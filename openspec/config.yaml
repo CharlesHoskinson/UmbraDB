@@ -1,0 +1,44 @@
+schema: spec-driven
+
+context: |
+  UmbraDB: a local, single-writer, PostgreSQL-backed persistent datastore
+  for Midnight clients. TypeScript (Node >=24), no ORM, hand-written SQL via
+  the `postgres.js` driver. Four modules: TemporalKV (versioned KV,
+  event-sourced), CheckpointStore (content-addressed chunked checkpoints,
+  idempotent join-semilattice + reachability-closure GC), Watermarks
+  (last-write-wins sync cursors), Transaction/Lease (transactions +
+  connection-pinned advisory locks).
+
+  Prior art already exists and MUST be read before writing any new spec:
+  - design/proposal.md, design/design.md (schema DDL), design/design-interfaces.md
+    (the TypeScript interface contract, already implemented in src/interfaces/,
+    typechecked clean), design/tasks.md (the original 34-task/11-phase plan
+    from when this was still a module inside midnight-dev-env).
+  - Formal/STORAGE_ALGEBRA.md, Formal/STORAGE_TYPES.md, Formal/LEAN_FORMALIZATION_PLAN.md
+    (the algebraic laws each module must satisfy, with derived property tests
+    P1-P10, and a Lean 4 formalization plan).
+  - Performance/README.md (profiling/benchmarking/logging workstream, still
+    early).
+  - ROADMAP.md for the full 1.0.0 scope and milestone ordering.
+
+  Correctness rule (carried over from the parent project's own convention):
+  every external API/library claim MUST be verified against the actually
+  installed dependency version or real upstream source, not assumed from
+  training data or a prior research pass alone — cite file:line or a
+  version-pinned doc URL. Several design docs in this repo already document
+  real corrections found this way (a wrong SQL inequality, a misattributed
+  lemma, schema gaps found by reading real MongoDB source directly) — that
+  rigor is the standard to match, not the exception.
+
+rules:
+  proposal:
+    - Every proposal must state what it does NOT cover (explicit non-goals),
+      matching this project's existing proposal.md style.
+  design:
+    - Cite design/design.md, design/design-interfaces.md, and
+      Formal/STORAGE_ALGEBRA.md by section number wherever a new design
+      decision touches an existing one - never silently duplicate or
+      contradict them.
+  tasks:
+    - Each task must state its acceptance criteria concretely (what test
+      passes, what command succeeds) - not just a description of work.

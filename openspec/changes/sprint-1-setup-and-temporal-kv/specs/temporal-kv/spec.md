@@ -1,0 +1,200 @@
+# temporal-kv (implementation)
+
+The Postgres-backed implementation of `src/interfaces/temporal-kv.ts`,
+plus the project-setup/migration machinery it depends on. Extends (does
+not replace) the interface-level requirements already implied by
+`src/interfaces/temporal-kv.ts`'s own TSDoc contract.
+
+## ADDED Requirements
+
+### Requirement: Migrations are idempotent and ordered
+
+The migration runner SHALL apply each `migrations/NNN_*.sql` file at most
+once, in ascending numeric order, recording each successful application in
+`umbradb._migrations`, and SHALL be safe to invoke repeatedly against an
+already-migrated database.
+
+#### Scenario: Running migrations twice is a no-op the second time
+- **WHEN** `runMigrations(sql)` is called against a fresh database, then
+  called again against the same now-migrated database
+- **THEN** the second call SHALL apply zero additional migrations
+- **AND** SHALL NOT error
+
+#### Scenario: A migration failure does not partially apply
+- **WHEN** a migration file's SQL fails partway through execution
+- **THEN** none of that file's DDL/DML SHALL be visible afterward (the
+  migration runs inside a transaction)
+- **AND** that migration SHALL NOT be recorded as applied
+
+### Requirement: Schema isolation is the default, not opt-in
+
+The connection factory SHALL create and operate within a dedicated
+Postgres schema (default `umbradb`), SHALL set `search_path` to that schema
+for every connection it creates, and SHALL NOT rely on table-name
+distinctiveness alone to avoid colliding with other schemas in the same
+database.
+
+#### Scenario: Default schema is used when none is specified
+- **WHEN** `createClient()` is called with no `schema` option
+- **THEN** the resulting connection's `search_path` SHALL be `umbradb`
+- **AND** all subsequent DDL/DML from this connection SHALL operate within
+  that schema
+
+#### Scenario: A custom schema is honored end to end
+- **WHEN** `createClient({ schema: "custom_name" })` is called
+- **THEN** migrations and all `TemporalKV` operations on that connection
+  SHALL operate within `custom_name`, not `umbradb`
+
+### Requirement: Postgres errors surface as the shared StorageError hierarchy
+
+Driver-level and constraint-violation errors SHALL be translated into the
+project's shared `StorageError` subclasses before reaching the caller; a
+raw `postgres.js` error object SHALL NOT escape the adapter layer.
+
+#### Scenario: A connection failure surfaces as ConnectionError
+- **WHEN** the underlying Postgres connection cannot be established (e.g.
+  an invalid connection string or an unreachable host)
+- **THEN** the adapter SHALL reject with `ConnectionError`
+- **AND** SHALL NOT reject with a raw driver-level error type
+
+### Requirement: Unconditional writes are gapless and monotonic (Law T1)
+
+`PgTemporalKV.put` calls with no `expectedVersion` (the unconditional write
+path) SHALL assign versions that increase by exactly 1 from the key's
+previous version, starting at 1 for a key's first write, with no gaps and
+no repeats, when calls are serialized (a single writer, or writes
+coordinated by a lease/transaction outside this sprint's scope) — this
+requirement is explicitly conditional on serialization, per
+`Formal/STORAGE_ALGEBRA.md` Law T1, not a claim that concurrent
+unserialized writers cannot race.
+
+#### Scenario: Sequential unconditional writes produce consecutive versions
+- **WHEN** a key is written N times in sequence with no `expectedVersion`
+  supplied, no concurrent writer involved
+- **THEN** the assigned versions SHALL be exactly `1, 2, 3, ..., N` in
+  order, with no gap and no repeated value
+
+#### Scenario: The CAS-guarded and unconditional paths agree on version assignment
+- **WHEN** a `put` with `expectedVersion` matching the current version
+  succeeds
+- **THEN** the resulting version SHALL be exactly `current + 1`, identical
+  to what an unconditional write at that point would have produced
+
+### Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored
+
+Until the Transaction/Lease module's real wiring lands (a later sprint),
+every `PgTemporalKV` method accepting `opts.tx` SHALL throw a dedicated,
+distinctly-named error when a caller passes a non-`undefined`
+`TransactionHandle`, rather than accepting it and running the operation
+outside that transaction.
+
+#### Scenario: Passing a transaction handle throws before any query runs
+- **WHEN** any of `put`/`get`/`getAt`/`listKeys` is called with a
+  non-`undefined` `opts.tx`
+- **THEN** the call SHALL reject with a dedicated
+  "transaction participation not yet supported" error
+- **AND** SHALL NOT execute any query against the database first
+
+### Requirement: put's CAS guard distinguishes conflict from absence
+
+`PgTemporalKV.put`, when given `expectedVersion`, SHALL determine whether a
+failed compare-and-set was caused by a version mismatch (key exists at a
+different version) or by the key never having been written, and SHALL
+populate `VersionConflictError.actual` accordingly (`undefined` only in the
+never-written case, per `src/interfaces/temporal-kv.ts`'s documented
+contract) — a zero-affected-rows result from the underlying `UPDATE`
+statement alone is NOT sufficient to make this distinction and MUST NOT be
+used as the sole signal.
+
+#### Scenario: CAS conflict against an existing key reports the actual version
+- **WHEN** `put(ns, scope, key, value, { expectedVersion: 2 })` is called
+  and the key's current version is actually `3`
+- **THEN** the call SHALL reject with `VersionConflictError`
+- **AND** `error.actual` SHALL equal `3`
+
+#### Scenario: CAS against a never-written key reports actual as undefined
+- **WHEN** `put(ns, scope, key, value, { expectedVersion: 1 })` is called
+  and the key has never been written
+- **THEN** the call SHALL reject with `VersionConflictError`
+- **AND** `error.actual` SHALL be `undefined`, not `0` and not the numeral
+  zero as a version
+
+### Requirement: listKeys streams without materializing the full result set first, and orders results correctly
+
+`PgTemporalKV.listKeys` SHALL yield keys incrementally via a database
+cursor (SHALL NOT load the entire matching result set into memory before
+yielding its first item), SHALL yield only each matching key's newest
+version, and SHALL yield in a stable order suitable for resumable
+pagination — all three properties required by
+`src/interfaces/temporal-kv.ts`'s own documented contract for this method,
+not only the streaming behavior.
+
+#### Scenario: The first key is yielded before the full scan completes
+- **WHEN** `listKeys` is called against a prefix matching a large number of
+  keys
+- **THEN** the first yielded key SHALL be observable by the caller before
+  every matching row has been fetched from Postgres
+
+#### Scenario: Only the newest version of each key is yielded
+- **WHEN** a key under the queried prefix has been written multiple times
+- **THEN** `listKeys` SHALL yield that key at most once, reflecting its
+  current version, not once per historical version
+
+#### Scenario: Aborting mid-iteration releases the cursor
+- **WHEN** `opts.signal` is aborted partway through a `listKeys` iteration
+- **THEN** iteration SHALL stop
+- **AND** the underlying database cursor SHALL be released, not left open
+
+### Requirement: getAt satisfies temporal-projection equivalence (Law T3), within the store's retention window
+
+`getAt(k, { at: T })` SHALL return the value that a full, from-scratch fold
+of every `put` to `k` at or before `T` would produce, **for any `T` within
+whatever history-retention window this implementation actually enforces**
+— this sprint enforces no retention/pruning at all (that is a later
+concern, per `design/design.md` §2's `pg_cron`-based retention discussion),
+so for Sprint 1 this requirement holds unconditionally for the store's
+entire lifetime. A future sprint that adds retention MUST revisit this
+requirement's scenarios rather than assume they still hold unchanged once
+old history can be pruned.
+
+#### Scenario: getAt matches an independent replay for an arbitrary put sequence
+- **WHEN** an arbitrary sequence of `put`s to a key, each with a
+  distinct timestamp, is applied, and `getAt(k, { at: T })` is queried for
+  an arbitrary `T` within the sequence's time range
+- **THEN** the returned value SHALL equal the value produced by folding
+  (in a plain, from-scratch reference implementation, not the code under
+
+#### Scenario: getAt matches an independent replay for an arbitrary put sequence
+- **WHEN** an arbitrary sequence of `put`s to a key, each with a
+  distinct timestamp, is applied, and `getAt(k, { at: T })` is queried for
+  an arbitrary `T` within the sequence's time range
+- **THEN** the returned value SHALL equal the value produced by folding
+  (in a plain, from-scratch reference implementation, not the code under
+  test) only the puts at or before `T`
+
+### Requirement: Dual addressing agrees at commit instants (Law T4)
+
+For any committed version `v` of a key, `getAt(k, { version: v })` and
+`getAt(k, { at: T })`, where `T` is that version's actual commit instant,
+SHALL return equal values.
+
+#### Scenario: Version and timestamp addressing agree
+- **WHEN** a key is written across several versions, and for each version
+  `v` its exact commit timestamp is recorded
+- **THEN** `getAt(k, { version: v })` and `getAt(k, { at: <that version's
+  commit timestamp> })` SHALL return the same value for every `v`
+
+### Requirement: History intervals never overlap for a single key (Law T5)
+
+The `kv_history_no_overlap` constraint SHALL make it impossible, at the
+database level, for two history intervals belonging to the same
+`(ns, scope, key)` to overlap — this SHALL be enforced by Postgres itself,
+not solely by application logic.
+
+#### Scenario: An attempt to create overlapping history intervals is rejected
+- **WHEN** application logic attempts (whether through a bug or a direct
+  manual `INSERT`) to create two `kv_history` rows for the same key whose
+  `[valid_from, valid_to)` ranges overlap
+- **THEN** Postgres SHALL reject the write with a constraint violation
+- **AND** the violation SHALL be traceable to the `kv_history_no_overlap`
+  exclusion constraint specifically
