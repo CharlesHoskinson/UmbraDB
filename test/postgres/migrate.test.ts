@@ -166,6 +166,11 @@ describe("runMigrations", () => {
       try {
         await hostileConn`insert into ${hostileConn(schema)}.kv_current (ns, scope, key, value, version)
                            values ('h', 'h', 'h', '{"a":1}'::jsonb, 1)`;
+        // These are two separate auto-committing statements against the same key -- found by a
+        // fourth-round cross-vendor re-audit as another site exposed to the documented
+        // millisecond-collision caveat (design/design.md §4a) if both land in the same truncated
+        // millisecond. Force a boundary crossing, matching this project's other tests.
+        await new Promise((r) => setTimeout(r, 5));
         await hostileConn`update ${hostileConn(schema)}.kv_current set value = '{"a":2}'::jsonb, version = 2
                            where ns='h' and scope='h' and key='h'`;
       } finally {
@@ -183,6 +188,19 @@ describe("runMigrations", () => {
 });
 
 describe("error translation (design.md §4a)", () => {
+  it("runMigrations itself translates a connection failure to ConnectionError, not a raw driver error (Codex re-audit finding: prior test only exercised translatePostgresError directly, not the exported adapter operation)", async () => {
+    const sql = createClient({
+      connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
+      schema: "unreachable_test",
+      maxConnections: 1,
+    });
+    try {
+      await expect(runMigrations(sql, { schema: "unreachable_test" })).rejects.toBeInstanceOf(ConnectionError);
+    } finally {
+      await sql.end({ timeout: 1 });
+    }
+  }, 10_000);
+
   it("a connection failure surfaces as ConnectionError, not a raw driver error", async () => {
     const sql = postgres("postgres://nouser:nopass@127.0.0.1:1/nonexistent", {
       max: 1,

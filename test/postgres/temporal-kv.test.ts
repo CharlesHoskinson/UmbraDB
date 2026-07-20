@@ -20,6 +20,19 @@ async function truncateAll(sql: UmbraDBSql): Promise<void> {
   await sql`TRUNCATE ${sql(TEST_SCHEMA)}.kv_current, ${sql(TEST_SCHEMA)}.kv_history`;
 }
 
+/**
+ * Forces a millisecond-boundary crossing between two sequential writes to the same key.
+ * **Added by a fourth-round cross-vendor re-audit**: any two writes to one key whose
+ * `clock_timestamp()`-truncated instants land in the same millisecond collide and reject with
+ * `ClockRegressionError` (the accepted, documented caveat — `Formal/STORAGE_ALGEBRA.md` §1's
+ * Law T4), which is a real, if low-probability, source of flakiness for any test doing
+ * back-to-back same-key writes with no delay between them. Call this between such writes,
+ * matching the property tests' own established P3/P4/P5 pattern.
+ */
+async function tick(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 5));
+}
+
 describe("PgTemporalKV", () => {
   afterEach(async () => {
     await truncateAll(getSql());
@@ -34,6 +47,7 @@ describe("PgTemporalKV", () => {
 
     it("1b. omitted expectedVersion, existing version N -> update to N+1", async () => {
       await kv().put("ns", "sc", "k2", { a: 1 });
+      await tick();
       const entry = await kv().put("ns", "sc", "k2", { a: 2 });
       expect(entry.version).toBe(2n);
       expect(entry.value).toEqual({ a: 2 });
@@ -55,6 +69,7 @@ describe("PgTemporalKV", () => {
 
     it("3a. expectedVersion=N matching -> update to N+1", async () => {
       await kv().put("ns", "sc", "k5", { a: 1 });
+      await tick();
       const entry = await kv().put("ns", "sc", "k5", { a: 2 }, { expectedVersion: 1n });
       expect(entry.version).toBe(2n);
     });
@@ -85,6 +100,7 @@ describe("PgTemporalKV", () => {
   describe("getAt", () => {
     it("{version} addressing returns the value at that version, including old ones from kv_history", async () => {
       const v1 = await kv().put("ns", "sc", "kg1", { a: 1 });
+      await tick();
       await kv().put("ns", "sc", "kg1", { a: 2 });
       const at1 = await kv().getAt("ns", "sc", "kg1", { kind: "version", version: v1.version });
       expect(at1?.value).toEqual({ a: 1 });
@@ -93,6 +109,7 @@ describe("PgTemporalKV", () => {
 
     it("{at} addressing agrees with {version} addressing at that version's commit instant (Law T4)", async () => {
       const v1 = await kv().put("ns", "sc", "kg2", { a: 1 });
+      await tick();
       await kv().put("ns", "sc", "kg2", { a: 2 });
       const atTime = await kv().getAt("ns", "sc", "kg2", { kind: "at", at: v1.writtenAt });
       expect(atTime?.value).toEqual({ a: 1 });
@@ -110,6 +127,7 @@ describe("PgTemporalKV", () => {
   describe("listKeys", () => {
     it("yields only the newest version of each key under a prefix, in order", async () => {
       await kv().put("ns", "sc", "list:a", { v: 1 });
+      await tick();
       await kv().put("ns", "sc", "list:a", { v: 2 });
       await kv().put("ns", "sc", "list:b", { v: 1 });
       await kv().put("ns", "sc", "other:c", { v: 1 });
@@ -226,23 +244,36 @@ describe("PgTemporalKV", () => {
       expect(after?.value).toEqual({ v: 0 });
     });
 
-    it("aborting listKeys while the initial SELECT is genuinely blocked cancels the query, not just the client-side wait (Codex re-audit finding)", async () => {
+    it("aborting listKeys while the initial SELECT is genuinely blocked cancels the query SERVER-SIDE, not just the client-side wait (Codex re-audit finding)", async () => {
       // The mid-iteration test above aborts AFTER rows have already arrived, which never
       // exercises the code path where NO batch has ever arrived yet -- iterator.return() alone
       // is a no-op in that case (verified against the installed postgres.js source: its `prev`
       // resolver is only set inside the callback fired when a batch arrives). Force a genuine
       // block on the underlying SELECT itself using an ACCESS EXCLUSIVE table lock from a
       // separate connection, so this actually reaches that path.
+      //
+      // Revised after a fourth-round cross-vendor re-audit found the original version of this
+      // test proved only client-side rejection, not that query.cancel() actually reached the
+      // server: it released the lock immediately after observing AbortError, so the same
+      // assertions would have passed even with query.cancel() removed entirely (the blocked
+      // SELECT would just complete naturally once unlocked, on a spare pool connection). Fixed
+      // by checking pg_stat_activity for the blocked backend WHILE THE LOCK IS STILL HELD --
+      // proving the backend actually stopped waiting on the lock because it was cancelled, not
+      // because the lock was released.
       const sql = getSql();
       await kv().put("ns", "sc", "blocked:a", { v: 1 });
 
       let releaseLock: (() => void) | undefined;
-      const lockHeld = new Promise<void>((resolveLockHeld) => {
-        void sql.begin(async (tx) => {
-          await tx`LOCK TABLE ${tx(TEST_SCHEMA)}.kv_current IN ACCESS EXCLUSIVE MODE`;
-          resolveLockHeld();
-          await new Promise<void>((resolveRelease) => { releaseLock = resolveRelease; });
-        });
+      let lockAcquired: () => void;
+      const lockHeld = new Promise<void>((resolve) => { lockAcquired = resolve; });
+      // Capturing (and later awaiting) this promise directly -- rather than discarding it -- is
+      // itself part of the fourth-round fix: the original version never awaited sql.begin()'s
+      // own promise, so a BEGIN/LOCK failure could leave an unobserved rejection and
+      // nondeterministic cleanup ordering.
+      const lockTxDone = sql.begin(async (tx) => {
+        await tx`LOCK TABLE ${tx(TEST_SCHEMA)}.kv_current IN ACCESS EXCLUSIVE MODE`;
+        lockAcquired();
+        await new Promise<void>((resolveRelease) => { releaseLock = resolveRelease; });
       });
       await lockHeld;
 
@@ -255,16 +286,33 @@ describe("PgTemporalKV", () => {
         };
         const iteration = iterate();
         await new Promise((r) => setTimeout(r, 50)); // let the SELECT actually dispatch and block
+
+        const before = await sql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity
+          where wait_event_type = 'Lock' and query ilike '%kv_current%'
+        `;
+        expect(before[0]!.n).toBeGreaterThanOrEqual(1); // confirms the SELECT really is blocked
+
         controller.abort();
         await expect(iteration).rejects.toMatchObject({ name: "AbortError" });
+
+        // Still holding the lock at this point -- if the backend still shows up waiting on it,
+        // query.cancel() did NOT actually reach the server.
+        await new Promise((r) => setTimeout(r, 50));
+        const after = await sql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity
+          where wait_event_type = 'Lock' and query ilike '%kv_current%'
+        `;
+        expect(after[0]!.n).toBe(0);
       } finally {
         releaseLock?.();
+        await lockTxDone;
       }
 
       // Prove the connection wasn't left broken/leaked by the cancellation: a fresh query
       // still works.
-      const after = await kv().get("ns", "sc", "blocked:a");
-      expect(after?.value).toEqual({ v: 1 });
+      const finalRow = await kv().get("ns", "sc", "blocked:a");
+      expect(finalRow?.value).toEqual({ v: 1 });
     }, 15_000);
   });
 
@@ -329,7 +377,7 @@ describe("PgTemporalKV", () => {
       expect(current?.value).toEqual({ a: 1 });
     });
 
-    it("sequential puts to the same key in separate transactions are unaffected", async () => {
+    it("sequential puts to the same key in separate transactions succeed once a millisecond boundary is crossed", async () => {
       await kv().put("ns", "sc", "reuse-key-2", { a: 1 });
       // Found by a third-round cross-vendor re-audit: two back-to-back puts with no delay can
       // legitimately land in the same truncated millisecond and reject with

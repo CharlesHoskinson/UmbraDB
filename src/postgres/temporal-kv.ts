@@ -164,7 +164,10 @@ export class PgTemporalKV implements TemporalKV {
 
     try {
       if (expectedVersion === undefined) {
-        // Case 1 (Law T1's "total" case): unconditional upsert, always succeeds.
+        // Case 1 (Law T1's "total" case): unconditional upsert -- always succeeds UNLESS this
+        // write's truncated clock_timestamp() collides with a prior write to the same key
+        // within the same millisecond, which raises ClockRegressionError (see that class's own
+        // doc; found overstated by a fourth-round cross-vendor re-audit).
         const rows = await sql<KvRow[]>`
           INSERT INTO ${sql(this.schema)}.kv_current (ns, scope, key, value, version)
           VALUES (${ns}, ${scope}, ${key}, ${jsonValue}, 1)
@@ -375,6 +378,22 @@ export class PgTemporalKV implements TemporalKV {
     let onAbort: (() => void) | undefined;
     const abortedWhileWaiting = signal && new Promise<never>((_resolve, reject) => {
       onAbort = () => {
+        // Corrected by a fifth-round cross-vendor re-audit, which caught a mistake this file's
+        // OWN fourth-round fix introduced: `Query.prototype.cancel()` (the method actually
+        // called here) is NOT the same thing as the internal `cancel(query)` factory function
+        // that postgres.js's connection layer uses to build `query.canceller` -- that internal
+        // factory does return a real Promise, but `Query.prototype.cancel()` itself, verified
+        // against the installed source (`node_modules/postgres/src/query.js`), is
+        // `cancel() { return this.canceller && (this.canceller(this), this.canceller = null) }`.
+        // The comma operator means this expression evaluates to `this.canceller = null` -- i.e.
+        // `null` (or `false`, if already cancelled) -- NOT the internal promise, which is
+        // invoked purely for its side effect and its own result silently discarded by
+        // `Query.prototype.cancel()` itself. The previous `(query.cancel() as unknown as
+        // Promise<void>).catch(() => {})` therefore called `.catch` on a literal `null` and
+        // crashed with an uncaught `TypeError` the moment any abort actually reached a genuinely
+        // blocked query -- confirmed by two real test failures in the same run this fix
+        // addresses. There is no promise to catch: this call is synchronous and its cancellation
+        // request is fired off internally with no result this method exposes to us.
         query.cancel();
         reject(abortError(signal));
       };
@@ -390,6 +409,17 @@ export class PgTemporalKV implements TemporalKV {
             : await iterator.next();
         } catch (err) {
           if (err instanceof Error && err.name === "AbortError") throw err;
+          // Corrected by the same fifth-round re-audit: once `query.cancel()` above actually
+          // reaches the server (the very case this whole abort path exists to handle), the
+          // ORIGINAL query's own promise -- the one `iterator.next()` is awaiting -- rejects
+          // with a real Postgres error (SQLSTATE 57014, "canceling statement due to user
+          // request"), not our synthetic `abortError`. Whether that real rejection or our
+          // synthetic one "wins" `Promise.race` above is a genuine, unavoidable race against
+          // real network I/O, not something callable order can fix -- so if the signal we
+          // ourselves aborted is what's responsible, ANY error surfacing here while it is
+          // aborted must be reported as the abort the caller actually asked for, not as
+          // whatever driver error happened to arrive first.
+          if (signal?.aborted) throw abortError(signal);
           throw translatePostgresError(err);
         }
         if (next.done) break;

@@ -14,10 +14,19 @@ export class ExclusionViolationError extends StorageError {
 }
 
 /**
- * SQLSTATE `23514` (check_violation) firing on `kv_history_range` — caused by a backward
- * wall-clock STEP (not drift) between two writes to the same key, since `valid_from`/`valid_to`
- * are `clock_timestamp()`-derived (design/design.md §4a; `Formal/STORAGE_ALGEBRA.md` §1 Law T4's
- * accepted caveat). Not a data-model violation and not caller-fixable by retrying.
+ * SQLSTATE `23514` (check_violation) firing on `kv_history_range`, from EITHER of two distinct
+ * causes with different retry characteristics — **corrected by a fourth-round cross-vendor
+ * re-audit, which found the prior wording only described one of them and blanket-claimed
+ * non-retryability that doesn't hold for the other**:
+ * (a) a backward wall-clock STEP (an NTP correction, not drift) between two writes to the same
+ * key — genuinely NOT caller-fixable by retrying, since the caller has no way to know when (or
+ * whether) the clock will move forward again; or
+ * (b) two writes to the SAME key, in different transactions, whose `clock_timestamp()`-derived,
+ * millisecond-truncated instants land in the same millisecond — IS caller-fixable: simply
+ * retrying after the millisecond boundary has passed succeeds, since the collision is a
+ * precision artifact, not a real ordering conflict. (`design/design.md` §4a;
+ * `Formal/STORAGE_ALGEBRA.md` §1 Law T4's accepted caveat covers both causes.) Not a data-model
+ * violation either way, but callers should not assume this error is always non-retryable.
  */
 export class ClockRegressionError extends StorageError {
   readonly code = "CLOCK_REGRESSION" as const;

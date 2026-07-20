@@ -1,6 +1,7 @@
 import type { ISql, Sql } from "postgres";
 import { ValidationError } from "../interfaces/storage-errors.js";
 import { assertValidSchemaName } from "./client.js";
+import { translatePostgresError } from "./errors.js";
 import * as migration000 from "./migrations/000_schema.js";
 import * as migration001 from "./migrations/001_temporal_kv.js";
 
@@ -61,6 +62,24 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
     );
   }
 
+  // Found by a fourth-round cross-vendor re-audit: this function never routed any of its own
+  // failures through translatePostgresError, so a reserve failure, a migration-query failure, or
+  // a cleanup-statement failure would all escape as raw postgres.js/Node errors — contradicting
+  // this project's shared no-raw-driver-errors convention (design/design.md §4a). The wrapping
+  // below covers the whole function; translatePostgresError itself already passes any error that
+  // is ALREADY one of this project's own StorageError subclasses through unchanged (the
+  // ValidationError thrown just above this point never reaches this wrapper, since it's outside
+  // the try below — but if it ever did, it would still come back unchanged, not re-wrapped).
+  try {
+    return await runMigrationsImpl(sql, opts);
+  } catch (err) {
+    throw translatePostgresError(err);
+  }
+}
+
+async function runMigrationsImpl<TTypes extends Record<string, unknown> = {}>(
+  sql: Sql<TTypes>, opts: RunMigrationsOptions,
+): Promise<void> {
   const reserved = await sql.reserve();
   // Revised after a cross-vendor audit found two related bugs in this function's cleanup:
   // (1) `search_path` was widened on this connection but never restored before `release()`,
