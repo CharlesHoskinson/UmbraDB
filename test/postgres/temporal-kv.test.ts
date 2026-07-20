@@ -225,6 +225,47 @@ describe("PgTemporalKV", () => {
       const after = await kv().get("ns", "sc", "abort-mid:00");
       expect(after?.value).toEqual({ v: 0 });
     });
+
+    it("aborting listKeys while the initial SELECT is genuinely blocked cancels the query, not just the client-side wait (Codex re-audit finding)", async () => {
+      // The mid-iteration test above aborts AFTER rows have already arrived, which never
+      // exercises the code path where NO batch has ever arrived yet -- iterator.return() alone
+      // is a no-op in that case (verified against the installed postgres.js source: its `prev`
+      // resolver is only set inside the callback fired when a batch arrives). Force a genuine
+      // block on the underlying SELECT itself using an ACCESS EXCLUSIVE table lock from a
+      // separate connection, so this actually reaches that path.
+      const sql = getSql();
+      await kv().put("ns", "sc", "blocked:a", { v: 1 });
+
+      let releaseLock: (() => void) | undefined;
+      const lockHeld = new Promise<void>((resolveLockHeld) => {
+        void sql.begin(async (tx) => {
+          await tx`LOCK TABLE ${tx(TEST_SCHEMA)}.kv_current IN ACCESS EXCLUSIVE MODE`;
+          resolveLockHeld();
+          await new Promise<void>((resolveRelease) => { releaseLock = resolveRelease; });
+        });
+      });
+      await lockHeld;
+
+      try {
+        const controller = new AbortController();
+        const iterate = async () => {
+          const keys: string[] = [];
+          for await (const k of kv().listKeys("ns", "sc", "blocked:", { signal: controller.signal })) keys.push(k);
+          return keys;
+        };
+        const iteration = iterate();
+        await new Promise((r) => setTimeout(r, 50)); // let the SELECT actually dispatch and block
+        controller.abort();
+        await expect(iteration).rejects.toMatchObject({ name: "AbortError" });
+      } finally {
+        releaseLock?.();
+      }
+
+      // Prove the connection wasn't left broken/leaked by the cancellation: a fresh query
+      // still works.
+      const after = await kv().get("ns", "sc", "blocked:a");
+      expect(after?.value).toEqual({ v: 1 });
+    }, 15_000);
   });
 
   describe("getAt AsOf payload validation (Codex audit: only the discriminant was checked before)", () => {
@@ -290,6 +331,12 @@ describe("PgTemporalKV", () => {
 
     it("sequential puts to the same key in separate transactions are unaffected", async () => {
       await kv().put("ns", "sc", "reuse-key-2", { a: 1 });
+      // Found by a third-round cross-vendor re-audit: two back-to-back puts with no delay can
+      // legitimately land in the same truncated millisecond and reject with
+      // ClockRegressionError (the accepted caveat this project documents, not a bug) -- a real,
+      // if low-probability, source of flakiness this test previously didn't guard against.
+      // Force a millisecond boundary crossing, matching the property test's own P4 pattern.
+      await new Promise((r) => setTimeout(r, 5));
       const second = await kv().put("ns", "sc", "reuse-key-2", { a: 2 });
       expect(second.version).toBe(2n);
       const v1 = await kv().getAt("ns", "sc", "reuse-key-2", { kind: "version", version: 1n });

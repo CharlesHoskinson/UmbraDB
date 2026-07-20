@@ -106,6 +106,18 @@ export function translatePostgresError(
   err: unknown,
   keyContext?: { namespace: string; scope: string; key: string },
 ): Error {
+  // Found by a third-round cross-vendor re-audit: every StorageError subclass ALSO has a
+  // string `.code` (storage-errors.ts's own `abstract readonly code: string`), so the
+  // `isPgDriverError` check below — added specifically to distinguish real driver errors from
+  // arbitrary application bugs — cannot by itself tell a genuine driver error apart from one of
+  // THIS project's own already-typed errors. Concretely: `toEntry()` throws `ValidationError`
+  // for a malformed stored row, and callers that invoke it inside the same try/catch that
+  // routes through this function (e.g. a read path) would previously see that `ValidationError`
+  // silently relabeled as `UnrecognizedPostgresError`, losing its real type. Any error that is
+  // ALREADY one of ours must pass through completely unchanged, checked first, before the
+  // driver-error classification below ever runs.
+  if (err instanceof StorageError) return err;
+
   if (!isPgDriverError(err)) return err instanceof Error ? err : new Error(String(err));
 
   if (err.code && CONNECTION_FAILURE_CODES.has(err.code)) {

@@ -192,8 +192,16 @@ export class HistoryUnavailableError extends TemporalKVError {
  * commit instant, and the adapter's trigger detects and rejects it rather than silently
  * discarding the first write's history row (the bug this rule replaces). Detection is
  * transaction-scoped (keyed off the writing transaction's ID, not a timestamp comparison), so
- * this can only be thrown when both writes share one transaction — sequential `put`s in
- * separate transactions are unaffected no matter how close together in wall-clock time.
+ * this SPECIFIC error can only be thrown when both writes share one transaction — sequential
+ * `put`s in separate transactions never throw `TransactionKeyReuseError`, no matter how close
+ * together in wall-clock time. **This does not mean separate-transaction sequential writes are
+ * unconditionally unaffected by ANY error, though** — corrected after a cross-vendor re-audit
+ * found this comment's original, broader phrasing contradicted the documented
+ * `ClockRegressionError` caveat: a Postgres adapter using `clock_timestamp()`-derived,
+ * millisecond-truncated instants can still reject a genuinely separate-transaction second write
+ * with `ClockRegressionError` if both writes' truncated instants land in the same millisecond
+ * (see that error's own doc, and `Formal/STORAGE_ALGEBRA.md` §1's Law T4 caveat) — a different
+ * failure mode than the one this class documents, not ruled out by anything said here.
  */
 export class TransactionKeyReuseError extends TemporalKVError {
   readonly code = "TRANSACTION_KEY_REUSE" as const;

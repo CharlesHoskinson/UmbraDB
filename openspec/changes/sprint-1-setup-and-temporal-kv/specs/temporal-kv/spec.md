@@ -80,9 +80,22 @@ requirement is explicitly conditional on serialization, per
 `Formal/STORAGE_ALGEBRA.md` Law T1, not a claim that concurrent
 unserialized writers cannot race.
 
+**Also explicitly conditional on the millisecond-collision caveat, corrected by a third-round
+cross-vendor re-audit that found this Requirement still claimed unconditional gaplessness after
+a DIFFERENT requirement had already documented the exception.** Since Sprint 1 does not wire
+`opts.tx` yet, each sequential `put` in the Scenario below is its own separate, autocommitting
+transaction — exactly the case `ClockRegressionError`'s own doc describes. If two of the N
+sequential writes to one key have `clock_timestamp()`-derived, millisecond-truncated instants
+landing in the SAME millisecond, the second SHALL reject with `ClockRegressionError` (SQLSTATE
+`23514`) rather than assigning the next consecutive version — this is the accepted, disclosed
+tradeoff `Formal/STORAGE_ALGEBRA.md` §1's Law T4 caveat already documents, not a violation of
+this Requirement; the Requirement's gapless-and-monotonic guarantee holds for any sequence of
+writes that does NOT hit that collision, which is what the word "serialized" above is scoped to.
+
 #### Scenario: Sequential unconditional writes produce consecutive versions
 - **WHEN** a key is written N times in sequence with no `expectedVersion`
-  supplied, no concurrent writer involved
+  supplied, no concurrent writer involved, and no two of the N writes'
+  truncated `clock_timestamp()` instants land in the same millisecond
 - **THEN** the assigned versions SHALL be exactly `1, 2, 3, ..., N` in
   order, with no gap and no repeated value
 

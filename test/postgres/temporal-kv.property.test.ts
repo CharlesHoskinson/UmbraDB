@@ -25,6 +25,12 @@ describe("TemporalKV properties (Formal/STORAGE_ALGEBRA.md §5)", () => {
         for (let i = 0; i < n; i++) {
           const entry = await kv().put("p1", "sc", key, { i });
           versions.push(entry.version);
+          // Found by a third-round cross-vendor re-audit: without this, two of the N writes
+          // can legitimately land in the same truncated millisecond and reject with
+          // ClockRegressionError instead of producing the next consecutive version -- the
+          // accepted caveat this project documents (Formal/STORAGE_ALGEBRA.md §1's Law T4),
+          // not a violation of T1 itself. Matches P3/P4/P5's own pattern.
+          await new Promise((r) => setTimeout(r, 5));
         }
         expect(versions).toEqual(Array.from({ length: n }, (_, i) => BigInt(i + 1)));
       }),
@@ -41,6 +47,10 @@ describe("TemporalKV properties (Formal/STORAGE_ALGEBRA.md §5)", () => {
           const key = freshKey();
           for (let i = 0; i < priorWrites; i++) {
             await kv().put("p2", "sc", key, { i });
+            // Same millisecond-collision guard as P1 -- prevents a prior write from
+            // legitimately colliding with the probe put below (Formal/STORAGE_ALGEBRA.md §1's
+            // Law T4 caveat), found by a third-round cross-vendor re-audit.
+            await new Promise((r) => setTimeout(r, 5));
           }
           const currentVersion = BigInt(priorWrites); // 0 means never written
           const expectedVersion = BigInt(probed);
