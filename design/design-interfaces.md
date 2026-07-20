@@ -8,8 +8,11 @@ between modules.
 Each module below is unchanged in its *domain* design (what it stores, how it's keyed, its
 concurrency semantics) from the original four documents. What changed is exclusively the
 *shape* of the contract: error handling, the transaction-handle type, and validation wiring, so
-that a caller touching all four modules in the same code path (e.g. `wallet-sync`) uses one
-mental model throughout instead of three.
+that a caller composing several of these modules in one code path uses one mental model
+throughout instead of several. (Note, per §4's composition audit: production `wallet-sync`
+today actually composes three of the four — `CheckpointStore`, `Watermarks`, and
+`Transaction/Lease` — not all four; `TemporalKV` is a general-purpose module in this family
+without a named production consumer yet, see §4's closing note.)
 
 ---
 
@@ -899,34 +902,64 @@ introducing a `Result` type at any layer).
 This document doesn't restate their signatures (out of scope — they aren't being normalized
 here), but the compositional boundaries are:
 
+**Both notes below were corrected by a 2026-07-20 audit that read the real
+`PrivateStateProvider` source (`midnight-js/packages/types/src/private-state-provider.ts`),
+the real `MongoPrivateStateProvider.ts`, and real production call sites — the
+original text below (kept struck through in git history) was written from
+the interface names alone and did not hold up.**
+
 - **`PrivateStateProvider`** is a fixed external contract (SDK-owned); nothing in this
-  document changes it, and none of these four modules attempt to reimplement its semantics.
-  If a Postgres-backed `PrivateStateProvider` implementation is ever built, it would most
-  naturally sit *on top of* `TemporalKV` (using `namespace = "private-state"`, `scope =
-  contractAddress`) rather than duplicating a bespoke storage path — but that's an
-  implementation choice for whoever writes that adapter, not part of this interface spec.
-- **`WalletStateStore`** owns the current/live mutable wallet state. It is a *client* of this
-  storage layer, not a peer of it:
-  - **`CheckpointStore`** is explicitly orthogonal to it (unchanged from the original note):
-    `CheckpointStore` only archives point-in-time snapshots of whatever `WalletStateStore`
-    currently holds, for rollback/audit — the two never share a keyspace or types. A
-    `WalletStateStore` implementation would call `CheckpointStore.save(walletId, networkId,
-    serialize(currentState))` on its own cadence (e.g. after N applied blocks) and
-    `CheckpointStore.load` during recovery, but `WalletStateStore` itself is not required to be
-    backed by `CheckpointStore`.
-  - **`Watermarks`** is the natural place for `WalletStateStore`'s sync-progress cursor (last
-    scanned block height / transaction index) to live, keyed by `kind = "wallet-sync"`,
-    `key = walletId` or `networkId` — decoupling "how far have we synced" from "what does the
-    wallet look like now" so a crash mid-apply can compare the two on restart.
-  - **`TemporalKV`** is the generic substrate `WalletStateStore` could be implemented *on*, if
-    it needs point-in-time reads (e.g. "what did this UTXO set look like 10 blocks ago" without
-    a full checkpoint restore) — `getAt` gives that for free where `CheckpointStore`'s
-    coarser-grained snapshots don't.
-  - **Transaction/Lease** is the shared foundation: a `WalletStateStore.applyBlock()` that
-    needs to update live state, bump a watermark, and occasionally trigger a checkpoint all in
-    one atomic step would wrap the whole thing in `withTransaction`, threading the resulting
-    `TransactionHandle` into each module's `opts.tx` — exactly the composition all four
-    interfaces were shaped to support.
+  document changes it. It should be **implemented directly against the `private_states` /
+  `signing_keys` / `private_state_salts` tables (design.md §6) — exactly as
+  `MongoPrivateStateProvider` implements it directly against Mongo collections — NOT layered
+  through `TemporalKV`.** The real interface's `setContractAddress` is a *stateful* scoping
+  call (not a per-call positional argument the way `TemporalKV.get(ns,scope,key)` works), it
+  carries its own password-strength/rotation locking (a 5-minute internal timeout on the read
+  path), a documented lazy-migration-on-read side effect (a "read" can trigger a write), and a
+  whole export/import subsystem with conflict strategies and its own error taxonomy
+  (`PrivateStateExportError`, `ExportDecryptionError`, `InvalidExportFormatError`,
+  `ImportConflictError`, `SigningKeyExportError`, defined in `midnight-js/packages/types/src/errors.ts`) —
+  none of this is expressible through `TemporalKV`'s simple `put`/`get`/`getAt` contract, and
+  routing through it would mean wrapping every one of these semantics above a KV store that was
+  never designed to carry them, while also accruing unwanted `kv_history` version rows for
+  ciphertext on every write. This matches what `design.md` §9's module-mapping table already
+  said — the composition note above previously contradicted it.
+- **`WalletStateStore`** owns the current/live mutable wallet state, but **the pure interface
+  (`examples/storage/WalletStateStore.ts`) is not what production actually uses.**
+  `ballot-preprod.ts` instantiates `CheckpointWalletStateStore`
+  (`midnight-mongo-store/src/walletStateStoreAdapter.ts`), which implements the legacy
+  `WalletStateStore` surface **on top of `CheckpointStore` + `Watermarks`** — the composition
+  this section describes already exists in the Mongo codebase, it just isn't `TemporalKV`-based:
+  - **`CheckpointStore` is the real backing store, not orthogonal to it.** The adapter maps
+    `{networkId, walletId}` directly to `CheckpointStore`'s `WalletKey {w, net}` and stores the
+    shielded/unshielded/dust blobs as content-addressed chunks; `load` uses `latestAnchor` +
+    `loadLatest`, and point-in-time recovery uses `CheckpointStore.loadAt(seq)` — which already
+    provides the point-in-time capability a `TemporalKV`-based design was originally considered
+    for (that suggestion is withdrawn, kept struck through in git history; `loadAt` already
+    covers it), without `kv_history`'s much heavier full-value-copy-per-write cost on multi-MB
+    state blobs.
+  - **`Watermarks` does not hold a sync-progress cursor in production.** The legacy
+    `WalletStateRecord` has no separate block-height field at all — progress lives implicitly
+    inside the three opaque SDK blobs. Where a real sync height exists, it rides on the
+    *checkpoint manifest* (`syncHeight`), not `Watermarks`. `Watermarks` in production instead
+    holds checkpoint bookkeeping: `latestComplete` sequence and a `prunedBelow` floor.
+  - **`TemporalKV` is not recommended for `WalletStateStore`** — not because it's incapable, but
+    because production already chose `CheckpointStore` for exactly this workload (large,
+    mostly-unchanged blobs where chunk-level dedup beats copying the whole value into
+    `kv_history` on every write) and already has point-in-time reads via `loadAt`.
+  - **Transaction/Lease** is still the shared foundation for atomically composing a live-state
+    update with a watermark bump and an occasional checkpoint trigger, unchanged from the
+    original note.
+
+**On `TemporalKV`'s standing in this document, now that it's ruled out as substrate for both
+`PrivateStateProvider` and `WalletStateStore`:** it has no named production consumer as of this
+audit. This is not evidence it shouldn't exist — it's `design.md` §2/§9's own module with its
+own tests, general-purpose versioned-KV infrastructure that predates and is independent of this
+composition question — but this document should say so plainly rather than imply (via §1's
+original "wallet-sync touches all four modules" framing, now corrected above) a consumer that
+isn't actually named anywhere. If a concrete consumer is identified during implementation
+(Task 1+), record it here; until then, treat `TemporalKV` as available general infrastructure,
+not as a module justified by a specific call site.
 
 ---
 

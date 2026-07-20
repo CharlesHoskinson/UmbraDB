@@ -23,6 +23,20 @@ too. Both tiers end up on **one Postgres instance, two schemas**
 merged schema. Tier 1 tables are NOT part of the forked official indexer
 schema and must not be added to it.
 
+**This is a hard requirement, not a tidiness preference — a real name
+collision was confirmed against the actual upstream indexer schema**
+(`midnight-indexer/indexer-common/migrations/postgres/001_initial.sql`): the
+real indexer creates a table literally named `wallets` (line 135), in the
+default `public` schema (it enables no extensions and issues no `CREATE
+SCHEMA`/`search_path` statements anywhere). Our own Tier 1 has a `wallet_state`
+table (§6) — different name today, but the indexer's own schema shows the
+`public` schema is not reserved or namespaced by convention on this project,
+so a future rename on either side could collide silently. Task 0.5 MUST
+create the `tier1_wallet` schema explicitly and set `search_path` for every
+Tier-1 connection (`postgres.js`'s `postgres(url, { connection: { search_path:
+'tier1_wallet' } })` or an explicit `sql\`SET search_path TO tier1_wallet\``
+per connection) rather than relying on table-name distinctiveness alone.
+
 ## 1. Mongo-compatibility-shim tooling: evaluated and rejected
 
 FerretDB (MongoDB wire protocol → Postgres, now built on the `documentdb`
@@ -63,6 +77,11 @@ CREATE TABLE kv_current (
   PRIMARY KEY (ns, scope, key)
 );
 
+-- requires the btree_gist extension (gives GiST a `=` operator class for
+-- text, needed so the EXCLUDE constraint below can combine equality on
+-- ns/scope/key with a range-overlap check in one index)
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
 CREATE TABLE kv_history (
   id         bigserial PRIMARY KEY,   -- surrogate PK: (ns,scope,key) is no
                                        -- longer unique once history is kept
@@ -73,7 +92,22 @@ CREATE TABLE kv_history (
   version    bigint NOT NULL,
   valid_from timestamptz NOT NULL,
   valid_to   timestamptz NOT NULL,    -- exclusive upper bound
-  CONSTRAINT kv_history_range CHECK (valid_from < valid_to)
+  -- generated from valid_from/valid_to so existing read/write code keeps
+  -- using the two plain timestamptz columns; this column exists only to
+  -- give the EXCLUDE constraint below a range type to index
+  validity   tstzrange GENERATED ALWAYS AS (tstzrange(valid_from, valid_to, '[)')) STORED,
+  CONSTRAINT kv_history_range CHECK (valid_from < valid_to),
+  -- Law T5 (design-algebra.md §1): no two history intervals for the same
+  -- key may overlap. Originally enforced only by "the trigger doesn't
+  -- produce overlaps" (an application-level ASPIRATIONAL guarantee); this
+  -- EXCLUDE constraint makes non-overlap a database-enforced invariant —
+  -- the engine rejects a second write that would violate it, the same way
+  -- the ledger's Merkle tree makes a non-linear insert unrepresentable
+  -- rather than merely unexpected. Promotes T5 from ASPIRATIONAL to
+  -- GUARANTEED.
+  CONSTRAINT kv_history_no_overlap EXCLUDE USING gist (
+    ns WITH =, scope WITH =, key WITH =, validity WITH &&
+  )
 );
 CREATE INDEX kv_history_lookup ON kv_history (ns, scope, key, valid_from);
 
@@ -301,17 +335,58 @@ serialized shielded/unshielded/dust sync state + chain genesis hash per
 secret material — the Mongo version never encrypts it), with a 7-day TTL
 index that expires stale entries automatically.
 
+**Schema corrected after auditing the real `MongoPrivateStateProvider.ts`
+directly (not inferred).** The tables below were originally single-key
+(`contract_address text PRIMARY KEY` / `address text PRIMARY KEY`), which
+cannot represent the real provider's actual key structure or its salt
+mechanism:
+- `set`/`get`/`remove` key private state by
+  `${accountId}:${contractAddress}:${privateStateId}` — three components,
+  not one — and `clear()` deletes every row scoped to `accountId` alone
+  (all contract addresses for that account), which a single-column PK
+  cannot express as a scoped delete.
+- `setSigningKey`/`getSigningKey` key by `${accountId}:${address}` — two
+  components.
+- Encryption keys are derived from a **per-`(accountId, scope)` salt**,
+  looked up (and lazily created, first-writer-wins under a race) via
+  `getOrCreateSalt('states' | 'signingKeys')` — a **third table**
+  (`private_state_salts` in the real Mongo collection naming) the earlier
+  draft omitted entirely. Without it, `PgPrivateStateProvider` cannot
+  re-derive the same at-rest encryption key on a second `get`/`set` call —
+  every read after the process restarts (or a second instance opens the
+  same account) would either fail to decrypt or silently derive a different
+  key. (Note: `exportPrivateStates`/`importPrivateStates` do NOT use this
+  salt — export re-encrypts under a fresh, export-embedded salt scoped to
+  that one export/import operation, independent of `private_state_salts`;
+  this table's only job is at-rest encrypt/decrypt key derivation.)
+
 ```sql
-CREATE TABLE private_states (
-  contract_address text PRIMARY KEY,
-  encrypted_value   bytea NOT NULL,
-  updated_at        timestamptz NOT NULL DEFAULT now()
+CREATE TABLE private_state_salts (
+  account_id text NOT NULL,
+  scope      text NOT NULL CHECK (scope IN ('states', 'signingKeys')),
+  salt       bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, scope)
 );
 
-CREATE TABLE signing_keys (
-  address           text PRIMARY KEY,
+CREATE TABLE private_states (
+  account_id        text NOT NULL,
+  contract_address  text NOT NULL,
+  private_state_id  text NOT NULL,
   encrypted_value   bytea NOT NULL,
-  updated_at        timestamptz NOT NULL DEFAULT now()
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, contract_address, private_state_id)
+);
+-- no separate account_id index needed: it's the PK's leading column, so
+-- clear()'s account-scoped, all-contracts delete already uses the PK index
+-- (consistent with signing_keys below, which relies on the same property)
+
+CREATE TABLE signing_keys (
+  account_id        text NOT NULL,
+  address           text NOT NULL,
+  encrypted_value   bytea NOT NULL,
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, address)
 );
 
 CREATE TABLE wallet_state (
@@ -387,9 +462,26 @@ well-trodden path).
 | `watermarks.ts` | `watermarks` (§4) |
 | `commit.ts` (standalone/replset transaction layer) | `sql.begin()` + `sql.reserve()`-pinned advisory lock (§5) — **branch deleted, not ported; lease semantics changed, see §5** |
 | `checkpointHistory.ts`, `prune.ts` | GC query against `ckpt_chunks`/`ckpt_manifests` (§3) |
-| `MongoPrivateStateProvider.ts` → `PgPrivateStateProvider.ts` | `private_states` + `signing_keys` (§6) |
-| `MongoWalletStateStore.ts` → `PgWalletStateStore.ts` | `wallet_state` (§6) — a distinct table, not a reuse of `signing_keys` |
+| `MongoPrivateStateProvider.ts` → `PgPrivateStateProvider.ts` | `private_states` + `signing_keys` + `private_state_salts` (§6) |
+| `MongoWalletStateStore.ts` → `PgWalletStateStore.ts` | `wallet_state` (§6) — **superseded, see the correction immediately below: production actually uses `CheckpointWalletStateStore`, not this path; confirm in Task 1 whether `wallet_state` is needed for anything else before porting it** |
 | `mongoClient.ts` → `pgClient.ts` | `postgres.js` connection factory (§7) |
+
+**Correction (found by the 2026-07-20 interface audit against real call
+sites, not just the module files above):** `MongoWalletStateStore.ts` is
+NOT what production actually uses. `ballot-preprod.ts` instantiates
+`CheckpointWalletStateStore` (`midnight-mongo-store/src/walletStateStoreAdapter.ts`)
+— an adapter implementing the legacy `WalletStateStore` surface **on top
+of `CheckpointStore` + `Watermarks`**, mapping `{networkId, walletId}` to
+`CheckpointStore`'s `WalletKey {w, net}` and storing the shielded/
+unshielded/dust blobs as content-addressed chunks (point-in-time recovery
+via `CheckpointStore.loadAt(seq)`). The plain `MongoWalletStateStore.ts` →
+`wallet_state` table path above is the unused legacy path today, not the
+one that needs porting for cutover — `PgWalletStateStore` should port
+`CheckpointWalletStateStore`'s adapter logic against the new
+`CheckpointStore`/`Watermarks` Postgres implementations, and the
+`wallet_state` table in §6 is needed only if the legacy path is kept for
+some other consumer (confirm in Task 1; if nothing else uses it, drop the
+table from scope rather than porting dead code).
 
 ## 10. State-equivalence gate (merge blocker, mirrors the mongo-store Plan A/B gate)
 
@@ -427,3 +519,20 @@ before the Mongo package is deleted:
      loosened, or changed in a way not explained by the schema's actual
      structural differences (e.g. `bytea` vs `Binary` comparison syntax is
      an expected diff; a removed edge-case assertion is not).
+
+**Known residual gap in this gate (surfaced by the mathematical-structure
+audit, `design-algebra.md` §1, Law T3):** the differential check above
+proves the Mongo and Postgres implementations agree with EACH OTHER at
+shared `asOf` timestamps — it does NOT prove either one equals the true
+fold-over-all-events-from-genesis (`getAt(k, at=T) = fold(events(k)
+filtered to writtenAt ≤ T)`, `design-algebra.md` Law T3). A bug present in
+BOTH implementations (e.g. inherited from a shared, subtly-wrong Mongo
+design decision) would pass this gate undetected. This gate is necessary
+but not sufficient for full correctness; `design-algebra.md`'s property
+test P3 (Law T3 — checks `getAt` against a from-scratch replay of a
+generated event sequence, not against the other implementation) is the
+actual replay-equivalence check and MUST also be implemented — not treated
+as already covered by this gate's item 4. (P4, Law T4, is a related but
+distinct check — that `{version}` and `{at}` addressing agree with each
+other — and must also be implemented, but it doesn't by itself cover the
+replay-equivalence gap this note is about.)
