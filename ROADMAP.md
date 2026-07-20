@@ -1,9 +1,14 @@
 # Roadmap
 
-Tracked in detail in [`design/tasks.md`](design/tasks.md) (34 tasks across
-11 phases, each implemented and reviewed per-task before moving on — see
-that file for the exact acceptance criteria per task). This page is the
-public-facing summary, and the target for everything below is **1.0.0**.
+Tracked in detail per-module as `openspec/changes/sprint-N-<module>/` changes (proposal/design/
+tasks/spec, EARS-format requirements, each reviewed by an Opus panel + Fable 5 consolidation and
+a Codex GPT-5.6 Sol audit before implementation) — see `openspec/changes/sprint-1-setup-and-temporal-kv/`
+for the completed, implemented example and `openspec/changes/sprint-2-transaction-lease/` for the
+next one, in review as of this writing. [`design/tasks.md`](design/tasks.md) is the ORIGINAL
+task breakdown from before this project split into its own repo and is now retired/superseded —
+see that file's own supersession note; it is kept only as a historical phase-number map, not a
+source of task detail. This page is the public-facing summary, and the target for everything
+below is **1.0.0**.
 
 ## Milestone 0 — Design (current)
 
