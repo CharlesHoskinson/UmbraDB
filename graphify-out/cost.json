@@ -1,0 +1,14 @@
+{
+  "runs": [
+    {
+      "date": "2026-07-20T23:04:10.837507+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 50,
+      "token_accounting": "Unavailable from the collaboration runtime; zero values are placeholders, not measured usage."
+    }
+  ],
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "token_accounting": "Unavailable from the collaboration runtime; zero values are placeholders, not measured usage."
+}
