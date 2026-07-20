@@ -2,3 +2,8 @@ node_modules/
 docs/api/
 *.log
 .DS_Store
+
+# graphify: commit graph.json/GRAPH_REPORT.md/graph.html/cost.json, but not the
+# machine-local interpreter/scan-root cache (absolute paths, not portable — see CLAUDE.md)
+graphify-out/.graphify_python
+graphify-out/.graphify_root
