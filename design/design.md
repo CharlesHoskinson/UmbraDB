@@ -202,7 +202,6 @@ CREATE TABLE ckpt_manifests (
   w            text NOT NULL,
   net          text NOT NULL,
   seq          bigint NOT NULL,
-  chunk_hashes bytea[] NOT NULL,
   complete     boolean NOT NULL DEFAULT false,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
@@ -210,10 +209,21 @@ CREATE TABLE ckpt_manifests (
 -- prune/list-descending access pattern
 CREATE INDEX ckpt_manifests_lookup
   ON ckpt_manifests (w, net, complete, seq DESC);
--- GIN index so the GC chunk-reclaim query's `hash = ANY(chunk_hashes)`
--- check doesn't force a sequential scan of ckpt_manifests
-CREATE INDEX ckpt_manifests_chunk_hashes_gin
-  ON ckpt_manifests USING gin (chunk_hashes);
+
+-- Junction table for manifest -> chunk references — REPLACES an earlier
+-- `chunk_hashes bytea[]` array column + GIN index (Performance/DESIGN.md
+-- §3, Performance/GC_AND_TRACING_RESEARCH.md): GIN's `array_ops` operator
+-- class only accelerates &&/@>/<@/= — never the scalar `hash = ANY(array)`
+-- membership test the GC reclaim query actually needs, and a real
+-- benchmark found GIN gives zero benefit for exactly this cross-row query
+-- shape. A plain junction table + btree gives the GC an ordinary,
+-- btree-indexed anti-join instead.
+CREATE TABLE ckpt_manifest_chunks (
+  manifest_id bigint NOT NULL REFERENCES ckpt_manifests(id),
+  chunk_hash  bytea  NOT NULL REFERENCES ckpt_chunks(hash),
+  PRIMARY KEY (manifest_id, chunk_hash)
+);
+CREATE INDEX ckpt_manifest_chunks_by_hash ON ckpt_manifest_chunks (chunk_hash);
 ```
 
 GC (prune old manifests, reclaim unreferenced chunks) keeps the Mongo
@@ -246,9 +256,14 @@ WHERE m.complete
 DELETE FROM ckpt_chunks c
 WHERE c.created_at < now() - interval '15 minutes'   -- grace window, unchanged value
   AND NOT EXISTS (
-    SELECT 1 FROM ckpt_manifests m WHERE c.hash = ANY(m.chunk_hashes)
+    SELECT 1 FROM ckpt_manifest_chunks mc WHERE mc.chunk_hash = c.hash
   );
 ```
+
+Batching this DELETE (vs. one unbatched sweep) is deliberately left
+undecided here — `Performance/DESIGN.md` §3 has the tradeoff (both
+patterns have real production precedent; which one UmbraDB needs depends
+on measured table size, not a speculative choice made at design time).
 
 ## 4. Watermarks
 

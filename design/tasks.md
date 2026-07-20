@@ -66,9 +66,12 @@ fix rounds before close). A task is CLOSED only after both auditors approve
 
 ## 3. Checkpoint manifests, GC, and prune
 
-- [ ] 3.1 Implement `ckpt_manifests` DDL + both indexes (compound
-  `(w,net,complete,seq DESC)` and the GIN index on `chunk_hashes`) from
-  design.md §3.
+- [ ] 3.1 Implement `ckpt_manifests` DDL, its compound index
+  (`w,net,complete,seq DESC`), and the `ckpt_manifest_chunks` junction
+  table + its `chunk_hash` index from design.md §3 — **not** an array
+  column with a GIN index (that approach was superseded by
+  `Performance/DESIGN.md` §3's research: GIN doesn't accelerate the scalar
+  `ANY()` membership test the GC reclaim query needs).
 - [ ] 3.2 Implement the two-step GC (manifest prune, then chunk reclaim) in
   the exact order design.md §3 specifies, porting the real retention
   predicate from the Mongo `prune.ts` (not the `<retain_count>` placeholder
