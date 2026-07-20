@@ -51,14 +51,23 @@ export interface CheckpointRecord extends CheckpointSummary {
 
 export interface PruneResult {
   prunedSequences: CheckpointSequence[];
-  /** Chunks physically deleted BY THIS CALL because this prune removed their last remaining
-   *  reference anywhere in the store — across ALL wallets and networks, not just this one.
-   *  Reclamation is synchronous and immediate (the refcount scan runs in the same internal
-   *  transaction as the manifest deletion, per the interface doc above) — there is no
-   *  eventual/deferred/grace-window collection to account for; by the time `prune` resolves,
-   *  reclamation has already happened or it hasn't. Chunk storage is globally content-addressed
-   *  and shared, so a chunk still referenced by another wallet's manifest is never reclaimed,
-   *  and this count can be zero even when many checkpoints were pruned. */
+  /**
+   * Chunks physically deleted BY THIS CALL. `prune` checks for reclaimable chunks
+   * synchronously, in the same internal transaction as the manifest deletion (so the safety
+   * side — never deleting a chunk a live manifest still references, `Formal/STORAGE_ALGEBRA.md`
+   * §2 Law C2a — holds unconditionally, at every instant) — but this count is NOT everything
+   * that just became unreferenced. A chunk only appears here if it ALSO clears this store's
+   * grace-window age check (an intentional TOCTOU guard, see the interface doc above and
+   * `design/design.md` §3's grace-window `DELETE`): a chunk that lost its last reference in
+   * this very call, but was created too recently to have aged past the grace window, is left
+   * in place and will only show up in `reclaimedChunks`/`reclaimedBytes` on a LATER `prune`
+   * call made after the window elapses (Law C2b, "eventual collection," is explicitly
+   * conditional on a later GC pass actually running — do not read a zero or low count here as
+   * proof nothing became unreferenced). Chunk storage is globally content-addressed and
+   * shared, so a chunk still referenced by another wallet's manifest is never reclaimed either,
+   * for an unrelated reason — and this count can be zero even when many checkpoints were
+   * pruned, for either reason.
+   */
   reclaimedChunks: number;
   reclaimedBytes: number;
 }

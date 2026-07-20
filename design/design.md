@@ -130,13 +130,13 @@ CREATE TABLE kv_history (
   -- give the EXCLUDE constraint below a range type to index
   validity   tstzrange GENERATED ALWAYS AS (tstzrange(valid_from, valid_to, '[)')) STORED,
   CONSTRAINT kv_history_range CHECK (valid_from < valid_to),
-  -- Law T5a (design-algebra.md §1): no two history intervals for the same
-  -- key may overlap ("MECHANISM SPECIFIED" per Formal/STORAGE_ALGEBRA.md's
+  -- Law T5(1) (Formal/STORAGE_ALGEBRA.md §1): no two history intervals for
+  -- the same key may overlap ("MECHANISM SPECIFIED" per that document's
   -- terminology — the engine rejects a write that would violate it, the
   -- same way the ledger's Merkle tree makes a non-linear insert
   -- unrepresentable rather than merely unexpected). This constraint gives
   -- non-overlap ALONE; it does NOT by itself guarantee gap-freedom
-  -- (T5b, below) between consecutive intervals — that half is proved by
+  -- (T5(2), below) between consecutive intervals — that half is proved by
   -- construction from the trigger's own logic (each new history row's
   -- valid_from is exactly the prior row's valid_to), not by a constraint.
   CONSTRAINT kv_history_no_overlap EXCLUDE USING gist (
@@ -309,6 +309,11 @@ referenced becomes reclaimable in the same GC pass):
 --    (the oldest one we must KEEP) sits at OFFSET (N-1), not OFFSET N — the
 --    original `OFFSET <retain_count>` selected the (N+1)-th newest instead,
 --    silently retaining one extra manifest (and its chunks) forever.
+--    PRECONDITION, found by a follow-up review: retain_count MUST be >= 1.
+--    retain_count = 0 makes OFFSET evaluate to -1, which Postgres rejects
+--    outright ("OFFSET must not be negative") — the caller (PruneResult's
+--    caller in design/tasks.md's port of prune.ts) must validate/clamp
+--    retain_count >= 1 before this query runs, this SQL does not guard it.
 DELETE FROM ckpt_manifests m
 WHERE m.complete
   AND m.seq < (
@@ -362,8 +367,16 @@ transaction is `sql.begin(async sql => { ... })` (driver TBD, §7).
 
 **Writer lease — corrected design.** The writer-lease pattern (currently a
 Mongo app-level lease document) becomes a Postgres **session-level advisory
-lock** (`pg_advisory_lock(hashtext(leaseKey))` / `pg_advisory_unlock`).
-Session-scoped advisory locks live on the *specific connection* that
+lock** (`pg_advisory_lock(2, hashtext(leaseKey))` / `pg_advisory_unlock`) —
+**revised 2026-07-20 to use the two-integer form with a fixed class
+constant (`2` = "writer lease"), found necessary by a follow-up review:**
+the Sprint 1 migration runner (`openspec/changes/sprint-1-setup-and-temporal-kv/design.md`
+§2) also takes an advisory lock, using class `1` = "migrations" — without
+distinct class constants, a lease key and a migration's schema name could
+hash-collide onto the same single-integer lock key, causing an unrelated
+migration and a writer-lease acquisition to needlessly serialize against
+each other. Session-scoped advisory locks live on the *specific connection*
+that
 acquired them — but §7 picks `postgres.js`, whose default `postgres(url)`
 factory is itself a connection pool (`max: 10` by default). Acquiring the
 lock via one pooled call and releasing it via another can silently land on
@@ -623,14 +636,14 @@ before the Mongo package is deleted:
      an expected diff; a removed edge-case assertion is not).
 
 **Known residual gap in this gate (surfaced by the mathematical-structure
-audit, `design-algebra.md` §1, Law T3):** the differential check above
+audit, `Formal/STORAGE_ALGEBRA.md` §1, Law T3):** the differential check above
 proves the Mongo and Postgres implementations agree with EACH OTHER at
 shared `asOf` timestamps — it does NOT prove either one equals the true
 fold-over-all-events-from-genesis (`getAt(k, at=T) = fold(events(k)
-filtered to writtenAt ≤ T)`, `design-algebra.md` Law T3). A bug present in
+filtered to writtenAt ≤ T)`, `Formal/STORAGE_ALGEBRA.md` Law T3). A bug present in
 BOTH implementations (e.g. inherited from a shared, subtly-wrong Mongo
 design decision) would pass this gate undetected. This gate is necessary
-but not sufficient for full correctness; `design-algebra.md`'s property
+but not sufficient for full correctness; `Formal/STORAGE_ALGEBRA.md`'s property
 test P3 (Law T3 — checks `getAt` against a from-scratch replay of a
 generated event sequence, not against the other implementation) is the
 actual replay-equivalence check and MUST also be implemented — not treated

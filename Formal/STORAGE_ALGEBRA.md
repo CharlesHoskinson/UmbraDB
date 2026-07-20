@@ -75,15 +75,24 @@ writes to the same key in one transaction would otherwise be
 indistinguishable by wall-clock timestamp, which is exactly the defect that
 broke Law T4 in the prior version of this document (below).
 
-**Implementation note (normative for the Postgres adapter):** the
-`BEFORE UPDATE` trigger on `kv_current` must check, before doing anything
-else: `IF OLD.updated_at = now() THEN RAISE EXCEPTION ...`. Because
-`updated_at` is always set to that write's `now()`, a second write in the
-same transaction will find `OLD.updated_at` exactly equal to its own
-(unchanged, transaction-constant) `now()` — this is a correct, mechanical
-way to detect "this is a second write to this row within the current
-transaction," using `now()`'s transaction-scoped constancy as the detection
-signal rather than fighting it.
+**Implementation note (normative for the Postgres adapter) — corrected
+after a follow-up review found this paragraph still describing the
+abandoned mechanism.** The `BEFORE UPDATE` trigger on `kv_current` must
+check, before doing anything else: `IF OLD.updated_xact = txid_current()
+THEN RAISE EXCEPTION ...`, where `updated_xact bigint NOT NULL DEFAULT
+txid_current()` is a column dedicated to this check — NOT a comparison on
+`updated_at`. This distinction matters because `updated_at` itself is
+`clock_timestamp()`-derived (§ Law T4 below), which changes on every
+statement and would therefore never equal a prior write's value even within
+the same transaction — a same-transaction detector built on `updated_at`
+would simply never fire. `txid_current()`, by contrast, is the current
+transaction's ID: constant across every statement within one transaction
+(including across `sql.begin()`'s savepoint-based nesting) and distinct
+across different transactions (returned as the 64-bit epoch-extended id, so
+32-bit wraparound is not a practical collision risk). `OLD.updated_xact =
+txid_current()` is therefore true if and only if `OLD` was itself written
+earlier in the currently-executing transaction — the correct, mechanical
+detector this rule needs. See `design/design.md` §2 for the exact DDL.
 
 **Law T1 — gapless monotonicity (algebraic content of "gapless").** For
 successive non-conflict states `s, s' = s · Put`,
@@ -250,10 +259,12 @@ choice**: a sync cursor needs current progress, not lineage, so the design
 drops the entire event-sourced structure rather than carrying dead
 versioning. Monotonicity is explicitly *not* a law here (callers hold a
 lease if they need it). **Status: MECHANISM SPECIFIED** (single-row
-upsert) — **conditional on the stored value actually being losslessly
-JSON-representable**, which the current `WatermarkValueSchema` does not
-guarantee (see `src/interfaces/watermarks.ts`'s fix, applied alongside
-this document).
+upsert) — conditional on the stored value actually being losslessly
+JSON-representable, which an earlier `WatermarkValueSchema` draft (a
+`z.record(z.string(), z.unknown())` shape admitting non-JSON-safe values
+like nested `bigint`/`undefined`/`Date`) did NOT guarantee; fixed by
+rebuilding `WatermarkValueSchema` on the shared `JsonValueSchema`
+(`src/interfaces/watermarks.ts`, already applied).
 
 ---
 

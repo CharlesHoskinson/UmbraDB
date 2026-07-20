@@ -81,8 +81,14 @@ auditors approve, or their findings are fixed and re-reviewed.
   bypassing the trigger, in a test-only helper) asserts the error is
   identified via SQLSTATE `23P01` specifically and translated to a
   distinguishable error, not just that "some error" was thrown; (c) a unit
-  test that triggers `UB001` (two `put`s to one key in one transaction)
-  asserts the result is specifically `TransactionKeyReuseError`.
+  test that triggers `UB001` directly at the SQL level — two `UPDATE`
+  statements against the same `kv_current` row inside one `sql.begin()`,
+  bypassing `PgTemporalKV.put`'s public surface (which cannot reach this
+  case yet in Sprint 1 — see `specs/temporal-kv/spec.md`'s scope note on
+  this Requirement) — asserts the second `UPDATE` fails with SQLSTATE
+  `UB001`, and that the adapter's `errors.ts` translates it to
+  `TransactionKeyReuseError` when routed through the normal error-translation
+  path.
 
 ## 1. TemporalKV
 

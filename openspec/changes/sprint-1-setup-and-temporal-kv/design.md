@@ -84,6 +84,20 @@ confusing DDL.
 import type { Sql } from "postgres";
 
 export async function up(sql: Sql, schema: string): Promise<void> {
+  // NOTE, found by a follow-up review: btree_gist's operator classes (needed
+  // by kv_history's EXCLUDE constraint below) are resolved via search_path
+  // at CREATE TABLE time, same as any catalog object — `CREATE EXTENSION IF
+  // NOT EXISTS` is a global, database-scoped no-op if btree_gist already
+  // exists ANYWHERE in this database (extension names are unique per
+  // database, not per schema), which is common on managed Postgres where
+  // it's pre-installed in `public`. If this migration's connection's
+  // search_path is JUST the target schema (no `public`), the EXCLUDE
+  // constraint below fails with "data type text has no default operator
+  // class for access method gist" even though the extension "exists." Fix:
+  // runMigrations (below) explicitly widens THIS connection's search_path to
+  // `<schema>, public` before running any migration — safe, since every
+  // object this migration creates is already schema-qualified via
+  // `sql(schema)` and cannot collide with anything in `public`.
   await sql`
     CREATE EXTENSION IF NOT EXISTS btree_gist
   `;
@@ -178,12 +192,22 @@ and `001` (this section) both live as `up(sql, schema)` functions in
 
 **Migration concurrency/bootstrap (found missing by audit): two processes
 starting simultaneously must not both apply the same migration.** Fix:
-`runMigrations` acquires a single, schema-scoped session advisory lock
-(`pg_advisory_lock(hashtext('umbradb_migrations:' || schema))`) via a
+`runMigrations` acquires a single, schema-scoped session advisory lock via a
 `sql.reserve()`-pinned connection *before* anything else — including before
 checking whether `_migrations` exists, since that table may not exist yet
 on a cold database and the lock must cover the bootstrap step too, not just
-steady-state migration application:
+steady-state migration application. **Three fixes from a follow-up review,
+folded in below:** (1) the lock uses the two-integer form of
+`pg_advisory_lock(class, key)` with a fixed class constant reserved for
+migrations (`1`), so it can never collide with the writer-lease's own
+advisory locks (`design/design.md` §5) even if a lease key and a schema
+name happened to hash to the same 32-bit value under a single shared
+keyspace; (2) the connection's `search_path` is explicitly widened to
+`<schema>, public` before anything else runs, fixing the btree_gist
+operator-class resolution gap noted in the migration code above; (3) the
+unlock and the connection release are in separate `finally`s, so a failed
+unlock (e.g. the connection died mid-migration) still releases the
+connection back to the pool instead of leaking it:
 
 ```typescript
 export async function runMigrations(sql: Sql, opts: { schema: string }): Promise<void> {
@@ -192,27 +216,33 @@ export async function runMigrations(sql: Sql, opts: { schema: string }): Promise
   }
   const reserved = await sql.reserve();
   try {
-    await reserved`select pg_advisory_lock(hashtext(${"umbradb_migrations:" + opts.schema}))`;
-    // Bootstrap check: to_regclass returns NULL (not an error) for a
-    // relation that doesn't exist yet, so this is safe on a cold database
-    // even before migration 000 has ever run.
-    const bootstrapped = await reserved`select to_regclass(${opts.schema + "._migrations"}) is not null as exists`;
-    if (!bootstrapped[0].exists) {
-      await reserved.begin(async (tx) => {
-        await migration000.up(tx, opts.schema);
-        await tx`insert into ${tx(opts.schema)}._migrations (name) values ('000_schema')`;
-      });
-    }
-    for (const m of migrations.slice(1)) {
-      const applied = await reserved`select 1 from ${reserved(opts.schema)}._migrations where name = ${m.name}`;
-      if (applied.length > 0) continue;
-      await reserved.begin(async (tx) => {
-        await m.up(tx, opts.schema);
-        await tx`insert into ${tx(opts.schema)}._migrations (name) values (${m.name})`;
-      });
+    // class 1 = "migrations" (a fixed constant, reserved and documented here so the writer-lease
+    // layer, design/design.md §5, uses a different class and the two can never collide)
+    await reserved`select pg_advisory_lock(1, hashtext(${opts.schema}))`;
+    await reserved`set search_path = ${reserved(opts.schema)}, public`; // btree_gist opclass resolution fix
+    try {
+      // Bootstrap check: to_regclass returns NULL (not an error) for a
+      // relation that doesn't exist yet, so this is safe on a cold database
+      // even before migration 000 has ever run.
+      const bootstrapped = await reserved`select to_regclass(${opts.schema + "._migrations"}) is not null as exists`;
+      if (!bootstrapped[0].exists) {
+        await reserved.begin(async (tx) => {
+          await migration000.up(tx, opts.schema);
+          await tx`insert into ${tx(opts.schema)}._migrations (name) values ('000_schema')`;
+        });
+      }
+      for (const m of migrations.slice(1)) {
+        const applied = await reserved`select 1 from ${reserved(opts.schema)}._migrations where name = ${m.name}`;
+        if (applied.length > 0) continue;
+        await reserved.begin(async (tx) => {
+          await m.up(tx, opts.schema);
+          await tx`insert into ${tx(opts.schema)}._migrations (name) values (${m.name})`;
+        });
+      }
+    } finally {
+      await reserved`select pg_advisory_unlock(1, hashtext(${opts.schema}))`;
     }
   } finally {
-    await reserved`select pg_advisory_unlock(hashtext(${"umbradb_migrations:" + opts.schema}))`;
     reserved.release();
   }
 }
@@ -359,10 +389,15 @@ each tied to a specific law from `Formal/STORAGE_ALGEBRA.md` §1:
   `kv_current` state inconsistent with the `kv_history` query that already
   ran. One statement shares one MVCC snapshot across both halves:
   ```sql
-  SELECT value, version FROM kv_history
+  -- NOTE: selects writtenAt (valid_from / updated_at) in both branches —
+  -- VersionedEntrySchema (src/interfaces/temporal-kv.ts) requires it as a
+  -- non-optional field; a two-column SELECT here would pass every getAt
+  -- read straight into a ValidationError. Found by the follow-up Opus
+  -- review of this fix, added here before any implementer copies this.
+  SELECT value, version, valid_from AS written_at FROM kv_history
   WHERE ns = $1 AND scope = $2 AND key = $3 AND validity @> $4::timestamptz
   UNION ALL
-  SELECT value, version FROM kv_current
+  SELECT value, version, updated_at AS written_at FROM kv_current
   WHERE ns = $1 AND scope = $2 AND key = $3 AND updated_at <= $4::timestamptz
   LIMIT 1
   ```
@@ -450,6 +485,7 @@ error would fall through to a generic/untranslated failure instead).
 | (connection-level failures, no SQLSTATE — driver throws before a query even reaches the server) | connection refused / unreachable host | `ConnectionError` |
 | `23P01` | `kv_history_no_overlap` exclusion violation | a distinguishable, catchable error (not `TemporalKVError` itself — this constraint is not expected to fire under normal `PgTemporalKV` operation since the trigger is designed not to produce overlaps; its purpose is defense-in-depth, so a generic but distinguishable `StorageError` subclass is sufficient here, not a new `TemporalKV`-specific error type) |
 | `UB001` (custom, `design/design.md` §2's trigger) | same-transaction second write to one key | `TransactionKeyReuseError` (`src/interfaces/temporal-kv.ts`) |
+| `23514` (`check_violation`, `kv_history_range`) | a backward wall-clock STEP (not drift — an NTP correction) between two writes to the same key makes `valid_from` (the older write's `updated_at`) exceed `valid_to` (the new write's `clock_timestamp()`) | a distinguishable, catchable error (not `TemporalKVError`, since it isn't a data-model violation — the rare underlying cause is the deployment's clock, not the storage layer, and there is no CALLER-fixable retry available). Found by a follow-up review: inherent to choosing `clock_timestamp()` over a monotonic source, and previously undocumented — see `Formal/STORAGE_ALGEBRA.md` §1's Law T4 accepted-caveat paragraph for the underlying tradeoff. |
 
 ## 5. Test infrastructure
 
@@ -460,11 +496,24 @@ responsible for cleaning up its own data (`TRUNCATE` between tests, not a
 fresh container per test — container startup cost is real and shouldn't be
 paid per-test).
 
-`temporal-kv.property.test.ts` implements the five property tests
-`Formal/STORAGE_ALGEBRA.md` §5 derives (P1-P5), using `fast-check` (add as
-a devDependency) with `fc.property`/`fc.asyncProperty` generating arbitrary
-put sequences, versions, and timestamps. P4 and P5 are explicitly marked
-ASPIRATIONAL→GUARANTEED in the algebra spec (P4 by the trigger's
-`valid_from`-sourcing discipline; P5 by the `GiST EXCLUDE` constraint) —
-these two tests are the actual verification that the aspirational parts of
-the design hold in the real, running implementation, not just on paper.
+`temporal-kv.property.test.ts` implements the TemporalKV-relevant property
+tests `Formal/STORAGE_ALGEBRA.md` §5 derives — P1 through P5 (the
+CheckpointStore/Watermarks/Lease properties P6-P10 belong to later
+sprints' modules, not this one), using `fast-check` (add as a
+devDependency) with `fc.property`/`fc.asyncProperty` generating arbitrary
+put sequences, versions, and timestamps. **Revised 2026-07-20 — the
+retired ASPIRATIONAL→GUARANTEED terminology this paragraph previously used
+no longer appears anywhere in the algebra spec** (see that document's own
+revision note on why the labels were retired). In the current terminology,
+P4 and P5 both verify laws marked **MECHANISM SPECIFIED** — meaning a
+concrete schema constraint or trigger discipline is specified but not yet
+proven against a real, running implementation. P4 verifies Law T4 (dual-
+addressing agreement, backed by the trigger's `clock_timestamp()`/
+`txid_current()` discipline); P5 verifies Law T5, split into T5(1)
+non-overlap (backed by the `GiST EXCLUDE` constraint itself, so this test
+mostly confirms the constraint fires correctly) and T5(2) gap-freedom
+(backed only by the trigger's write discipline, with no database constraint
+— this half is the one a regression could silently break with nothing else
+to catch it). These two tests are the actual verification that the
+mechanism-specified parts of the design hold in the real, running
+implementation, not just on paper.

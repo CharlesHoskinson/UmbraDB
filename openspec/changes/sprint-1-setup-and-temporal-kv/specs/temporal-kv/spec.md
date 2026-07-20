@@ -131,21 +131,33 @@ used as the sole signal.
 - **AND** `error.actual` SHALL be `undefined`, not `0` and not the numeral
   zero as a version
 
-### Requirement: A second put to the same key within one transaction is rejected, not silently absorbed
+### Requirement: A second write to the same key within one transaction is rejected at the trigger level, not silently absorbed
 
 Added 2026-07-20 after a cross-vendor audit found the original design lost history rows under
 same-transaction double-writes (Postgres's `now()` is fixed at transaction start, so two writes
-to one key in one `sql.begin()` shared an indistinguishable commit instant). Per
-`Formal/STORAGE_ALGEBRA.md` §1 (Law T4) and `design/design.md` §2's trigger: `PgTemporalKV.put`
-SHALL reject a second write to the same `(ns, scope, key)` within a single transaction with
-`TransactionKeyReuseError`, and SHALL NOT insert a `kv_history` row that would go unrecorded as a
-result of the rejection — the first write's row remains exactly as committed.
+to one key in one transaction shared an indistinguishable commit instant). Per
+`Formal/STORAGE_ALGEBRA.md` §1 (Law T4) and `design/design.md` §2's trigger:
+`kv_current_history_trigger` SHALL reject a second `UPDATE` to the same `(ns, scope, key)` row
+within a single transaction with SQLSTATE `UB001` (translated by the adapter to
+`TransactionKeyReuseError`), and SHALL NOT insert a `kv_history` row that would go unrecorded as
+a result of the rejection — the first write's row remains exactly as committed.
 
-#### Scenario: A second put to the same key in one transaction is rejected
-- **WHEN** a transaction issues `put(ns, scope, key, v1)` followed by
-  `put(ns, scope, key, v2)` against the same key before committing
-- **THEN** the second `put` SHALL reject with `TransactionKeyReuseError`
-- **AND** the first `put`'s version SHALL remain the current value after the transaction commits
+**Scope note, corrected after a follow-up review found the original scenario unreachable as
+written:** this sprint's `PgTemporalKV.put` never issues two `UPDATE`s within one transaction on
+its own, and (per the separate opts.tx Requirement below) rejects any caller-supplied
+`opts.tx` outright — so there is no public-API call sequence that reaches this trigger twice in
+one transaction yet. The scenario below is therefore exercised directly at the SQL/trigger
+level (two `UPDATE`s issued within one `sql.begin()` against the same connection, bypassing
+`PgTemporalKV.put`'s public surface entirely), proving the database-level mechanism itself is
+correct and ready for the day the Transaction/Lease module wires real `opts.tx` support through
+to it in a later sprint — at which point this scenario becomes reachable via `put` directly and
+should be re-verified end-to-end through the public API too.
+
+#### Scenario: A second UPDATE to the same key's row in one transaction is rejected at the trigger level
+- **WHEN** a `sql.begin()` transaction issues an `UPDATE` to a `kv_current` row, followed by a
+  second `UPDATE` to that same row, before committing
+- **THEN** the second `UPDATE` SHALL reject with SQLSTATE `UB001`
+- **AND** the first `UPDATE`'s version SHALL remain the current value after the transaction commits
 - **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection
 
 #### Scenario: Sequential puts to the same key in separate transactions are unaffected
