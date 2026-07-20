@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JsonValueSchema, type JsonValue } from "./temporal-kv.js";
 import type { TransactionHandle } from "./transaction-lease.js";
 
 /**
@@ -22,11 +23,19 @@ export type WatermarkKey = string;
 
 /** Opaque progress value, stored as JSONB. Callers agree on shape per kind: a block height,
  *  byte offset, or composite cursor object. Schema-first per §1.4 — the type is derived,
- *  not hand-duplicated. */
-export const WatermarkValueSchema = z.union([
-  z.string(), z.number(), z.record(z.string(), z.unknown()),
-]);
-export type WatermarkValue = z.infer<typeof WatermarkValueSchema>;
+ *  not hand-duplicated.
+ *
+ *  REVISED after review found the original `z.union([z.string(), z.number(),
+ *  z.record(z.string(), z.unknown())])` unsound: `z.unknown()` record values admit anything —
+ *  `bigint`, `undefined`, `Date`, functions, class instances — none of which round-trip through
+ *  JSONB losslessly, so a value could pass validation on `set()` and come back a different
+ *  shape (or throw in the JSONB encoder) on `get()`. Reusing the shared, already-audited
+ *  {@link JsonValueSchema} from `temporal-kv.ts` (rather than a second hand-rolled definition)
+ *  guarantees the same lossless-round-trip property this store's sibling interface already
+ *  relies on, and a top-level bare string/number is still valid JSON so no existing use case
+ *  narrows. */
+export const WatermarkValueSchema = JsonValueSchema;
+export type WatermarkValue = JsonValue;
 
 export interface Watermarks {
   /**

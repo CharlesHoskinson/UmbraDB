@@ -7,11 +7,36 @@ faces. Each module is a distinct algebra over a shared transactional
 substrate; the transaction layer is what makes the other three's laws hold
 at all.
 
+**Revision note (this version):** a cross-vendor Codex GPT-5.6 Sol audit,
+run independently of the Opus review that approved the previous version,
+found this document mathematically self-contradictory: Law T4 as
+originally stated is impossible to satisfy given P1 permitted multiple
+same-key writes inside one transaction (Postgres's `now()` is fixed at
+transaction start, so two such writes share one commit instant — no
+timestamp-based lookup can then distinguish them). It also found T3's
+retention interaction makes `null` ambiguous between "never existed" and
+"pruned away," that T5 only ever had a non-overlap guarantee not the
+gap-freedom it claimed, that L1 cannot hold for arbitrary caller code once
+TTL/lease-stealing is in the picture, and that "GUARANTEED" is a dishonest
+label before any of this is actually implemented. All fixed below — this
+is a structural revision, not a wording pass. See git history for the
+prior version if the before/after is useful.
+
 Notation: `S` = state set, `·` = right action of an event on state, `E*` =
 free monoid of events under concatenation, `π` = observation projection,
-`⊑` = semilattice order. "GUARANTEED" = enforced today by a schema
-constraint, trigger, or type; "ASPIRATIONAL" = stated as intent but not yet
-enforced by any constraint or test.
+`⊑` = semilattice order.
+
+**Status labels (replacing the previous "GUARANTEED"/"ASPIRATIONAL"
+scheme, which claimed things were guaranteed before any implementation
+existed):**
+- **MECHANISM SPECIFIED** — a concrete schema constraint, trigger
+  discipline, or type-level device is specified in this document that would
+  enforce the law once actually built and tested; not yet true of any
+  running system.
+- **CALLER-ENFORCED** — holds only if callers/implementers follow a
+  documented rule; no schema constraint or type forbids violating it.
+- **OPEN** — not yet resolved by this document; requires a decision before
+  implementation.
 
 **Grounding fact this whole document builds on:** `(State, applyEvent)` for
 Midnight's real `ZswapLocalState` is a right action of the free monoid `E*`
@@ -39,15 +64,43 @@ storage layer.
 `ZswapLocalState`, but here the monoid element is a caller-issued put, not a
 ledger event indexed on a global tree.
 
+**Structural rule, introduced by this revision, that everything else in
+this section depends on: at most one `put` to a given key `k` may occur
+within a single database transaction.** A second `put` to the same key in
+the same transaction MUST be rejected (not silently accepted, not silently
+merged) — enforced at the trigger level (§ implementation note below), not
+merely documented. This exists because Postgres's `now()` is fixed at
+transaction start and constant for the transaction's entire duration; two
+writes to the same key in one transaction would otherwise be
+indistinguishable by wall-clock timestamp, which is exactly the defect that
+broke Law T4 in the prior version of this document (below).
+
+**Implementation note (normative for the Postgres adapter):** the
+`BEFORE UPDATE` trigger on `kv_current` must check, before doing anything
+else: `IF OLD.updated_at = now() THEN RAISE EXCEPTION ...`. Because
+`updated_at` is always set to that write's `now()`, a second write in the
+same transaction will find `OLD.updated_at` exactly equal to its own
+(unchanged, transaction-constant) `now()` — this is a correct, mechanical
+way to detect "this is a second write to this row within the current
+transaction," using `now()`'s transaction-scoped constancy as the detection
+signal rather than fighting it.
+
 **Law T1 — gapless monotonicity (algebraic content of "gapless").** For
 successive non-conflict states `s, s' = s · Put`,
 `s'.version = s.version + 1`, with `⊥ · Put` producing `version = 1`. This
 is exactly `firstFree`'s "only index i+1 reachable from i," but enforced
 *operationally* (server assigns current+1) rather than *structurally*. Two
 concurrent `put`s could each read version `v` and both attempt `v+1`; only
-serialization prevents a gap or a duplicate. **Status: GUARANTEED only
-inside a transaction / writer-lease; ASPIRATIONAL otherwise** — nothing in
-the type system forbids a race.
+serialization (row-level locking on `UPDATE`, which Postgres provides
+per-row regardless of transaction wrapping) prevents a gap or a duplicate.
+**Status: MECHANISM SPECIFIED for single-key serialization** (Postgres's
+own row lock on `UPDATE ... WHERE key = ...` already serializes concurrent
+writers to the *same* row without needing an explicit transaction wrapper);
+**OPEN for cross-key/writer-role coordination** (nothing here specifies
+what happens if two independent processes are meant to act as a single
+logical writer — that is the Transaction/Lease module's job, not
+TemporalKV's, and is out of this document's scope until that module
+exists).
 
 **Law T2 — CAS as a guarded partial action.**
 `put(k, v, expectedVersion=e)` is defined iff `e = current.version` (or
@@ -56,55 +109,91 @@ the type system forbids a race.
 ledger's *partial action* pattern — `s · w` defined only when `w` starts at
 `s`'s current index — with `expectedVersion` playing the role the index
 plays structurally in the ledger. Omitting `expectedVersion` makes the
-action *total* (unconditional write), which is precisely where T1 can
-silently break under concurrency. **Status: GUARANTEED** (the guard is a
-`WHERE version = e` in the UPDATE; a mismatch affects 0 rows).
+action *total* (unconditional write). **Status: MECHANISM SPECIFIED** — the
+guard is a real `WHERE version = e` predicate in a plain `UPDATE` statement
+(NOT an `INSERT ... ON CONFLICT`, which cannot express "fail when the row
+is absent" — this exact confusion caused the original CAS-guard bug found
+and fixed earlier this session); a mismatch affects 0 rows, and the caller
+distinguishes "conflict" from "never written" by a follow-up read, not by
+row-count alone.
 
-**Law T3 — temporal-projection / observational equivalence.** Let
-`events(k)` be the committed put-sequence. Then
+**Law T3 — temporal-projection / observational equivalence, scoped to
+retention.** Let `events(k)` be the committed put-sequence still present in
+`kv_history` (i.e. not yet pruned by retention). Then, for any `T` at or
+after the oldest timestamp `kv_history` currently retains for `k`:
 
     getAt(k, at=T)  =  fold(events(k) filtered to writtenAt ≤ T)
 
-i.e. a read-as-of-T must equal replaying only the events at or before T.
-This is *the same property* the ledger's `applyCollapsedUpdate` homomorphism
-must satisfy — `π ∘ collapse = π ∘ replay` — applied to our own design, with
-`π` = "the value + version live at T." In Postgres it is discharged by the
-`[valid_from, valid_to)` interval read (`valid_from ≤ T < valid_to`), which
-*is* the fold, precomputed. **Status: GUARANTEED for `getAt` reachable
-within retention; ASPIRATIONAL beyond it** — `pg_cron` history deletion caps
-how far back T3 holds, so `getAt` past the retention window silently
-violates it (returns `null`/stale rather than the true fold).
+For `T` older than that retention floor, `getAt` MUST NOT return `null` or
+stale data as if the key had never existed at `T` — that conflates "never
+existed" with "existed, but the record was pruned," which the interface's
+own documented contract for `get`/`getAt` (absence ⇒ `null`) does not
+permit conflating. Instead, `getAt` for a `T` older than the retention
+floor MUST throw a distinct error carrying the actual floor
+(`HistoryUnavailableError { oldestAvailableAt, oldestAvailableVersion }` —
+add this to the TemporalKV error hierarchy), so a caller can distinguish
+"this key never existed at T" from "this key's history at T was pruned and
+is no longer knowable." **Status: MECHANISM SPECIFIED within retention**
+(the `[valid_from, valid_to)` interval read is the fold, precomputed);
+**OPEN beyond retention until `HistoryUnavailableError` is implemented** —
+Sprint 1 performs no retention at all (§0 of the Sprint 1 change), so this
+gap does not yet manifest, but the error type and the retention-floor
+tracking it needs must exist before any retention mechanism (`pg_cron` or
+partitioning) is turned on.
 
-**Law T4 — dual-addressing agreement (a genuine, currently-unenforced
-law).** `AsOf` is `{version: v} | {at: T}` — two projections `π_v` and `π_T`
-of the same history. They must agree at commit instants:
+**Law T4 — dual-addressing agreement, now well-defined.** `AsOf` is
+`{version: v} | {at: T}` — two projections `π_v` and `π_T` of the same
+history. Given the structural rule above (at most one `put` per key per
+transaction), every committed version of a key has a distinct, well-defined
+`clock_timestamp()`-derived instant — call it `commitInstant(v)` — because
+no two versions can share a transaction, and Postgres's own row-level
+locking on `UPDATE` totally orders writes to the same key regardless of
+transaction boundaries. The law:
 
     getAt(k, {at = commitInstant(v)})  =  getAt(k, {version = v})
 
-The design maintains **two separate intervals** — a version interval and a
-wall-clock `tstzrange` — over the same rows. Agreement is only guaranteed if
-`valid_from` of version `v` equals exactly the `writtenAt`/`updated_at` used
-as the version boundary. The trigger sets `valid_from = OLD.updated_at`, so
-alignment *depends on the trigger being the sole writer of both columns*.
-**Status: ASPIRATIONAL** — assumed by construction, enforced by no
-constraint. A property test (P4 below) is the only thing that would catch
-drift.
+**Accepted residual caveat, stated explicitly rather than glossed over:**
+`commitInstant(v)` is populated using `clock_timestamp()` (real wall-clock
+time at trigger-execution time), not a true post-commit visibility
+timestamp — Postgres has no built-in mechanism to stamp a row with "the
+instant this transaction's commit became visible to other transactions" at
+write time (only `pg_xact_commit_timestamp(xid)`, a post-hoc lookup
+requiring `track_commit_timestamp = on`, usable for verification/auditing
+but not as the stored `valid_from`/`valid_to` value itself). Because writes
+to the *same key* are already serialized by Postgres's row lock (a second
+writer blocks until the first commits or rolls back), there is no race
+window in which this distinction matters for T4's own statement — the
+`clock_timestamp()` recorded for version `v` is always earlier than
+whatever a subsequent writer to the same key observes. **Status: MECHANISM
+SPECIFIED**, conditional on: (a) the one-write-per-key-per-transaction rule
+being enforced (it is, at the trigger level, per the structural rule
+above), and (b) `clock_timestamp()`, not `now()`, being used for
+`valid_from`/`valid_to`/`updated_at` (the original `now()`-based design
+was the actual T4-breaking bug; corrected here and in `design.md` §2).
 
-**The `tstzrange` + `GiST EXCLUDE` upgrade as an algebraic law.** Replacing
-the app-trigger `CHECK (valid_from < valid_to)` with
-
-    EXCLUDE USING gist (ns WITH =, scope WITH =, key WITH =, validity WITH &&)
-
-makes **non-overlap of a key's history intervals a database-enforced
-invariant**, not prose. Law T5 — *temporal coherence*: for a fixed `k`, the
-set of `[valid_from, valid_to)` intervals partitions its lifetime with no
-overlap and no gap other than pre-creation. Overlap ⇒ T3 is ill-defined (two
-rows match one `T`). Today overlap is merely *not produced* by the trigger
-(**ASPIRATIONAL**); under EXCLUDE it becomes **GUARANTEED** — the DB rejects
-the second write. This is the single highest-value change: it moves T5 from
-"trust the trigger" to "the engine cannot represent a violation," the same
-way the ledger makes races unrepresentable structurally rather than merely
-checked.
+**Law T5 — temporal coherence, now split into its two actually-distinct
+parts.** For a fixed `k`, the set of `[valid_from, valid_to)` intervals in
+`kv_history` (plus the live `kv_current` row) must:
+1. **Never overlap.** Two rows matching the same `T` would make T3
+   ill-defined. **Status: MECHANISM SPECIFIED** — the
+   `EXCLUDE USING gist (ns WITH =, scope WITH =, key WITH =, validity WITH &&)`
+   constraint makes this a database-enforced invariant Postgres itself
+   rejects a violation of; this is genuinely mechanism-backed, not just
+   trigger discipline.
+2. **Never leave an unintended gap.** This is a SEPARATE guarantee from
+   (1) — the EXCLUDE constraint only forbids overlap, it says nothing about
+   gaps, and the two are logically independent (a schema could easily have
+   neither, one, or both). Gap-freedom here holds **by construction of the
+   trigger's write discipline**, not by any database constraint: each new
+   history row's `valid_from` is set to `OLD.updated_at`, which is exactly
+   the `valid_to` (or `kv_current.updated_at`) that the *previous* write to
+   this key set — so the chain of intervals is contiguous by the trigger
+   always reusing the prior write's boundary value as the next row's start.
+   **Status: CALLER-ENFORCED** (specifically, "trigger-enforced" — it holds
+   only as long as the trigger remains the sole writer of `valid_from` on
+   `kv_history` and `updated_at` on `kv_current`; a manual `INSERT` bypassing
+   the trigger could violate it and no constraint would catch that). Do not
+   conflate this with (1)'s database-level guarantee.
 
 ---
 
@@ -114,25 +203,40 @@ checked.
 `INSERT … ON CONFLICT (hash) DO UPDATE SET created_at = now()`.
 Content-addressing gives `f(f(x)) = f(x)` on the `(hash → data)` map:
 writing the same hash twice leaves `data` unchanged (only the GC clock
-refreshes). **Status: GUARANTEED** — `hash` is PK, `data` never overwritten
-with different bytes because equal hash ⇒ equal content.
+refreshes). **Status: MECHANISM SPECIFIED** — `hash` is PK, `data` never
+overwritten with different bytes because equal hash ⇒ equal content.
 
-**Law C1 — chunk store is a join-semilattice.** The global chunk set
-ordered by ⊆ has `save` = join (`chunks' = chunks ∪ newChunks`), idempotent
-(`x ⊔ x = x`, dedup by hash) and commutative (two wallets saving overlapping
-chunks in either order reach the same set). Manifests never mutate a chunk,
-so joins never conflict. **Status: GUARANTEED.**
+**Law C1 — the *save-only* chunk projection is a join-semilattice (not the
+full store, which also prunes).** The chunk set considered only under
+`writeChunk`/`save` operations, ordered by ⊆, has `save` = join
+(`chunks' = chunks ∪ newChunks`), idempotent (`x ⊔ x = x`, dedup by hash)
+and commutative (two wallets saving overlapping chunks in either order
+reach the same set). **This does not extend to the full store**: `prune`
+removes chunks, so the store as a whole (save + prune) is not a monotone
+semilattice — only the write-side projection is. **Status: MECHANISM
+SPECIFIED** for the save-only projection.
 
-**Law C2 — GC reachability closure (restate so it can't regress).** Let
-`Live` = all manifests surviving prune, `refs(m)` = `m.chunk_hashes`. A
-chunk `c` may be physically deleted **iff** `c ∉ ⋃_{m ∈ Live} refs(m)`.
-Equivalently: `survivors = ⋃ refs(Live)` is closed — GC must never delete a
-member of it. The refcount/scan runs in the manifest-write transaction, so
-no concurrent `save` resurrects a reference mid-reclaim; the 15-minute grace
-window covers `ON CONFLICT DO UPDATE` re-references whose manifest INSERT is
-still uncommitted. **Status: GUARANTEED by the same-transaction scan + grace
-window** (this is the dedup/GC race already fixed earlier this session; C2
-is its regression guard).
+**Law C2 — GC reachability, split into safety (unconditional) and eventual
+collection (conditional) — conflating these was the original bug.** Let
+`Live` = all manifests surviving prune, `refs(m)` = the chunk hashes `m`'s
+junction-table rows reference (see `design.md` §3's `ckpt_manifest_chunks`
+table, which replaced an array-of-hashes column this document originally,
+incorrectly, assumed a GIN index could accelerate).
+- **C2a (safety, unconditional):** `Deleted ∩ ⋃_{m ∈ Live} refs(m) = ∅` —
+  GC never deletes a chunk any live manifest references. This must hold at
+  every instant, not just eventually.
+  **Status: MECHANISM SPECIFIED** — the refcount/scan runs in the same
+  transaction as the manifest write it needs to see, so no concurrent
+  `save` can resurrect a reference mid-reclaim.
+- **C2b (eventual collection, explicitly conditional — this is where the
+  original "survivors = closed set, chunk deleted iff unreachable" wording
+  overclaimed):** an unreachable chunk older than the grace window is
+  *eventually* deleted, **not** immediately upon becoming unreachable — the
+  grace window is a deliberate, intentional delay (a TOCTOU guard for a
+  chunk mid-re-reference by a not-yet-committed `save`), so "deleted iff
+  unreachable" was never literally true and should not be restated as if it
+  were. **Status: MECHANISM SPECIFIED**, conditional on a GC pass actually
+  running periodically (a scheduling concern, not an algebraic one).
 
 ---
 
@@ -145,78 +249,121 @@ version, no history, no fold — contrast T1/T3 directly: TemporalKV keeps
 choice**: a sync cursor needs current progress, not lineage, so the design
 drops the entire event-sourced structure rather than carrying dead
 versioning. Monotonicity is explicitly *not* a law here (callers hold a
-lease if they need it). **Status: GUARANTEED** (single-row upsert).
+lease if they need it). **Status: MECHANISM SPECIFIED** (single-row
+upsert) — **conditional on the stored value actually being losslessly
+JSON-representable**, which the current `WatermarkValueSchema` does not
+guarantee (see `src/interfaces/watermarks.ts`'s fix, applied alongside
+this document).
 
 ---
 
 ## 4. Transaction / Lease — the control algebra the other three run inside
 
-**Law L1 — mutual exclusion.** For any lease `key`, `|holders(key)| ≤ 1` at
-every instant. `withLease` acquire→run→release, backed by a
-`sql.reserve()`-pinned advisory lock. **Status: GUARANTEED** by the
-pinned-connection advisory lock (the design's earlier fixed blocker); breaks
-only under a transaction-pooling proxy, which the deployment forbids.
+**Law L1 — mutual exclusion, simplified after review found the original
+design couldn't actually deliver it.** For any lease `key`,
+`|holders(key)| ≤ 1` at every instant. **The original design's `ttlMs`
+self-expiry and lease-stealing semantics are REMOVED from this interface**
+— a lease is held from `acquireLease`/`withLease` until either explicit
+`releaseLease` or the holding connection closes, full stop, with no
+self-expiry and no fencing-token machinery. The review that caught this
+was exactly right: TTL-based expiry makes L1 impossible to guarantee for
+*arbitrary* caller code, because `withLease`'s callback has no way to learn
+its lease was stolen mid-execution and stop — guaranteeing that would need
+a monotonic fencing token, a lease-loss `AbortSignal`, and every downstream
+write checking the fencing token, none of which this project needs yet for
+a single-process, single-writer deployment. Simpler is correct here: no
+TTL, no stealing, so L1 holds unconditionally for as long as the holding
+connection lives. Revisit only if a real multi-process/crash-recovery
+requirement appears. **Status: MECHANISM SPECIFIED** by the
+`sql.reserve()`-pinned advisory lock (the design's earlier fixed
+connection-pool blocker); breaks only under a transaction-pooling proxy,
+which the deployment forbids.
 
 **Atomicity envelope — which laws are conditional.** `withTransaction` is
 the boundary within which the data algebras' laws hold:
 
-| Law | Holds unconditionally | Conditional on serialization |
+| Law | Holds unconditionally | Conditional |
 |---|---|---|
-| T1 gapless monotonicity | — | **yes** (concurrent puts must serialize) |
+| T1 gapless monotonicity | yes, per-key (row lock) | cross-key/writer-role coordination is OPEN |
 | T2 CAS guard | yes (atomic `WHERE version = e`) | — |
-| T3 temporal projection | yes, per committed history | — |
-| T4 dual-addressing | — | yes (both intervals written in one tx) |
-| C1 join / C2 closure | — | **yes** (scan + write same tx) |
+| T3 temporal projection | yes, within retention | beyond retention: OPEN until `HistoryUnavailableError` lands |
+| T4 dual-addressing | yes, given the one-write-per-tx rule | — |
+| T5(1) non-overlap | yes (EXCLUDE constraint) | — |
+| T5(2) gap-freedom | — | yes, trigger remains sole writer of the boundary columns |
+| C2a safety | yes (same-tx scan) | — |
+| C2b eventual collection | — | yes, a GC pass actually runs |
 | W1 LWW | yes | — |
-
-The lease is *coarse* mutual exclusion (writer role); the transaction is
-*fine* atomicity. T1 needs both: a lease serializes writers to a key-space,
-the transaction makes read-current-then-write-current+1 atomic.
+| L1 mutual exclusion | yes, for the life of the connection | — |
 
 ---
 
 ## 5. Testable-law deliverable (fast-check + Vitest)
 
-Each maps to an `fc.property` over arbitrary event sequences. **G** = would
-catch a real regression today; **A** = documents intent, needs the noted
-enforcement first.
+Each maps to an `fc.property` over arbitrary event sequences. Several of
+these are **not testable through the public interface alone** — this was a
+real finding, not a stylistic nitpick: a production interface should not
+grow adapter-only methods just to make a property test possible, so P5–P8
+below require adapter-private conformance diagnostics (a test-only export,
+clearly marked as such, not part of the public `TemporalKV`/`CheckpointStore`
+surface).
 
-- **P1 (T1, G):** for any `put` sequence to one key in one tx, emitted
-  versions are exactly `1,2,3,…` — no gap, no repeat.
-- **P2 (T2, G):** for random `expectedVersion e`, `put` succeeds iff `e` =
-  current version, else throws `VersionConflictError` and state is
-  unchanged.
-- **P3 (T3, G):** for a random sequence with timestamps and a random `T`,
-  `getAt({at:T})` equals folding the sub-sequence with `writtenAt ≤ T`.
-- **P4 (T4, A→G):** for every committed version `v`,
-  `getAt({version:v}).value === getAt({at: commitInstant(v)}).value`. *This
-  is the law currently only assumed* — P4 is the sole guard on
-  dual-addressing drift.
-- **P5 (T5, A→G):** generate interleaved writes; assert no two history
-  intervals for one key overlap. Fails today only if the trigger is buggy;
-  under the `GiST EXCLUDE` upgrade the DB enforces it and P5 becomes a
-  redundant confirmation (keep it as the migration's acceptance test).
-- **P6 (C-idempotence, G):** writing the same `(hash,data)` twice leaves
+- **P1 (T1):** for any sequence of sequential, top-level (not
+  transaction-wrapped — the one-write-per-tx rule means this property no
+  longer needs a shared transaction to exercise T1 at all) `put`s to one
+  key, emitted versions are exactly `1,2,3,…` — no gap, no repeat.
+- **P2 (T2):** for random `expectedVersion e`, `put` succeeds iff `e` =
+  current version (or `e = 0n` against an absent key), else throws
+  `VersionConflictError` with `actual` set correctly (a real conflicting
+  version, or `undefined` for a never-written key — these are different
+  outcomes, test both) and leaves state unchanged.
+- **P3 (T3):** for a random sequence with timestamps and a random `T`
+  within the retained window, `getAt({at:T})` equals folding the
+  sub-sequence with `writtenAt ≤ T`. Separately, test that a `T` older than
+  the retention floor throws `HistoryUnavailableError`, not `null`.
+- **P4 (T4):** for every committed version `v`, `getAt({version:v})` and
+  `getAt({at: commitInstant(v)})` return **the same full `VersionedEntry`**
+  (version, value, and `writtenAt` — not just `.value`, which the original
+  property under-specified and could pass even when adjacent versions
+  happen to share a value).
+- **P5 (T5, adapter-private diagnostic):** generate interleaved writes;
+  assert (a) no two history intervals for one key overlap [tests T5(1),
+  redundant with the EXCLUDE constraint but confirms it fires correctly],
+  and (b) every interval's `valid_from` equals the immediately preceding
+  interval's `valid_to` with no gap [tests T5(2), which no constraint
+  enforces — this is the only thing that would catch a regression there].
+- **P6 (C-idempotence):** writing the same `(hash,data)` twice leaves
   `data` identical and chunk count unchanged.
-- **P7 (C1, G):** for two random chunk multisets saved in either order, the
-  resulting chunk set is identical (commutative idempotent join).
-- **P8 (C2, G):** after random save/prune sequences,
-  `deletedChunks ∩ ⋃ refs(Live) = ∅` — no reachable chunk is ever reclaimed.
-- **P9 (W1, G):** `get` after N random `set`s to one key returns the last
+- **P7 (C1, adapter-private diagnostic for the chunk set):** for two random
+  chunk multisets saved in either order, the resulting chunk set is
+  identical (commutative idempotent join). The public API doesn't expose
+  the raw chunk set — use a private diagnostic query, or substitute a
+  black-box check (reload every resulting checkpoint and compare bytes).
+- **P8 (C2a, black-box testable without adapter-private access):** after
+  random save/prune sequences, reload every surviving checkpoint via the
+  public `load`/`loadAt` API and confirm none throws `ChunkIntegrityError`
+  or `CheckpointNotFoundError` for a checkpoint that should still be valid
+  — this is the practical, public-API version of "no reachable chunk is
+  ever reclaimed."
+- **P9 (W1):** `get` after N random `set`s to one key returns the last
   value; `set·set` of equal value is indistinguishable from one.
-- **P10 (L1, G):** under concurrent `withLease` on one key, an instrumented
-  critical section never observes overlap (holder count ≤ 1).
+- **P10 (L1):** under concurrent `withLease` calls on one key from
+  multiple connections (ideally multiple processes, not just multiple
+  in-process callers, since the guarantee is connection-scoped), an
+  instrumented critical section never observes overlap (holder count ≤ 1).
+  With TTL/stealing removed (§4), this property is now well-defined and
+  actually provable — the original version's caveat about TTL making L1
+  untestable no longer applies.
 
-**Bottom line.** Seven of ten laws (T2, T3, C-idempotence, C1, C2, W1, L1)
-are GUARANTEED by constraints/transactions already in the design and their
-tests would catch regressions immediately. Three (T1, T4, T5) are the fault
-lines: T1 depends on serialization discipline, T4 and T5 depend on the
-trigger being the sole coherent writer of two parallel interval
-representations. Adopting the `tstzrange` + `GiST EXCLUDE` constraint
-converts T5 from trigger-trust to engine-guarantee and gives T4 a firm
-boundary to align against — the one change that moves the layer's most
-fragile law from aspirational to structural, mirroring how the ledger makes
-its linearity unrepresentable-to-violate rather than merely checked.
+**Bottom line.** This revision trades some of the previous version's
+overclaimed certainty for actually-defensible guarantees: T4 is now
+well-defined (via the one-write-per-key-per-transaction rule) instead of
+silently broken; T5 is honestly split into a mechanism-backed half and a
+trigger-discipline half instead of one conflated "GUARANTEED"; T3's
+retention interaction has an actual error type instead of a silent `null`;
+L1 is simplified to something genuinely provable instead of a TTL design
+that made the guarantee impossible for arbitrary code. Nothing here is
+claimed to be "GUARANTEED" — that label is retired until real
+implementation and tests exist to back it.
 
 ---
 

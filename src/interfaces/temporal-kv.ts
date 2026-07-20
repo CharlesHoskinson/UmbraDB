@@ -5,31 +5,52 @@ import {
 import type { TransactionHandle } from "./transaction-lease.js";
 
 /**
+ * REVISED after a cross-vendor audit found the original design mathematically
+ * self-contradictory: permitting multiple `put`s to one key within a single transaction made
+ * Law T4 (dual-addressing agreement, STORAGE_ALGEBRA.md §1) impossible to satisfy, because
+ * Postgres's `now()` is fixed at transaction start — two such writes would share one commit
+ * instant, and no timestamp-based lookup could then distinguish them. Fix: **at most one
+ * `put` to a given key may occur within a single transaction** (enforced at the trigger level
+ * in the Postgres adapter, not just documented — see design.md §2). This is a real constraint
+ * on callers, not a cosmetic one: batch multiple logical updates to the same key across
+ * separate transactions, not one.
+ */
+
+/**
  * A JSON-serializable value — the only value shape TemporalKV accepts, since both the
  * Postgres JSONB and Mongo BSON backends must round-trip it losslessly.
- * Schema-first per §1.4: `z.json()` is Zod v4's built-in recursive JSON-value schema, and the
+ * Schema-first: `z.json()` is Zod v4's built-in recursive JSON-value schema, and the
  * type is derived from it — there is no hand-written duplicate.
  */
 export const JsonValueSchema = z.json();
 export type JsonValue = z.infer<typeof JsonValueSchema>;
 
-export type Namespace = string;
-export type Scope = string;
-export type Key = string;
+export const NamespaceSchema = z.string().min(1).max(63);
+export const ScopeSchema = z.string().min(1).max(63);
+export const KeySchema = z.string().min(1);
+export type Namespace = z.infer<typeof NamespaceSchema>;
+export type Scope = z.infer<typeof ScopeSchema>;
+export type Key = z.infer<typeof KeySchema>;
 
-/** Monotonic logical version, scoped to a single (namespace, scope, key) triple. */
+/** Monotonic logical version, scoped to a single (namespace, scope, key) triple. A STORED
+ *  version is always >= 1 (versions start at 1); `0n` is meaningful only as the sentinel value
+ *  of `put`'s `expectedVersion` option ("this key must not already exist") and never appears as
+ *  a stored/observed version — these are deliberately two different schemas below, not one
+ *  reused type, so a stored `0n` can never round-trip as if it were valid. */
 export type Version = bigint;
+export const StoredVersionSchema = z.bigint().positive();
+export const ExpectedVersionSchema = z.bigint().nonnegative();
 
 /** Runtime schema for the erased shape of {@link VersionedEntry} — validated on every read
- *  boundary. The generic interface below is the §1.4 "generic exception": hand-written because
- *  `z.infer` cannot express the type parameter, but pinned to this schema by the compile-time
- *  guard that follows it. */
+ *  boundary. The generic interface below is a deliberate exception to "derive the type from the
+ *  schema": `z.infer` cannot express the type parameter, so it is hand-written, but pinned to
+ *  this schema by the compile-time guard that follows it. */
 export const VersionedEntrySchema = z.object({
-  namespace: z.string().min(1).max(63),
-  scope: z.string().min(1).max(63),
-  key: z.string().min(1),
+  namespace: NamespaceSchema,
+  scope: ScopeSchema,
+  key: KeySchema,
   value: JsonValueSchema,
-  version: z.bigint().nonnegative(),
+  version: StoredVersionSchema,
   writtenAt: z.date(),
 });
 
@@ -43,27 +64,40 @@ export interface VersionedEntry<T extends JsonValue = JsonValue> {
   readonly writtenAt: Date;
 }
 
-// Compile-time sync guard (§1.4): fails to typecheck if schema and interface drift apart.
-type _VersionedEntryInSync =
-  z.infer<typeof VersionedEntrySchema> extends VersionedEntry ? true : never;
+// Compile-time sync guard: a real mutual-assignability check, not the previous
+// `extends ? true : never` pattern (which silently resolves to `never` without ever failing
+// compilation — an alias of `never` is not a type error). This form actually fails to compile
+// if either type gains/loses a field the other lacks.
+type AssertExact<A, B> = A extends B ? (B extends A ? true : ["schema drifted from interface", B]) : ["interface drifted from schema", A];
+type _VersionedEntryInSync = AssertExact<z.infer<typeof VersionedEntrySchema>, VersionedEntry> extends true ? true : never;
+const _versionedEntrySyncCheck: _VersionedEntryInSync = true;
+void _versionedEntrySyncCheck;
 
 /**
- * Point-in-time selector for {@link TemporalKV.getAt}. `version` addresses the store's own
- * logical clock (cheap on both backends). `at` addresses wall-clock time — implementations
- * MUST maintain a per-record wall-clock validity interval with a supporting index (Postgres:
- * a `[valid_from, valid_to)` tstzrange column with a GiST index, distinct from the version
- * interval; Mongo: a revision-timestamp index) so that resolving `{ at }` is an index lookup,
- * never a sequential scan over history.
+ * Point-in-time selector for {@link TemporalKV.getAt}. A real discriminated union (not a loose
+ * structural union of two optional-looking shapes) — exactly one of `version`/`at` is present,
+ * enforced by the `kind` discriminant, so a value naming both (or neither) is a type error, not
+ * a runtime ambiguity.
+ *
+ * `{kind: "version"}` addresses the store's own logical clock (cheap on both backends).
+ * `{kind: "at"}` addresses wall-clock time. Given the one-`put`-per-key-per-transaction rule
+ * above, every committed version has a distinct, well-defined commit instant, so the two
+ * addressing schemes agree (Law T4) — see STORAGE_ALGEBRA.md §1 for the accepted residual
+ * caveat (the recorded instant is `clock_timestamp()` at write time, not a true post-commit
+ * visibility timestamp; this does not matter in practice because writes to the same key are
+ * already serialized by the row lock).
  */
-export type AsOf = { readonly version: Version } | { readonly at: Date };
+export type AsOf =
+  | { readonly kind: "version"; readonly version: Version }
+  | { readonly kind: "at"; readonly at: Date };
 
-export type TemporalKVErrorCode = "VERSION_CONFLICT";
+export type TemporalKVErrorCode = "VERSION_CONFLICT" | "HISTORY_UNAVAILABLE" | "TRANSACTION_KEY_REUSE";
 
 /** Base class for TemporalKV's domain failures. Infrastructure failures — connection loss,
  *  encoding round-trip failure, boundary validation — surface as the shared
- *  {@link ConnectionError} / {@link SerializationFailedError} / {@link ValidationError}
- *  (§1.1), not module-local copies. Note: absence of a key is NOT modeled here — `get`/`getAt`
- *  return `null`, per the storage-layer-wide "lookup vs. load" convention (§1.1). */
+ *  {@link ConnectionError} / {@link SerializationFailedError} / {@link ValidationError}, not
+ *  module-local copies. Note: absence of a key is NOT modeled here — `get`/`getAt` return
+ *  `null`, per the storage-layer-wide "lookup vs. load" convention. */
 export abstract class TemporalKVError extends StorageError {
   abstract readonly code: TemporalKVErrorCode;
 }
@@ -79,38 +113,102 @@ export class VersionConflictError extends TemporalKVError {
   }
 }
 
+/**
+ * Thrown by {@link TemporalKV.getAt} when `asOf` names a point in time (or version) older than
+ * this store's retention floor — i.e. history that once existed but has since been pruned.
+ * This is DELIBERATELY distinct from returning `null`: `null` means "this key had no value yet
+ * at the requested point," while `HistoryUnavailableError` means "this key may well have had a
+ * value there, but the record proving it has been deleted and the true answer is no longer
+ * knowable." Conflating these was a real bug found by review — a caller must be able to tell
+ * "never existed" from "existed, but we can't prove it anymore." Sprint 1 performs no
+ * retention at all (see the Sprint 1 openspec change), so this error cannot yet be thrown by
+ * any implementation that ships before a retention mechanism (`pg_cron` or partitioning) lands
+ * — but the error type must exist now so retention can be added later without a breaking
+ * interface change.
+ */
+export class HistoryUnavailableError extends TemporalKVError {
+  readonly code = "HISTORY_UNAVAILABLE" as const;
+  constructor(
+    readonly requested: AsOf,
+    readonly oldestAvailableAt: Date,
+    readonly oldestAvailableVersion: Version,
+  ) {
+    super(`history for this key is unavailable before ${oldestAvailableAt.toISOString()} (oldest retained version: ${oldestAvailableVersion})`);
+  }
+}
+
+/**
+ * Thrown by {@link TemporalKV.put} when it is the SECOND `put` to the same (namespace, scope,
+ * key) within one transaction (`opts.tx`). See this file's top-level doc comment for why this
+ * is forbidden rather than merely discouraged: Postgres's `now()` is fixed for the whole
+ * transaction, so a same-transaction second write cannot be given a distinct, well-defined
+ * commit instant, and the adapter's trigger detects and rejects it rather than silently
+ * discarding the first write's history row (the bug this rule replaces). Detection is
+ * transaction-scoped (keyed off the writing transaction's ID, not a timestamp comparison), so
+ * this can only be thrown when both writes share one transaction — sequential `put`s in
+ * separate transactions are unaffected no matter how close together in wall-clock time.
+ */
+export class TransactionKeyReuseError extends TemporalKVError {
+  readonly code = "TRANSACTION_KEY_REUSE" as const;
+  constructor(readonly namespace: Namespace, readonly scope: Scope, readonly key: Key) {
+    super(`key already written earlier in this transaction: ${namespace}/${scope}/${key} (at most one put per key per transaction is allowed)`);
+  }
+}
+
 export interface TemporalKV {
   /**
-   * Writes `value` for (namespace, scope, key), creating a new version.
-   *
-   * `opts.expectedVersion` is an optimistic-concurrency guard: omit for an unconditional
-   * write, pass the last-read version to CAS, or `0n` to require the key not already exist.
+   * Writes `value` for (namespace, scope, key), creating a new version. At most one `put` to
+   * a given key may occur within a single transaction (`opts.tx`) — see this file's top-level
+   * doc comment; a second `put` to the same key in the same transaction is rejected.
+   * `opts.expectedVersion` is an optimistic-concurrency guard: omit for an unconditional write,
+   * pass the last-read version to CAS, or `0n` to require the key not already exist.
    * @throws {ValidationError} if inputs fail their boundary schemas.
    * @throws {VersionConflictError} if `expectedVersion` is stale.
+   * @throws {TransactionKeyReuseError} if `opts.tx` names a transaction that already wrote
+   *   this same key once.
    * @throws {SerializationFailedError} if `value` cannot be round-tripped.
    * @throws {ConnectionError} on driver-level failure.
+   * @throws Rejects with `AbortError` if `opts.signal` aborts before the write completes; an
+   *   abort observed after commit is a no-op (the write already happened).
    */
   put<T extends JsonValue>(
     namespace: Namespace, scope: Scope, key: Key, value: T,
     opts?: { expectedVersion?: Version; tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T>>;
 
-  /** Latest version of a key, or `null` if it has never been written. */
+  /**
+   * Latest version of a key, or `null` if it has never been written.
+   * @throws Rejects with `AbortError` if `opts.signal` aborts before the read completes.
+   */
   get<T extends JsonValue = JsonValue>(
     namespace: Namespace, scope: Scope, key: Key,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T> | null>;
 
-  /** The version of a key as of `asOf`, or `null` if none existed yet at that point.
-   *  See {@link AsOf} for the index the `{ at }` variant requires of implementations. */
+  /**
+   * The version of a key as of `asOf`, or `null` if none existed yet at that point (see
+   * {@link AsOf}'s doc for the index/instant each variant requires of implementations).
+   * @throws {HistoryUnavailableError} if `asOf` names a point older than this store's
+   *   retention floor — distinct from `null`, see that error's own doc.
+   * @throws Rejects with `AbortError` if `opts.signal` aborts before the read completes.
+   */
   getAt<T extends JsonValue = JsonValue>(
     namespace: Namespace, scope: Scope, key: Key, asOf: AsOf,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T> | null>;
 
   /** Streams keys under `prefix`, newest-version-only, in a stable order for resumable
-   *  pagination. In-process iteration (§1.2) — not a network-paginated cursor. Aborting
-   *  `opts.signal` stops iteration and frees the underlying cursor (§1.2). */
+   *  pagination. In-process iteration (a database cursor, batches flattened to individual
+   *  keys) — not a network-paginated cursor. `prefix` is matched as a literal string prefix;
+   *  implementations MUST NOT interpret pattern-matching metacharacters in it (Postgres `LIKE`
+   *  semantics treat `%`/`_`/`\` specially — a naive `LIKE prefix || '%'` would let a `%` or `_`
+   *  inside a caller's prefix change what matches; implementations must escape them or use a
+   *  non-pattern-based range comparison instead).
+   * @throws Aborting `opts.signal` stops iteration and frees the underlying cursor, rejecting
+   *   the in-progress iteration with `AbortError` — ending the async generator's loop via a
+   *   plain `break` (which completes the iteration successfully) does NOT satisfy this
+   *   contract; the abort must surface as a rejection.
+   */
   listKeys(
     namespace: Namespace, scope: Scope, prefix: string,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },

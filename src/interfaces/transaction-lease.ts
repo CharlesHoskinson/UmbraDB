@@ -5,6 +5,14 @@ import { StorageError } from "./storage-errors.js";
  * Transaction/Lease layer — implementation-agnostic contract.
  * Backed by `sql.begin()` (transactions) and `sql.reserve()` + advisory locks (leases) in the
  * Postgres adapter; this file contains no `pg`-specific types.
+ *
+ * REVISED after a cross-vendor audit found the original TTL/lease-stealing design made the
+ * mutual-exclusion guarantee (Law L1, {@link STORAGE_ALGEBRA.md} §4) impossible for arbitrary
+ * caller code: a `withLease` callback had no way to learn its lease was stolen mid-execution
+ * and stop, so "at most one holder" could not actually be guaranteed. TTL/stealing/fencing are
+ * REMOVED — a lease is held from acquisition until explicit release or connection death, full
+ * stop. This is simpler and correct for this project's single-process, single-writer
+ * deployment; revisit only if a real multi-process/crash-recovery requirement appears.
  */
 
 // ---------------------------------------------------------------------------
@@ -20,15 +28,16 @@ export interface TransactionHandle {
   readonly id: string;
 }
 
-/** Opaque proof of a held writer lease (advisory lock pinned to a reserved connection). */
+/** Opaque proof of a held writer lease (advisory lock pinned to a reserved connection). Held
+ *  until {@link TransactionLeaseLayer.releaseLease} or the underlying connection closes — no
+ *  TTL, no self-expiry, no stealing. */
 export interface Lease {
   readonly __brand: "Lease";
   readonly key: string;
-  /** Unique per acquisition; lets releaseLease reject a stale/duplicate release. */
+  /** Unique per acquisition; lets {@link TransactionLeaseLayer.releaseLease} distinguish a
+   *  fresh release from a duplicate one on an already-released lease object. */
   readonly token: string;
   readonly acquiredAt: Date;
-  /** `null` = held until explicit release or connection death (no TTL). */
-  readonly expiresAt: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +48,6 @@ export type TransactionLeaseErrorCode =
   | "TRANSACTION_ROLLED_BACK"
   | "TRANSACTION_FAULT"
   | "LEASE_TIMEOUT"
-  | "LEASE_HELD_BY_OTHER"
   | "LEASE_NOT_HELD"
   | "LEASE_FAULT";
 
@@ -68,7 +76,11 @@ export class TransactionFaultError extends TransactionLeaseError {
 }
 
 /** Thrown by {@link TransactionLeaseLayer.acquireLease}/{@link TransactionLeaseLayer.withLease}
- *  when the lock could not be acquired within `opts.timeoutMs`. */
+ *  when `opts.timeoutMs` was given and elapsed before the lock was acquired. If no
+ *  `timeoutMs` is given, `acquireLease` waits indefinitely (matching `pg_advisory_lock`'s real
+ *  blocking semantics) and this error cannot occur — there is no separate "held by another
+ *  writer" error for the no-timeout case, because the caller is, by construction, willing to
+ *  wait as long as it takes. */
 export class LeaseTimeoutError extends TransactionLeaseError {
   readonly code = "LEASE_TIMEOUT" as const;
   constructor(readonly key: string, readonly waitedMs: number) {
@@ -76,21 +88,15 @@ export class LeaseTimeoutError extends TransactionLeaseError {
   }
 }
 
-/** Thrown when a lease is held by another writer and no (or an exhausted) timeout was given. */
-export class LeaseHeldByOtherError extends TransactionLeaseError {
-  readonly code = "LEASE_HELD_BY_OTHER" as const;
-  constructor(readonly key: string, readonly ownerHint?: string) {
-    super(`lease "${key}" is held by another writer${ownerHint ? ` (${ownerHint})` : ""}`);
-  }
-}
-
-/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the lease was already released,
- *  expired, or stolen — releasing twice is routine under contention, not a bug, but the caller
- *  is still told so via a distinct, catchable error rather than a silent no-op. */
+/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the lease was already released or
+ *  its connection already closed — releasing twice is routine under normal cleanup paths (e.g.
+ *  a `finally` block racing an already-completed release), not a bug, but the caller is still
+ *  told so via a distinct, catchable error rather than a silent no-op. With TTL/stealing
+ *  removed, this is the only way a release can fail to find its lease. */
 export class LeaseNotHeldError extends TransactionLeaseError {
   readonly code = "LEASE_NOT_HELD" as const;
   constructor(readonly key: string) {
-    super(`lease "${key}" was not held (expired, stolen, or already released)`);
+    super(`lease "${key}" was not held (already released, or its connection closed)`);
   }
 }
 
@@ -119,11 +125,10 @@ export class Rollback extends Error {
 
 export type TransactionRollbackCause =
   | { kind: "callback-requested"; reason?: string }
-  | { kind: "constraint-violation"; code: string; detail?: string }
-  | { kind: "lease-lost"; key: string };
+  | { kind: "constraint-violation"; code: string; detail?: string };
 
 // ---------------------------------------------------------------------------
-// Options — Zod-first, per §1.4 (data fields in the schema; live handles intersected on)
+// Options — Zod-first (data fields in the schema; live handles intersected on)
 // ---------------------------------------------------------------------------
 
 export const TransactionOptionsSchema = z.object({
@@ -132,22 +137,20 @@ export const TransactionOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
 });
 export type TransactionOptions = z.infer<typeof TransactionOptionsSchema> & {
-  /** Cancellation, per §1.2: abort rolls back and rejects with `AbortError`. */
+  /** Cancellation: abort rolls back and rejects with `AbortError`. */
   signal?: AbortSignal;
 };
 
 export const LeaseAcquireOptionsSchema = z.object({
-  /** Give up after this long waiting for the lock: {@link LeaseTimeoutError} from
-   *  `acquireLease`/`withLease`, `null` from `tryAcquireLease`. */
+  /** How long to wait for the lock before giving up: {@link LeaseTimeoutError} from
+   *  `acquireLease`/`withLease`, `null` from `tryAcquireLease`. Omit to wait indefinitely
+   *  (`acquireLease`) or to fail fast with no wait at all (`tryAcquireLease` — see its own
+   *  doc). */
   timeoutMs: z.number().int().positive().optional(),
-  /** Optional self-expiry so a crashed holder doesn't wedge the lock forever. Requires the
-   *  lease bookkeeping table (see implementation notes below) — advisory locks alone have
-   *  no TTL concept. */
-  ttlMs: z.number().int().positive().optional(),
 });
 export type LeaseAcquireOptions = z.infer<typeof LeaseAcquireOptionsSchema> & {
-  /** Cancellation, per §1.2: abort while waiting rejects with `AbortError`; if the lock was
-   *  already acquired when the abort lands, the lease is released before rejecting. */
+  /** Cancellation: abort while waiting rejects with `AbortError`; if the lock was already
+   *  acquired when the abort lands, the lease is released before rejecting. */
   signal?: AbortSignal;
 };
 
@@ -172,19 +175,23 @@ export interface TransactionLeaseLayer {
 
   /**
    * Acquires the writer lease identified by `key` (one advisory lock per logical writer role,
-   * e.g. `wallet-sync:{networkId}`).
-   * @throws {LeaseTimeoutError} if the lock could not be acquired within `opts.timeoutMs`.
-   * @throws {LeaseHeldByOtherError} if another writer holds it and no timeout resolves that.
+   * e.g. `wallet-sync:{networkId}`). With no `opts.timeoutMs`, blocks indefinitely until the
+   * lock is available — the same behavior as `pg_advisory_lock` itself. There is no "held by
+   * another writer, fail immediately" outcome for this method; use {@link tryAcquireLease} for
+   * that.
+   * @throws {LeaseTimeoutError} if `opts.timeoutMs` was given and elapsed before acquisition.
    * @throws {LeaseFaultError} on connection loss or reservation failure.
    */
   acquireLease(key: string, opts?: LeaseAcquireOptions): Promise<Lease>;
 
   /**
-   * Non-throwing companion to {@link TransactionLeaseLayer.acquireLease} for the routine
-   * contention hot path (§1.1): resolves `null` if the lease is held by another writer or if
-   * `opts.timeoutMs` elapses — contention is data here, mirroring `get`'s `null` for a
-   * missing key. Prefer this in retry/poll loops; reserve `acquireLease` for call sites where
-   * failing to get the lock is genuinely exceptional.
+   * Non-blocking (or bounded-wait, if `opts.timeoutMs` is given) companion to
+   * {@link TransactionLeaseLayer.acquireLease} for the routine contention hot path: resolves
+   * `null` immediately if the lease is held by another writer and no `timeoutMs` was given
+   * (matching `pg_try_advisory_lock`'s real non-blocking semantics), or after `opts.timeoutMs`
+   * elapses if one was given — contention is data here, mirroring `get`'s `null` for a missing
+   * key. Prefer this in retry/poll loops; reserve `acquireLease` for call sites willing to wait
+   * as long as it takes.
    * @throws {LeaseFaultError} on connection loss or reservation failure — infrastructure
    *   faults still throw; only contention resolves `null`.
    */
@@ -192,7 +199,8 @@ export interface TransactionLeaseLayer {
 
   /**
    * Releases a previously acquired lease.
-   * @throws {LeaseNotHeldError} if the lease was already released, expired, or stolen.
+   * @throws {LeaseNotHeldError} if the lease was already released or its connection already
+   *   closed.
    * @throws {LeaseFaultError} on connection loss.
    */
   releaseLease(lease: Lease): Promise<void>;

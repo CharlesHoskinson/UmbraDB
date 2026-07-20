@@ -57,6 +57,18 @@ raw `postgres.js` error object SHALL NOT escape the adapter layer.
 - **THEN** the adapter SHALL reject with `ConnectionError`
 - **AND** SHALL NOT reject with a raw driver-level error type
 
+#### Scenario: An exclusion-constraint violation is identified by its correct SQLSTATE
+- **WHEN** a `kv_history_no_overlap` violation occurs
+- **THEN** the adapter's error translation SHALL match it on SQLSTATE `23P01`
+  (`exclusion_violation`), NOT `23505` (`unique_violation`) — these are distinct SQLSTATEs and
+  matching the wrong one means this translation path silently never fires
+
+#### Scenario: A transaction-key-reuse violation surfaces as TransactionKeyReuseError
+- **WHEN** the `kv_current_history_trigger` trigger raises the custom SQLSTATE `UB001`
+  (`design/design.md` §2)
+- **THEN** the adapter SHALL translate it to `TransactionKeyReuseError`
+  (`src/interfaces/temporal-kv.ts`), not a generic query-failure error
+
 ### Requirement: Unconditional writes are gapless and monotonic (Law T1)
 
 `PgTemporalKV.put` calls with no `expectedVersion` (the unconditional write
@@ -119,6 +131,30 @@ used as the sole signal.
 - **AND** `error.actual` SHALL be `undefined`, not `0` and not the numeral
   zero as a version
 
+### Requirement: A second put to the same key within one transaction is rejected, not silently absorbed
+
+Added 2026-07-20 after a cross-vendor audit found the original design lost history rows under
+same-transaction double-writes (Postgres's `now()` is fixed at transaction start, so two writes
+to one key in one `sql.begin()` shared an indistinguishable commit instant). Per
+`Formal/STORAGE_ALGEBRA.md` §1 (Law T4) and `design/design.md` §2's trigger: `PgTemporalKV.put`
+SHALL reject a second write to the same `(ns, scope, key)` within a single transaction with
+`TransactionKeyReuseError`, and SHALL NOT insert a `kv_history` row that would go unrecorded as a
+result of the rejection — the first write's row remains exactly as committed.
+
+#### Scenario: A second put to the same key in one transaction is rejected
+- **WHEN** a transaction issues `put(ns, scope, key, v1)` followed by
+  `put(ns, scope, key, v2)` against the same key before committing
+- **THEN** the second `put` SHALL reject with `TransactionKeyReuseError`
+- **AND** the first `put`'s version SHALL remain the current value after the transaction commits
+- **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection
+
+#### Scenario: Sequential puts to the same key in separate transactions are unaffected
+- **WHEN** `put(ns, scope, key, v1)` commits in one transaction, then `put(ns, scope, key, v2)`
+  is issued in a separate transaction immediately afterward (arbitrarily close in wall-clock
+  time)
+- **THEN** the second `put` SHALL succeed normally
+- **AND** `getAt({version: 1})` SHALL still return `v1`'s value afterward
+
 ### Requirement: listKeys streams without materializing the full result set first, and orders results correctly
 
 `PgTemporalKV.listKeys` SHALL yield keys incrementally via a database
@@ -140,9 +176,11 @@ not only the streaming behavior.
 - **THEN** `listKeys` SHALL yield that key at most once, reflecting its
   current version, not once per historical version
 
-#### Scenario: Aborting mid-iteration releases the cursor
+#### Scenario: Aborting mid-iteration rejects with AbortError and releases the cursor
 - **WHEN** `opts.signal` is aborted partway through a `listKeys` iteration
-- **THEN** iteration SHALL stop
+- **THEN** the iteration SHALL reject with `AbortError` (per
+  `src/interfaces/temporal-kv.ts`'s cancellation contract) — ending the generator's loop via a
+  plain `break`, which completes the iteration successfully, does NOT satisfy this requirement
 - **AND** the underlying database cursor SHALL be released, not left open
 
 ### Requirement: getAt satisfies temporal-projection equivalence (Law T3), within the store's retention window
@@ -156,13 +194,6 @@ so for Sprint 1 this requirement holds unconditionally for the store's
 entire lifetime. A future sprint that adds retention MUST revisit this
 requirement's scenarios rather than assume they still hold unchanged once
 old history can be pruned.
-
-#### Scenario: getAt matches an independent replay for an arbitrary put sequence
-- **WHEN** an arbitrary sequence of `put`s to a key, each with a
-  distinct timestamp, is applied, and `getAt(k, { at: T })` is queried for
-  an arbitrary `T` within the sequence's time range
-- **THEN** the returned value SHALL equal the value produced by folding
-  (in a plain, from-scratch reference implementation, not the code under
 
 #### Scenario: getAt matches an independent replay for an arbitrary put sequence
 - **WHEN** an arbitrary sequence of `put`s to a key, each with a

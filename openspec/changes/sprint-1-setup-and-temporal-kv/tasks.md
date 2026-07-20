@@ -21,40 +21,68 @@ auditors approve, or their findings are fixed and re-reviewed.
   `sql.cursor()`, and a tagged-template call with an explicit generic
   (`sql<Row[]>\`...\``), and confirm it typechecks (`tsc --noEmit`). A
   passing `select 1` smoke test alone does not exercise any of these four
-  and is not sufficient evidence for this task on its own.
+  and is not sufficient evidence for this task on its own. **Added by the
+  2026-07-20 audit:** a test asserting `createClient()` (no `maxConnections`
+  given) opens a pool of the driver's actual default size (10), not 1 (the
+  `max: undefined` bug this change's `design.md` §3 fixes); and a test
+  writing/reading a `version` above `Number.MAX_SAFE_INTEGER` through
+  `PgTemporalKV`, asserting it round-trips as a real JS `bigint`, not a
+  string or a precision-lossy number (the `types.bigint` config fix, same
+  section).
 - [ ] 0.2 Add `@testcontainers/postgresql` as a devDependency. Write
   `test/postgres/setup.ts`: starts one Postgres container for the whole
   test run, exposes its connection string, tears down on suite completion.
   **Acceptance:** a trivial test file that imports the setup and runs
   `select 1` against the container passes in CI/locally with no other
   Postgres running.
-- [ ] 0.3 Write `migrations/000_schema.sql` and the migration runner
-  (`src/postgres/migrate.ts`, `design.md` §2). **Acceptance:** running
-  `runMigrations(sql)` twice in a row against a fresh database is
+- [ ] 0.3 Write `src/postgres/migrations/000_schema.ts` and the migration
+  runner (`src/postgres/migrate.ts`, `design.md` §2 — migrations are
+  TypeScript `up(sql, schema)` functions, not static `.sql` files, per this
+  change's schema-configurability fix). **Acceptance:** running
+  `runMigrations(sql, {schema})` twice in a row against a fresh database is
   idempotent (second run applies zero new migrations, doesn't error); a
   test asserts this directly (run twice, assert `_migrations` row count is
-  identical after both runs).
-- [ ] 0.4 Write `migrations/001_temporal_kv.sql` (design/design.md §2's DDL,
-  schema-qualified per this change's design.md §0/§2). **Acceptance:**
-  after `runMigrations`, `kv_current`, `kv_history`, and the
-  `kv_history_no_overlap` EXCLUDE constraint all exist (verify via a query
-  against `information_schema`/`pg_constraint`, not just "the migration
-  didn't error").
+  identical after both runs). **Added by the 2026-07-20 audit — idempotency
+  alone does not prove concurrent safety:** a second test starts two
+  concurrent `runMigrations` calls against the same fresh database and
+  asserts (a) neither errors, (b) `_migrations` ends with exactly one row
+  per migration (not duplicated), and (c) a deliberately-failing injected
+  migration leaves `_migrations` unchanged and its DDL fully rolled back.
+- [ ] 0.4 Write `src/postgres/migrations/001_temporal_kv.ts`
+  (design/design.md §2's DDL, schema-qualified via `sql(schema)` per this
+  change's design.md §0/§2). **Acceptance:** after `runMigrations`,
+  `kv_current`, `kv_history`, both indexes (`kv_history_lookup` and the
+  audit-added `kv_history_by_version`), and the `kv_history_no_overlap`
+  EXCLUDE constraint all exist (verify via a query against
+  `information_schema`/`pg_constraint`, not just "the migration didn't
+  error"). **Added by the 2026-07-20 audit — existence alone does not prove
+  qualification:** a hostile-`search_path` test that (1) creates a decoy
+  `kv_history` table of the same shape in a *different* schema, (2) sets
+  the connection that will fire the trigger to that decoy schema's
+  `search_path`, (3) performs a `kv_current` update, and (4) asserts the
+  resulting history row landed in the CONFIGURED schema's `kv_history`,
+  not the decoy — proving schema qualification holds at trigger-execution
+  time, not just that the migration's own DDL ran without error.
 - [ ] 0.5 Write `src/postgres/client.ts` (design.md §3) and
-  `src/postgres/errors.ts` (Postgres error-code → shared `StorageError`
-  translation — at minimum: connection failures → `ConnectionError`, a
-  unique-violation on the `kv_history_no_overlap` constraint →
-  something the caller can distinguish from a generic query failure, even
-  if TemporalKV itself doesn't hit this constraint under normal operation
-  since the trigger is designed not to produce overlaps).
-  **Acceptance:** two separate assertions, not one — (a) a unit test that
+  `src/postgres/errors.ts` (design.md §4a — Postgres error-code → shared
+  `StorageError` translation: connection failures → `ConnectionError`;
+  SQLSTATE `23P01` [exclusion_violation — NOT `23505`/unique_violation,
+  a distinct code; the original task wording named the wrong one] on the
+  `kv_history_no_overlap` constraint → a distinguishable, catchable error,
+  even if `TemporalKV` itself doesn't hit this constraint under normal
+  operation since the trigger is designed not to produce overlaps; the
+  custom SQLSTATE `UB001` on `kv_current_history_trigger` →
+  `TransactionKeyReuseError`).
+  **Acceptance:** three separate assertions, not one — (a) a unit test that
   forces a connection failure (e.g. an invalid connection string) asserts
   a `ConnectionError` is thrown, not a raw `postgres.js` error leaking
   through; (b) a unit test that directly triggers the
   `kv_history_no_overlap` constraint violation (e.g. a manual `INSERT`
   bypassing the trigger, in a test-only helper) asserts the error is
-  translated and distinguishable from a generic query failure, not just
-  that "some error" was thrown.
+  identified via SQLSTATE `23P01` specifically and translated to a
+  distinguishable error, not just that "some error" was thrown; (c) a unit
+  test that triggers `UB001` (two `put`s to one key in one transaction)
+  asserts the result is specifically `TransactionKeyReuseError`.
 
 ## 1. TemporalKV
 
@@ -73,7 +101,15 @@ auditors approve, or their findings are fixed and re-reviewed.
   for any test whose assertion had to change, explaining why the schema
   difference (not a weaker check) justifies it — same rigor already
   applied by the earlier `design/design.md` §10 discussion of this exact
-  risk.
+  risk. **Added by the 2026-07-20 audit:** a literal seven-case `put` CAS
+  regression matrix (design.md §4's re-derivation table: omitted/`0n`/`N>0`
+  expectedVersion crossed with absent/matching/mismatched current state),
+  each case asserting BOTH the return/error value AND that `kv_current`
+  and `kv_history` are byte-for-byte unchanged when the case is a failure
+  — not just "an error was thrown." Also a hostile-prefix `listKeys` test
+  using a prefix containing a literal `%` and `_`, asserting only
+  literal-prefix matches are returned (the `LIKE`-escaping fix, design.md
+  §4).
 - [ ] 1.3 Implement property tests P1-P5 from `Formal/STORAGE_ALGEBRA.md`
   §5 as `test/postgres/temporal-kv.property.test.ts`, using `fast-check`.
   **Acceptance:** all five pass against the real Testcontainers Postgres,
@@ -85,7 +121,14 @@ auditors approve, or their findings are fixed and re-reviewed.
   the CAS-guarded path 1.1/spec.md's CAS requirement already covers — T1 is
   most at risk exactly where no CAS guard is protecting it (found by
   review: the original draft only tracked T2 in its acceptance criteria and
-  silently under-covered T1).
+  silently under-covered T1). **Resolves an earlier tension the audit
+  flagged:** `Formal/STORAGE_ALGEBRA.md`'s properties no longer require a
+  shared transaction to exercise Law T1 (the "one write per key per
+  transaction" rule, `design.md` §2, makes wrapping a same-key sequence in
+  one `sql.begin()` meaningless for this purpose anyway) — sequential,
+  separately-committed `put` calls are sufficient, so this task does not
+  conflict with task 1.6's rule that `opts.tx` must not be passed this
+  sprint.
 - [ ] 1.4 Confirm whether point-in-time `listKeys` is actually needed
   (`design/design.md` §2 flags this as an open question, deferred to
   implementation time) — check the ported test suite from 1.2 for any

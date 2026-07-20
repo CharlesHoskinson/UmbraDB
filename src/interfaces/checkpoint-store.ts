@@ -36,25 +36,34 @@ export interface CheckpointSummary {
   createdAt: Date;
 }
 
-/** A summary plus the reconstructed payload. */
+/**
+ * A summary plus the reconstructed payload. There is deliberately no `integrityVerified`
+ * field: `load()` always fully rehashes and verifies every chunk before returning (see its
+ * `@throws`), so a `CheckpointRecord` in hand has, by construction, already passed integrity
+ * verification — an `integrityVerified: false` value could never actually be observed, and a
+ * review found that dead, always-true field misleading rather than informative. If a caller
+ * needs to distinguish "verified now" from "verified when originally loaded," that is a
+ * caching concern for the caller, not a property of this type.
+ */
 export interface CheckpointRecord extends CheckpointSummary {
   data: Uint8Array;
-  /** True if every chunk's rehashed content matched its manifest entry. */
-  integrityVerified: boolean;
 }
 
 export interface PruneResult {
   prunedSequences: CheckpointSequence[];
-  /** Chunks physically deleted because this prune removed their last remaining reference
-   *  anywhere in the store — across ALL wallets and networks, not just this one. Chunk
-   *  storage is globally content-addressed and shared (see interface doc), so a chunk still
-   *  referenced by another wallet's manifest is never reclaimed, and this count can be zero
-   *  even when many checkpoints were pruned. */
+  /** Chunks physically deleted BY THIS CALL because this prune removed their last remaining
+   *  reference anywhere in the store — across ALL wallets and networks, not just this one.
+   *  Reclamation is synchronous and immediate (the refcount scan runs in the same internal
+   *  transaction as the manifest deletion, per the interface doc above) — there is no
+   *  eventual/deferred/grace-window collection to account for; by the time `prune` resolves,
+   *  reclamation has already happened or it hasn't. Chunk storage is globally content-addressed
+   *  and shared, so a chunk still referenced by another wallet's manifest is never reclaimed,
+   *  and this count can be zero even when many checkpoints were pruned. */
   reclaimedChunks: number;
   reclaimedBytes: number;
 }
 
-export type CheckpointStoreErrorCode = "NOT_FOUND" | "CHUNK_INTEGRITY" | "MANIFEST_CORRUPT";
+export type CheckpointStoreErrorCode = "NOT_FOUND" | "CHUNK_MISSING" | "CHUNK_INTEGRITY" | "MANIFEST_CORRUPT";
 
 export abstract class CheckpointStoreError extends StorageError {
   abstract readonly code: CheckpointStoreErrorCode;
@@ -69,6 +78,17 @@ export class CheckpointNotFoundError extends CheckpointStoreError {
     readonly networkId: string,
     readonly sequence?: number,
   ) { super("checkpoint not found"); }
+}
+
+/** A chunk hash listed in the manifest has no corresponding row in chunk storage at all —
+ *  distinct from {@link ChunkIntegrityError} (chunk present, content wrong). This can only mean
+ *  the chunk was reclaimed while still referenced (a garbage-collection bug) or the store was
+ *  corrupted out-of-band; it is never a normal, expected outcome. */
+export class ChunkMissingError extends CheckpointStoreError {
+  readonly code = "CHUNK_MISSING" as const;
+  constructor(readonly chunkHash: ContentHash) {
+    super("chunk referenced by manifest is missing from chunk storage");
+  }
 }
 
 /** A chunk's rehashed content didn't match its manifest entry. */
@@ -113,8 +133,12 @@ export interface CheckpointStore {
   save(walletId: string, networkId: string, data: Uint8Array, opts?: SaveCheckpointOptions): Promise<CheckpointSummary>;
 
   /**
-   * Omit `sequence` for the latest checkpoint.
+   * Omit `sequence` for the latest checkpoint. Always fully rehashes and verifies every chunk
+   * before returning — see {@link CheckpointRecord}'s doc for why the return type has no
+   * separate `integrityVerified` flag.
    * @throws {CheckpointNotFoundError} if no checkpoint exists (or `sequence` doesn't).
+   * @throws {ChunkMissingError} if a chunk hash listed in the manifest has no corresponding
+   *   row in chunk storage at all.
    * @throws {ChunkIntegrityError} if a chunk's rehash doesn't match its manifest entry.
    * @throws {ManifestCorruptError} if the manifest itself fails validation.
    */

@@ -11,6 +11,19 @@ design was incompatible with the chosen pooled driver) and several majors,
 all fixed in this version — see git history for the pre-review draft if the
 before/after is useful.
 
+**2026-07-20 revision.** Three independent cross-vendor (Codex GPT-5.6 Sol)
+audits, run before implementation began, converged on the same finding: §2's
+temporal-KV trigger design silently lost history rows under same-transaction
+double-writes, because Postgres's `now()` is fixed at transaction start (not
+per-statement, not commit time) — a fact none of the earlier Opus review
+rounds had caught. Fixed per the user-selected direction (forbid a second
+`put` to one key within a single transaction, rather than redesigning
+history to retain every version unconditionally): see §2's rewritten DDL,
+`Formal/STORAGE_ALGEBRA.md` §1 (Law T4), and
+`src/interfaces/temporal-kv.ts`'s `TransactionKeyReuseError`. The same audit
+pass also fixed §3's manifest-prune off-by-one and §6's `wallet_state`
+scope/§9 contradiction, both below.
+
 ## 0. How this reconciles with the Tier-2 (indexer) Postgres decision
 
 The 2026-07-17 storage-architecture-reconciliation
@@ -66,14 +79,34 @@ Design: a **current table** + a trigger-populated **history table**, using
 closed-open validity intervals so a `getAt(ns, scope, key, asOf)` read is a
 single indexed range query.
 
+**Revised after the 2026-07-20 cross-vendor audit (three independent reviewers derived the
+same counterexample): the original design's "SKIPS the history insert when valid_from =
+valid_to, nothing is lost" workaround was wrong — `now()` is fixed for the whole transaction
+(Postgres docs: "the transaction's start time"), so two `UPDATE`s to the same key inside one
+`sql.begin()` produce a same-instant boundary and the skip silently discarded the first write's
+history row (`getAt({version:1})` would return `null` for a version that really existed).
+Per the user-selected fix (see `Formal/STORAGE_ALGEBRA.md` §1 and
+`src/interfaces/temporal-kv.ts`'s `TransactionKeyReuseError`): a second `put` to the same key
+within one transaction is now REJECTED outright by the trigger, not silently absorbed. Detecting
+"is this the second write to this row within the current transaction" cannot use `updated_at`
+equality once the timestamp column also switches to `clock_timestamp()` (see below) — the fix
+uses `pg_current_xact_id()`/`txid_current()` instead, which is guaranteed identical across every
+statement in one transaction and (short of the 64-bit epoch-extended ID wrapping, which does not
+happen in practice) distinct across transactions. This decouples reuse-detection from whatever
+column stores the human-readable write time.**
+
 ```sql
 CREATE TABLE kv_current (
-  ns         text NOT NULL,
-  scope      text NOT NULL,
-  key        text NOT NULL,
-  value      jsonb NOT NULL,
-  version    bigint NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now(),
+  ns           text NOT NULL,
+  scope        text NOT NULL,
+  key          text NOT NULL,
+  value        jsonb NOT NULL,
+  version      bigint NOT NULL,
+  updated_at   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  -- Transaction-reuse guard (see the note above): NOT the same value as
+  -- updated_at's clock_timestamp() — this must be constant across every
+  -- statement in one transaction, which only txid_current() guarantees.
+  updated_xact bigint NOT NULL DEFAULT txid_current(),
   PRIMARY KEY (ns, scope, key)
 );
 
@@ -97,31 +130,65 @@ CREATE TABLE kv_history (
   -- give the EXCLUDE constraint below a range type to index
   validity   tstzrange GENERATED ALWAYS AS (tstzrange(valid_from, valid_to, '[)')) STORED,
   CONSTRAINT kv_history_range CHECK (valid_from < valid_to),
-  -- Law T5 (design-algebra.md §1): no two history intervals for the same
-  -- key may overlap. Originally enforced only by "the trigger doesn't
-  -- produce overlaps" (an application-level ASPIRATIONAL guarantee); this
-  -- EXCLUDE constraint makes non-overlap a database-enforced invariant —
-  -- the engine rejects a second write that would violate it, the same way
-  -- the ledger's Merkle tree makes a non-linear insert unrepresentable
-  -- rather than merely unexpected. Promotes T5 from ASPIRATIONAL to
-  -- GUARANTEED.
+  -- Law T5a (design-algebra.md §1): no two history intervals for the same
+  -- key may overlap ("MECHANISM SPECIFIED" per Formal/STORAGE_ALGEBRA.md's
+  -- terminology — the engine rejects a write that would violate it, the
+  -- same way the ledger's Merkle tree makes a non-linear insert
+  -- unrepresentable rather than merely unexpected). This constraint gives
+  -- non-overlap ALONE; it does NOT by itself guarantee gap-freedom
+  -- (T5b, below) between consecutive intervals — that half is proved by
+  -- construction from the trigger's own logic (each new history row's
+  -- valid_from is exactly the prior row's valid_to), not by a constraint.
   CONSTRAINT kv_history_no_overlap EXCLUDE USING gist (
     ns WITH =, scope WITH =, key WITH =, validity WITH &&
   )
 );
 CREATE INDEX kv_history_lookup ON kv_history (ns, scope, key, valid_from);
 
--- BEFORE UPDATE/DELETE trigger on kv_current:
---   1. sets NEW.updated_at = now() on every write (UPDATE's column default
---      only fires on INSERT — this must be explicit, or the current/history
---      boundary drifts and getAt's fall-through returns a stale value);
---   2. copies the OLD row into kv_history with
---      valid_from = OLD.updated_at, valid_to = now();
---   3. SKIPS the history insert when valid_from = valid_to (a same-transaction
---      double-write: now() is constant for the whole transaction, so a
---      second update in one sql.begin would otherwise produce a zero-width
---      interval and trip kv_history_range's CHECK) — the current row already
---      reflects the last write in that case, nothing is lost.
+-- Reuse-detection support: no index needed on updated_xact (only ever
+-- compared against the current row via its PK lookup, never scanned).
+
+CREATE OR REPLACE FUNCTION kv_current_history_trigger() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  now_xact bigint := txid_current();
+  now_ts   timestamptz := clock_timestamp();
+BEGIN
+  -- Law T4 well-definedness (Formal/STORAGE_ALGEBRA.md §1): reject a second
+  -- write to this key within the current transaction rather than silently
+  -- losing OLD's history row (the bug this replaces — see the note above
+  -- the CREATE TABLE statements). OLD.updated_xact = now_xact iff OLD was
+  -- itself written earlier in this same transaction; unlike a timestamp
+  -- comparison this is exact regardless of how updated_at is derived.
+  IF OLD.updated_xact = now_xact THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'UB001',
+      MESSAGE = format('kv_current: only one write per key is allowed per transaction (ns=%s, scope=%s, key=%s)', OLD.ns, OLD.scope, OLD.key);
+      -- Custom SQLSTATE class 'UB' (UmbraDB-defined, avoids colliding with
+      -- any built-in class); the adapter's error-translation layer maps
+      -- 'UB001' to src/interfaces/temporal-kv.ts's TransactionKeyReuseError.
+  END IF;
+
+  INSERT INTO kv_history (ns, scope, key, value, version, valid_from, valid_to)
+  VALUES (OLD.ns, OLD.scope, OLD.key, OLD.value, OLD.version, OLD.updated_at, now_ts);
+
+  NEW.updated_at   := now_ts;
+  NEW.updated_xact := now_xact;
+  RETURN NEW;
+END;
+$$ SET search_path = pg_catalog, tier1_wallet;
+-- Hardened search_path (per §0's schema-qualification requirement): pins
+-- name resolution for every unqualified identifier/operator in this
+-- function body (txid_current(), clock_timestamp(), format(), the implicit
+-- kv_history reference) regardless of the calling connection's own
+-- search_path, closing the "decoy same-named object" attack the 2026-07-20
+-- audit specifically tested for.
+
+CREATE TRIGGER kv_current_history_bu
+  BEFORE UPDATE ON tier1_wallet.kv_current
+  FOR EACH ROW
+  EXECUTE FUNCTION tier1_wallet.kv_current_history_trigger();
+
 -- getAt() reads kv_history for valid_from <= asOf < valid_to, falling
 -- through to kv_current when asOf >= kv_current.updated_at (still the live
 -- value).
@@ -236,13 +303,18 @@ referenced becomes reclaimable in the same GC pass):
 -- 1. prune old superseded manifests (mirrors the Mongo prune.ts policy —
 --    e.g. keep only the newest N complete manifests per (w, net); exact
 --    retention predicate ported from prune.ts in Task <n>, not re-derived
---    here)
+--    here).
+--    OFF-BY-ONE, found by the 2026-07-20 audit and fixed here: ORDER BY seq
+--    DESC puts the newest row at OFFSET 0, so the Nth-newest surviving row
+--    (the oldest one we must KEEP) sits at OFFSET (N-1), not OFFSET N — the
+--    original `OFFSET <retain_count>` selected the (N+1)-th newest instead,
+--    silently retaining one extra manifest (and its chunks) forever.
 DELETE FROM ckpt_manifests m
 WHERE m.complete
   AND m.seq < (
     SELECT seq FROM ckpt_manifests
     WHERE w = m.w AND net = m.net AND complete
-    ORDER BY seq DESC OFFSET <retain_count> LIMIT 1
+    ORDER BY seq DESC OFFSET (<retain_count> - 1) LIMIT 1
   );
 
 -- 2. reclaim chunks no longer referenced by any surviving manifest, past
@@ -417,8 +489,23 @@ CREATE TABLE wallet_state (
 );
 ```
 
-**TTL gap — Postgres has no native expiring-document feature (unlike
-Mongo's `expireAfterSeconds` TTL index).** `wallet_state` needs an explicit
+**Scope of this table is conditional — resolved forward-reference to §9's
+correction, flagged here to remove the contradiction an earlier draft had
+(this table described below as needed, while §9 separately found it may be
+dead code).** §9's 2026-07-20 interface audit found that production
+(`ballot-preprod.ts`) does NOT use `MongoWalletStateStore`/this `wallet_state`
+shape at all — it uses `CheckpointWalletStateStore`, built on
+`CheckpointStore`+`Watermarks` (§3/§4), with no `wallet_state`-shaped table
+anywhere in that path. Do not treat the table above, or the TTL mechanism
+below, as confirmed-needed: **Task 1 MUST confirm whether anything other
+than the legacy `MongoWalletStateStore` path still reads this table before
+`wallet_state` is created at all.** If nothing else uses it, drop this table
+(and the TTL mechanism below) from scope entirely rather than porting dead
+code — do not implement it "just in case."
+
+**TTL gap (applies only if Task 1 confirms `wallet_state` is in scope) —
+Postgres has no native expiring-document feature (unlike Mongo's
+`expireAfterSeconds` TTL index).** `wallet_state` needs an explicit
 expiry mechanism to reproduce the Mongo store's 7-day auto-cleanup:
 `pg_cron`'s `SELECT cron.schedule(...)` running `DELETE FROM wallet_state
 WHERE updated_at < now() - interval '7 days'` on a periodic schedule (needs
