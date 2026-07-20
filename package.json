@@ -1,0 +1,20 @@
+{
+  "name": "midnight-pg-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "docs:storage": "typedoc",
+    "docs:storage:check": "typedoc --emit none --treatWarningsAsErrors"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typedoc": "^0.28.0",
+    "typescript": "^5.9.0"
+  }
+}
