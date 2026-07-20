@@ -138,6 +138,129 @@ describe("PgTemporalKV", () => {
     });
   });
 
+  describe("schema threading (Codex audit finding: PgTemporalKV must not default independently of createClient)", () => {
+    it("constructing without an explicit schema argument uses the client's own configured schema, not a hardcoded literal", async () => {
+      const sql = getSql();
+      // Deliberately omit the second constructor argument entirely -- the bug was that this
+      // silently defaulted to "umbradb" instead of reading sql.umbradbSchema (TEST_SCHEMA here).
+      const kvNoExplicitSchema = new PgTemporalKV(sql);
+      const entry = await kvNoExplicitSchema.put("ns", "sc", "schema-thread-key", { a: 1 });
+      expect(entry.version).toBe(1n);
+      // Confirm it actually landed in TEST_SCHEMA, not some other/default schema.
+      const viaExplicitSchema = await kv().get("ns", "sc", "schema-thread-key");
+      expect(viaExplicitSchema?.value).toEqual({ a: 1 });
+    });
+  });
+
+  describe("AbortSignal (Codex audit: pre-check only, no false rejection while a write actually commits)", () => {
+    it("put with an already-aborted signal rejects with AbortError and never touches the database", async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(kv().put("ns", "sc", "abort-key", { a: 1 }, { signal: controller.signal }))
+        .rejects.toMatchObject({ name: "AbortError" });
+      const row = await kv().get("ns", "sc", "abort-key");
+      expect(row).toBeNull();
+    });
+
+    it("get with an already-aborted signal rejects with AbortError", async () => {
+      await kv().put("ns", "sc", "abort-key-2", { a: 1 });
+      const controller = new AbortController();
+      controller.abort();
+      await expect(kv().get("ns", "sc", "abort-key-2", { signal: controller.signal }))
+        .rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("getAt with an already-aborted signal rejects with AbortError", async () => {
+      await kv().put("ns", "sc", "abort-key-3", { a: 1 });
+      const controller = new AbortController();
+      controller.abort();
+      await expect(kv().getAt("ns", "sc", "abort-key-3", { kind: "version", version: 1n }, { signal: controller.signal }))
+        .rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("a signal aborted AFTER a put has already been dispatched does not cause a false AbortError rejection", async () => {
+      const controller = new AbortController();
+      const promise = kv().put("ns", "sc", "abort-key-4", { a: 1 }, { signal: controller.signal });
+      controller.abort(); // fires after putImpl has already started, synchronously in the same tick
+      const entry = await promise; // must resolve normally, not reject -- the write is already in flight
+      expect(entry.version).toBe(1n);
+      const row = await kv().get("ns", "sc", "abort-key-4");
+      expect(row?.value).toEqual({ a: 1 });
+    });
+
+    it("abort(reason) with an arbitrary Error still surfaces as a real AbortError, not the arbitrary reason", async () => {
+      const controller = new AbortController();
+      controller.abort(new Error("some unrelated failure"));
+      await expect(kv().get("ns", "sc", "abort-key-5", { signal: controller.signal }))
+        .rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("listKeys with an already-aborted signal rejects with AbortError before yielding anything", async () => {
+      await kv().put("ns", "sc", "abort-list:a", { v: 1 });
+      const controller = new AbortController();
+      controller.abort();
+      const iterate = async () => {
+        const keys: string[] = [];
+        for await (const k of kv().listKeys("ns", "sc", "abort-list:", { signal: controller.signal })) keys.push(k);
+        return keys;
+      };
+      await expect(iterate()).rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("aborting listKeys mid-iteration rejects with AbortError and releases the cursor (no pool leak)", async () => {
+      for (let i = 0; i < 10; i++) {
+        await kv().put("ns", "sc", `abort-mid:${String(i).padStart(2, "0")}`, { v: i });
+      }
+      const controller = new AbortController();
+      const seen: string[] = [];
+      const iterate = async () => {
+        for await (const k of kv().listKeys("ns", "sc", "abort-mid:", { signal: controller.signal })) {
+          seen.push(k);
+          if (seen.length === 2) controller.abort();
+        }
+      };
+      await expect(iterate()).rejects.toMatchObject({ name: "AbortError" });
+      expect(seen.length).toBeGreaterThanOrEqual(2);
+      // Prove the connection/cursor wasn't left in a broken state: a fresh query still works.
+      const after = await kv().get("ns", "sc", "abort-mid:00");
+      expect(after?.value).toEqual({ v: 0 });
+    });
+  });
+
+  describe("getAt AsOf payload validation (Codex audit: only the discriminant was checked before)", () => {
+    it("negative version rejects with ValidationError before touching SQL", async () => {
+      await expect(kv().getAt("ns", "sc", "asof-key", { kind: "version", version: -1n as unknown as bigint }))
+        .rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("an invalid Date for {at} rejects with ValidationError before touching SQL", async () => {
+      await expect(kv().getAt("ns", "sc", "asof-key", { kind: "at", at: new Date(NaN) }))
+        .rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe("PostgreSQL-unsafe values rejected as ValidationError, not raw driver errors (Codex audit)", () => {
+    it("a value containing a NUL byte rejects with ValidationError before touching SQL", async () => {
+      await expect(kv().put("ns", "sc", "unsafe-key-1", { a: "contains\u0000nul" }))
+        .rejects.toBeInstanceOf(ValidationError);
+      const row = await kv().get("ns", "sc", "unsafe-key-1");
+      expect(row).toBeNull();
+    });
+
+    it("a value containing a lone UTF-16 surrogate rejects with ValidationError before touching SQL", async () => {
+      await expect(kv().put("ns", "sc", "unsafe-key-2", { a: "lone\uD800surrogate" }))
+        .rejects.toBeInstanceOf(ValidationError);
+      const row = await kv().get("ns", "sc", "unsafe-key-2");
+      expect(row).toBeNull();
+    });
+
+    it("a key containing a NUL byte in an object key rejects with ValidationError before touching SQL", async () => {
+      const value = { ["bad\u0000key"]: 1 };
+      await expect(kv().put("ns", "sc", "unsafe-key-3", value))
+        .rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
   describe("Transaction key reuse (UB001 -> TransactionKeyReuseError), exercised at the trigger level per spec.md's scope note", () => {
     it("a second UPDATE to the same kv_current row within one transaction is rejected", async () => {
       const sql = getSql();

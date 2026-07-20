@@ -4,22 +4,40 @@ import postgres, { type Sql } from "postgres";
  *  mapping (`postgres.BigInt`) configured below, so callers get real `bigint` in and out of
  *  tagged-template queries instead of the untyped `Sql<{}>` default (which rejects `bigint`
  *  query parameters at compile time and would otherwise force every consumer, including
- *  `PgTemporalKV`, to lose that type information at the createClient boundary). */
-export type UmbraDBSql = Sql<{ bigint: bigint }>;
+ *  `PgTemporalKV`, to lose that type information at the createClient boundary). Also carries
+ *  the resolved schema name as `umbradbSchema` — see that property's own doc below for why.
+ */
+export type UmbraDBSql = Sql<{ bigint: bigint }> & { readonly umbradbSchema: string };
 
 /** Default schema — see `openspec/changes/sprint-1-setup-and-temporal-kv/design.md` §0: a
  *  library default, not a name UmbraDB itself is embedded under. */
 export const DEFAULT_SCHEMA = "umbradb";
 
-/** Schema names must be safe to interpolate as SQL identifiers via `postgres.js`'s `sql(name)`
- *  helper. `sql(name)` already quotes/escapes correctly regardless of content, so this regex is
- *  defense-in-depth (a malformed config value fails fast with a clear message here, rather than
- *  producing confusing downstream DDL) — see design.md §2. */
+/**
+ * Schema names must be safe to interpolate as SQL identifiers via `postgres.js`'s `sql(name)`
+ * helper. `sql(name)` already quotes/escapes correctly regardless of content, so this regex is
+ * defense-in-depth (a malformed config value fails fast with a clear message here, rather than
+ * producing confusing downstream DDL) — see design.md §2.
+ *
+ * **Length bound added after a cross-vendor audit**: Postgres truncates identifiers longer
+ * than 63 bytes (`NAMEDATALEN - 1`) rather than rejecting them, so two configured schema names
+ * agreeing on their first 63 characters would silently address the SAME physical schema —
+ * while this module's own `hashtext()`-based advisory-lock keys (`migrate.ts`) hash the FULL
+ * string and would NOT collide, letting two "different" schemas' migrations run unlocked
+ * against one physical schema at the same time. Rejecting anything over the limit here closes
+ * that gap at the source rather than relying on every caller of `hashtext()` to know about it.
+ */
 const SCHEMA_NAME_PATTERN = /^[a-z_][a-z0-9_]*$/;
+const POSTGRES_MAX_IDENTIFIER_BYTES = 63;
 
 export function assertValidSchemaName(schema: string): void {
   if (!SCHEMA_NAME_PATTERN.test(schema)) {
     throw new Error(`invalid schema name: ${JSON.stringify(schema)} (must match ${SCHEMA_NAME_PATTERN})`);
+  }
+  if (schema.length > POSTGRES_MAX_IDENTIFIER_BYTES) {
+    throw new Error(
+      `invalid schema name: ${JSON.stringify(schema)} exceeds PostgreSQL's ${POSTGRES_MAX_IDENTIFIER_BYTES}-byte identifier limit`,
+    );
   }
 }
 
@@ -39,6 +57,19 @@ export interface UmbraDBConnectionOptions {
  * revision note for two real driver-config bugs): configures `search_path` to the target
  * schema and `types.bigint` so `version` columns round-trip as real JS `bigint`, matching
  * `src/interfaces/temporal-kv.ts`'s `StoredVersionSchema`.
+ *
+ * **Revised after a cross-vendor audit found the chosen schema wasn't actually threaded
+ * anywhere a caller could read it back.** `PgTemporalKV` (and any future adapter module) takes
+ * its own, independently-defaulted `schema` constructor parameter — nothing previously
+ * connected "the schema `createClient` was configured with" to "the schema an adapter
+ * constructed from that client's `Sql` instance defaults to," so `createClient({schema:
+ * "tenant_a"})` followed by `new PgTemporalKV(sql)` (without ALSO re-passing `"tenant_a"` as a
+ * second constructor argument) would silently query `"umbradb"` instead — two independent
+ * defaults that only agreed by accident. Fix: attach the resolved schema onto the returned
+ * `Sql` instance itself (as `umbradbSchema`, a plain non-enumerable property — `postgres.js`'s
+ * `sql` value is a callable function, and functions are ordinary objects that can carry extra
+ * properties) so it becomes the ONE place this information lives; every adapter's constructor
+ * defaults its own `schema` parameter to `sql.umbradbSchema` instead of a separate literal.
  */
 export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   const schema = opts.schema ?? DEFAULT_SCHEMA;
@@ -52,7 +83,9 @@ export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   // connectionString doesn't cleanly match either, so branch explicitly rather than passing
   // `undefined` positionally (which is also the exact "explicit undefined" footgun this file's
   // own `max` fix exists to avoid elsewhere).
-  return opts.connectionString !== undefined
+  const client = opts.connectionString !== undefined
     ? postgres(opts.connectionString, options)
     : postgres(options);
+  Object.defineProperty(client, "umbradbSchema", { value: schema, enumerable: false, writable: false });
+  return client as UmbraDBSql;
 }

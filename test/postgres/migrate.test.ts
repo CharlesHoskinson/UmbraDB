@@ -2,7 +2,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ConnectionError } from "../../src/interfaces/storage-errors.js";
-import { createClient, type UmbraDBSql } from "../../src/postgres/client.js";
+import { assertValidSchemaName, createClient, type UmbraDBSql } from "../../src/postgres/client.js";
 import { ExclusionViolationError, translatePostgresError } from "../../src/postgres/errors.js";
 import { runMigrations } from "../../src/postgres/migrate.js";
 
@@ -51,6 +51,63 @@ describe("runMigrations", () => {
       await sqlB.end({ timeout: 5 });
     }
   }, 30_000);
+
+  it("two concurrent runMigrations for DIFFERENT schemas do not race on the global CREATE EXTENSION (Codex audit finding #5)", async () => {
+    // Distinct per-schema advisory locks (class 1, hashtext(schema)) let these two run
+    // genuinely concurrently up to the point both try `CREATE EXTENSION IF NOT EXISTS
+    // btree_gist` -- which touches one shared, database-global catalog row regardless of
+    // schema. Without the class-3 global lock around just that statement, this races.
+    const schemaA = "ext_race_a";
+    const schemaB = "ext_race_b";
+    const sqlA = createClient({ connectionString: container.getConnectionUri(), schema: schemaA });
+    const sqlB = createClient({ connectionString: container.getConnectionUri(), schema: schemaB });
+    try {
+      await Promise.all([
+        runMigrations(sqlA, { schema: schemaA }),
+        runMigrations(sqlB, { schema: schemaB }),
+      ]);
+      const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
+      const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
+      expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+      expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+      const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
+      expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
+    } finally {
+      await sqlA.end({ timeout: 5 });
+      await sqlB.end({ timeout: 5 });
+    }
+  }, 30_000);
+
+  it("does not leave search_path or the advisory lock dangling on the connection after completion (Codex audit finding #4)", async () => {
+    const schema = "cleanup_test";
+    const sql = createClient({ connectionString: container.getConnectionUri(), schema });
+    try {
+      await runMigrations(sql, { schema });
+      // Force the SAME physical connection to be reused by capping the pool at 1, then run an
+      // ordinary query with NO schema qualification -- if search_path were still `schema,
+      // public` on this connection, `_migrations` (unqualified) would resolve; it must not,
+      // proving search_path was actually reset rather than merely widened and left in place.
+      const soloSql = createClient({ connectionString: container.getConnectionUri(), maxConnections: 1 });
+      try {
+        const searchPath = await soloSql<{ search_path: string }[]>`show search_path`;
+        expect(searchPath[0]!.search_path).not.toContain(schema);
+      } finally {
+        await soloSql.end({ timeout: 5 });
+      }
+      // The migration's own advisory lock (class 1) must not still be held -- a fresh
+      // migration run against the SAME schema must not block waiting for it.
+      await expect(runMigrations(sql, { schema })).resolves.toBeUndefined();
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  }, 30_000);
+
+  it("rejects a schema name over PostgreSQL's 63-byte identifier limit (Codex audit finding #6)", () => {
+    const tooLong = "a".repeat(64);
+    expect(() => assertValidSchemaName(tooLong)).toThrow(/63-byte/);
+    const exactly63 = "a".repeat(63);
+    expect(() => assertValidSchemaName(exactly63)).not.toThrow();
+  });
 
   it("hostile search_path: a decoy kv_history in another schema does not receive history rows (design.md task 0.4)", async () => {
     const schema = "hostile_test";

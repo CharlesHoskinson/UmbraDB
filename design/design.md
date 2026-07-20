@@ -383,8 +383,22 @@ the Sprint 1 migration runner (`openspec/changes/sprint-1-setup-and-temporal-kv/
 distinct class constants, a lease key and a migration's schema name could
 hash-collide onto the same single-integer lock key, causing an unrelated
 migration and a writer-lease acquisition to needlessly serialize against
-each other. Session-scoped advisory locks live on the *specific connection*
-that
+each other.
+
+**Advisory-lock class registry (this project's one shared keyspace across all its
+`pg_advisory_lock` uses — add new entries here, don't invent a new ad hoc class
+elsewhere):**
+- **`1`** — migrations (`migrate.ts`), keyed per-schema (`hashtext(schema)`).
+- **`2`** — writer lease (this section), keyed per lease name (`hashtext(leaseKey)`).
+- **`3`** — global DDL serialization for database-scoped catalog operations that a
+  per-schema lock cannot protect (`migrations/001_temporal_kv.ts`'s
+  `CREATE EXTENSION IF NOT EXISTS btree_gist` — found necessary by a cross-vendor
+  audit: extension names are unique per-DATABASE, not per-schema, so two different
+  schemas' per-schema-locked migrations could still race the same global catalog
+  row). Fixed key `0` (not derived from any caller value) — every use of class `3`
+  is expected to serialize against every other use of it, by design.
+
+Session-scoped advisory locks live on the *specific connection* that
 acquired them — but §7 picks `postgres.js`, whose default `postgres(url)`
 factory is itself a connection pool (`max: 10` by default). Acquiring the
 lock via one pooled call and releasing it via another can silently land on

@@ -35,9 +35,18 @@ function isPgDriverError(err: unknown): err is PgDriverError {
   return err instanceof Error;
 }
 
-/** Node-level connection failures (no SQLSTATE — the driver never reached the server, so
- *  postgres.js has nothing to attach a SQLSTATE to) surface with one of these codes. */
+/**
+ * Connection-failure codes, translated to `ConnectionError`. Two distinct namespaces share
+ * this one set (both surface via the same driver `.code` property, so one lookup covers both):
+ * Node-level codes (no SQLSTATE — the driver never reached/kept a connection to the server),
+ * and real Postgres SQLSTATEs for connection/authentication/shutdown failures. **Revised after
+ * a cross-vendor audit found the original set covered only the Node-level half** — a real
+ * Postgres error (a wrong password, an admin-initiated shutdown, a dropped connection
+ * mid-query) has its own SQLSTATE and was previously falling through to the `default` branch
+ * unchanged, contradicting the documented no-raw-driver-errors contract.
+ */
 const CONNECTION_FAILURE_CODES = new Set([
+  // Node-level
   "ECONNREFUSED",
   "ENOTFOUND",
   "ETIMEDOUT",
@@ -46,6 +55,22 @@ const CONNECTION_FAILURE_CODES = new Set([
   "CONNECT_TIMEOUT",
   "CONNECTION_ENDED",
   "CONNECTION_DESTROYED",
+  // Postgres SQLSTATE class 08 (connection_exception) — see PostgreSQL's own error-codes table
+  "08000", // connection_exception
+  "08001", // sqlclient_unable_to_establish_sqlconnection
+  "08003", // connection_does_not_exist
+  "08004", // sqlserver_rejected_establishment_of_sqlconnection
+  "08006", // connection_failure
+  "08007", // transaction_resolution_unknown
+  "08P01", // protocol_violation
+  // Authentication failures — a wrong password/role is a connection-establishment failure from
+  // this adapter's point of view, not a data-model error
+  "28000", // invalid_authorization_specification
+  "28P01", // invalid_password
+  // Server-initiated termination while a connection was in use
+  "57P01", // admin_shutdown
+  "57P02", // crash_shutdown
+  "57P03", // cannot_connect_now
 ]);
 
 /**

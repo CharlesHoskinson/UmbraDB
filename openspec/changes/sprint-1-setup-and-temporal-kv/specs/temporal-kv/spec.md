@@ -140,7 +140,22 @@ to one key in one transaction shared an indistinguishable commit instant). Per
 `kv_current_history_trigger` SHALL reject a second `UPDATE` to the same `(ns, scope, key)` row
 within a single transaction with SQLSTATE `UB001` (translated by the adapter to
 `TransactionKeyReuseError`), and SHALL NOT insert a `kv_history` row that would go unrecorded as
-a result of the rejection — the first write's row remains exactly as committed.
+a result of the rejection.
+
+**Corrected 2026-07-20 by a follow-up cross-vendor audit — a prior version of this Requirement
+overclaimed what actually survives.** An uncaught error raised inside a Postgres transaction
+aborts the ENTIRE transaction — Postgres's own documented behavior ("current transaction is
+aborted, commands ignored until end of transaction block") gives no way to commit part of a
+transaction while only the failing statement rolls back, absent an explicit `SAVEPOINT` this
+design does not use. This Requirement therefore does NOT claim the first write's row "remains
+committed" after a rejected second write — nothing in that transaction commits at all unless the
+caller catches the error and takes its own recovery action (e.g. retrying the whole transaction
+with only the first write). What IS guaranteed, and is the actual point of this Requirement: no
+`kv_history` row is silently dropped as a side effect of the rejection (the original bug this
+Requirement replaces) — the trigger fails loudly instead of losing data quietly. Whether a
+future sprint wraps each `put` in its own `SAVEPOINT` so a same-transaction reuse only rolls back
+to that savepoint (preserving the first write) is an open design question for the Transaction/
+Lease module wiring `opts.tx` (a later sprint), not settled by this Requirement.
 
 **Scope note, corrected after a follow-up review found the original scenario unreachable as
 written:** this sprint's `PgTemporalKV.put` never issues two `UPDATE`s within one transaction on
@@ -157,8 +172,14 @@ should be re-verified end-to-end through the public API too.
 - **WHEN** a `sql.begin()` transaction issues an `UPDATE` to a `kv_current` row, followed by a
   second `UPDATE` to that same row, before committing
 - **THEN** the second `UPDATE` SHALL reject with SQLSTATE `UB001`
-- **AND** the first `UPDATE`'s version SHALL remain the current value after the transaction commits
-- **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection
+- **AND** the entire transaction SHALL fail to commit as a result (Postgres aborts the whole
+  transaction on an uncaught in-transaction error; there is no partial commit without an
+  explicit `SAVEPOINT`, which this design does not use)
+- **AND** after the caller's own rollback, the row's version SHALL be whatever it was
+  immediately before this transaction began — i.e. NEITHER write took effect, not just the
+  second one
+- **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection (this
+  is the property this Requirement actually exists to guarantee — see the note above)
 
 #### Scenario: Sequential puts to the same key in separate transactions are unaffected
 - **WHEN** `put(ns, scope, key, v1)` commits in one transaction, then `put(ns, scope, key, v2)`

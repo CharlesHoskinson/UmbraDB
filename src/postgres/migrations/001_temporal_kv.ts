@@ -17,9 +17,26 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   // `<schema>, public` before calling any migration, specifically to fix this — every object
   // this migration creates is schema-qualified via `sql(schema)` so widening the path cannot
   // collide with anything.
-  await sql`
-    CREATE EXTENSION IF NOT EXISTS btree_gist
-  `;
+  //
+  // Revised after a cross-vendor audit found a real race here: `runMigrations`'s advisory lock
+  // is keyed per-schema (`hashtext(schema)`), so two DIFFERENT schemas' migrations run under
+  // DIFFERENT lock keys and can execute concurrently — but `CREATE EXTENSION IF NOT EXISTS`
+  // touches one shared, database-global `pg_extension` catalog row regardless of schema.
+  // PostgreSQL's own extension-creation code has a documented existence-check-then-insert race
+  // for exactly this case: two concurrent `CREATE EXTENSION IF NOT EXISTS` calls can both pass
+  // the precheck and race inserting the catalog row, and one fails outright instead of
+  // no-op'ing. Fix: a second, schema-INDEPENDENT advisory lock (class `3`, fixed key `0` — a
+  // constant, not derived from `schema`, so every schema's migration serializes around this
+  // one global operation) held only for the extension-creation statement itself, not the rest
+  // of this migration (which is already schema-scoped and doesn't need to serialize globally).
+  await sql`select pg_advisory_lock(3, 0)`;
+  try {
+    await sql`
+      CREATE EXTENSION IF NOT EXISTS btree_gist
+    `;
+  } finally {
+    await sql`select pg_advisory_unlock(3, 0)`;
+  }
 
   // updated_at truncates clock_timestamp() to millisecond precision. Found by actually running
   // the test suite, not by any prior audit: Postgres timestamptz carries microsecond precision,

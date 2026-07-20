@@ -17,20 +17,61 @@ import type { TransactionHandle } from "./transaction-lease.js";
  */
 
 /**
+ * A Postgres-safe UTF-16 string: rejects NUL (`\u0000`, which Postgres `text`/`jsonb` cannot
+ * store at all) and unpaired ("lone") surrogate code units (which `jsonb` also rejects, since
+ * it requires well-formed UTF-8 on the wire). Found necessary by a cross-vendor audit: the
+ * schemas below previously admitted these values, which then reached the driver and failed as
+ * raw, untranslated Postgres errors instead of the documented `ValidationError` — a boundary
+ * that looked like it validated everything but didn't actually cover what the storage backend
+ * can represent.
+ */
+const LONE_SURROGATE_PATTERN = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+function hasPostgresUnsafeText(s: string): boolean {
+  return s.includes("\u0000") || LONE_SURROGATE_PATTERN.test(s);
+}
+const POSTGRES_SAFE_TEXT_MESSAGE = "must not contain a NUL byte or an unpaired UTF-16 surrogate (PostgreSQL cannot store either)";
+
+/** Recursively checks a parsed `JsonValue` tree (both keys and string leaves) for the same
+ *  NUL/lone-surrogate problem `hasPostgresUnsafeText` checks on a plain string — `z.json()`'s
+ *  own recursive schema has no hook to apply a per-leaf refinement, so this walks the parsed
+ *  result once after the fact. */
+function jsonValueHasUnsafeText(v: unknown): boolean {
+  if (typeof v === "string") return hasPostgresUnsafeText(v);
+  if (Array.isArray(v)) return v.some(jsonValueHasUnsafeText);
+  if (v !== null && typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>).some(
+      ([k, val]) => hasPostgresUnsafeText(k) || jsonValueHasUnsafeText(val),
+    );
+  }
+  return false;
+}
+
+/**
  * A JSON-serializable value — the only value shape TemporalKV accepts, since both the
  * Postgres JSONB and Mongo BSON backends must round-trip it losslessly.
- * Schema-first: `z.json()` is Zod v4's built-in recursive JSON-value schema, and the
- * type is derived from it — there is no hand-written duplicate.
+ * Schema-first: `z.json()` is Zod v4's built-in recursive JSON-value schema, refined with the
+ * Postgres-safety check above so a value that would fail at the JSONB boundary is rejected
+ * here as `ValidationError`, not at the driver as a raw, untranslated error.
  */
-export const JsonValueSchema = z.json();
+export const JsonValueSchema = z.json().refine((v) => !jsonValueHasUnsafeText(v), {
+  message: `JSON value ${POSTGRES_SAFE_TEXT_MESSAGE}`,
+});
 export type JsonValue = z.infer<typeof JsonValueSchema>;
 
-export const NamespaceSchema = z.string().min(1).max(63);
-export const ScopeSchema = z.string().min(1).max(63);
-export const KeySchema = z.string().min(1);
+export const NamespaceSchema = z.string().min(1).max(63)
+  .refine((s) => !hasPostgresUnsafeText(s), { message: `namespace ${POSTGRES_SAFE_TEXT_MESSAGE}` });
+export const ScopeSchema = z.string().min(1).max(63)
+  .refine((s) => !hasPostgresUnsafeText(s), { message: `scope ${POSTGRES_SAFE_TEXT_MESSAGE}` });
+export const KeySchema = z.string().min(1)
+  .refine((s) => !hasPostgresUnsafeText(s), { message: `key ${POSTGRES_SAFE_TEXT_MESSAGE}` });
 export type Namespace = z.infer<typeof NamespaceSchema>;
 export type Scope = z.infer<typeof ScopeSchema>;
 export type Key = z.infer<typeof KeySchema>;
+
+/** Postgres's `bigint` column type is a signed 64-bit integer; a JS `bigint` has no such
+ *  ceiling, so without this bound a value outside Postgres's representable range would pass
+ *  Zod validation and then fail at the driver as a raw error instead of `ValidationError`. */
+const POSTGRES_BIGINT_MAX = 9223372036854775807n;
 
 /** Monotonic logical version, scoped to a single (namespace, scope, key) triple. A STORED
  *  version is always >= 1 (versions start at 1); `0n` is meaningful only as the sentinel value
@@ -38,8 +79,8 @@ export type Key = z.infer<typeof KeySchema>;
  *  a stored/observed version — these are deliberately two different schemas below, not one
  *  reused type, so a stored `0n` can never round-trip as if it were valid. */
 export type Version = bigint;
-export const StoredVersionSchema = z.bigint().positive();
-export const ExpectedVersionSchema = z.bigint().nonnegative();
+export const StoredVersionSchema = z.bigint().positive().max(POSTGRES_BIGINT_MAX);
+export const ExpectedVersionSchema = z.bigint().nonnegative().max(POSTGRES_BIGINT_MAX);
 
 /** Runtime schema for the erased shape of {@link VersionedEntry} — validated on every read
  *  boundary. The generic interface below is a deliberate exception to "derive the type from the
@@ -168,8 +209,18 @@ export interface TemporalKV {
    *   this same key once.
    * @throws {SerializationFailedError} if `value` cannot be round-tripped.
    * @throws {ConnectionError} on driver-level failure.
-   * @throws Rejects with `AbortError` if `opts.signal` aborts before the write completes; an
-   *   abort observed after commit is a no-op (the write already happened).
+   * @throws Rejects with `AbortError`, WITHOUT issuing any query, if `opts.signal` is already
+   *   aborted when this is called. **Revised after a cross-vendor audit found the original
+   *   wording ("aborts before the write completes") ambiguous in exactly the way that broke
+   *   an implementation**: it does NOT mean an abort can interrupt an in-flight write.
+   *   Cancelling an already-dispatched database operation requires backend-specific
+   *   infrastructure (e.g. a dedicated `pg_cancel_backend()` connection tracking the query's
+   *   backend PID) that this interface does not require implementations to provide — an abort
+   *   that fires AFTER the call has already started has NO effect on that call; it neither
+   *   rejects early nor prevents the write from completing and being committed. Racing a live
+   *   operation against abort and rejecting with `AbortError` while the write still commits
+   *   moments later is explicitly the failure mode this revision rules out, since a caller
+   *   that sees `AbortError` must be able to trust the operation never started.
    */
   put<T extends JsonValue>(
     namespace: Namespace, scope: Scope, key: Key, value: T,
@@ -178,7 +229,9 @@ export interface TemporalKV {
 
   /**
    * Latest version of a key, or `null` if it has never been written.
-   * @throws Rejects with `AbortError` if `opts.signal` aborts before the read completes.
+   * @throws Rejects with `AbortError`, without issuing any query, if `opts.signal` is already
+   *   aborted when this is called — see `put`'s doc for why this does not extend to
+   *   interrupting an already-dispatched read.
    */
   get<T extends JsonValue = JsonValue>(
     namespace: Namespace, scope: Scope, key: Key,
@@ -190,7 +243,9 @@ export interface TemporalKV {
    * {@link AsOf}'s doc for the index/instant each variant requires of implementations).
    * @throws {HistoryUnavailableError} if `asOf` names a point older than this store's
    *   retention floor — distinct from `null`, see that error's own doc.
-   * @throws Rejects with `AbortError` if `opts.signal` aborts before the read completes.
+   * @throws Rejects with `AbortError`, without issuing any query, if `opts.signal` is already
+   *   aborted when this is called — see `put`'s doc for why this does not extend to
+   *   interrupting an already-dispatched read.
    */
   getAt<T extends JsonValue = JsonValue>(
     namespace: Namespace, scope: Scope, key: Key, asOf: AsOf,
@@ -207,7 +262,12 @@ export interface TemporalKV {
    * @throws Aborting `opts.signal` stops iteration and frees the underlying cursor, rejecting
    *   the in-progress iteration with `AbortError` — ending the async generator's loop via a
    *   plain `break` (which completes the iteration successfully) does NOT satisfy this
-   *   contract; the abort must surface as a rejection.
+   *   contract; the abort must surface as a rejection. This applies even while a batch fetch
+   *   is blocked waiting on the underlying connection, not only between already-arrived
+   *   batches. (Standard async-iterator limitation, not specific to this method: if the
+   *   consumer stops calling `.next()` entirely without an explicit `break`/`.return()`, this
+   *   generator's body is simply not running any code to notice an abort — implementations are
+   *   not required to solve that case, only the case where the consumer keeps consuming.)
    */
   listKeys(
     namespace: Namespace, scope: Scope, prefix: string,

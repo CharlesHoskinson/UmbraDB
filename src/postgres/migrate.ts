@@ -62,8 +62,21 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
   }
 
   const reserved = await sql.reserve();
+  // Revised after a cross-vendor audit found two related bugs in this function's cleanup:
+  // (1) `search_path` was widened on this connection but never restored before `release()`,
+  // and `release()` just returns the same physical connection to the shared pool — so every
+  // later, unrelated query that happens to land on this backend would silently run under the
+  // wrong `search_path`. (2) the advisory-lock `finally` only wrapped the code AFTER `SET
+  // search_path` ran; if that specific statement were cancelled (already having acquired the
+  // lock a moment earlier), the lock would never be released and the connection would still go
+  // back to the pool holding it. `lockHeld` tracks the lock across both fixes: it flips to
+  // `true` immediately once the acquire statement itself resolves — before anything else runs
+  // — so the unlock in the outer `finally` covers every failure after that point, including a
+  // cancelled `SET search_path`.
+  let lockHeld = false;
   try {
     await reserved`select pg_advisory_lock(1, hashtext(${opts.schema}))`;
+    lockHeld = true;
     // btree_gist opclass resolution fix (migrations/001_temporal_kv.ts's own comment) — widen
     // this connection's search_path so CREATE EXTENSION IF NOT EXISTS's operators are visible
     // even when previously installed into `public` by something else.
@@ -93,9 +106,19 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
         });
       }
     } finally {
-      await reserved`select pg_advisory_unlock(1, hashtext(${opts.schema}))`;
+      // Reset search_path before this connection can possibly go back to the pool, regardless
+      // of what happens below (the lock unlock, or release()) — a connection carrying a
+      // schema-scoped search_path back into the shared pool would silently mis-scope every
+      // later unrelated query that happens to land on this same physical backend.
+      await reserved`reset search_path`;
     }
   } finally {
-    reserved.release();
+    try {
+      if (lockHeld) {
+        await reserved`select pg_advisory_unlock(1, hashtext(${opts.schema}))`;
+      }
+    } finally {
+      reserved.release();
+    }
   }
 }
