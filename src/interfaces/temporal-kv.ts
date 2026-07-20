@@ -26,7 +26,13 @@ import type { TransactionHandle } from "./transaction-lease.js";
  * can represent.
  */
 const LONE_SURROGATE_PATTERN = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-function hasPostgresUnsafeText(s: string): boolean {
+/** Exported (not just an internal helper) so adapter-level code validating a raw string that
+ *  isn't itself a Namespace/Scope/Key/JsonValue — e.g. `listKeys`'s `prefix` parameter, which
+ *  has no dedicated Zod schema of its own — can reuse the same check instead of duplicating it.
+ *  Found necessary by a cross-vendor re-audit: `listKeys`'s `prefix` was LIKE-escaped for
+ *  pattern-matching safety but never checked for the same NUL/lone-surrogate problem every
+ *  other string-shaped input is checked for. */
+export function hasPostgresUnsafeText(s: string): boolean {
   return s.includes("\u0000") || LONE_SURROGATE_PATTERN.test(s);
 }
 const POSTGRES_SAFE_TEXT_MESSAGE = "must not contain a NUL byte or an unpaired UTF-16 surrogate (PostgreSQL cannot store either)";

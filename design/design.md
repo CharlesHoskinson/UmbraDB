@@ -396,7 +396,16 @@ elsewhere):**
   audit: extension names are unique per-DATABASE, not per-schema, so two different
   schemas' per-schema-locked migrations could still race the same global catalog
   row). Fixed key `0` (not derived from any caller value) — every use of class `3`
-  is expected to serialize against every other use of it, by design.
+  is expected to serialize against every other use of it, by design. **Uses
+  `pg_advisory_xact_lock`, not `pg_advisory_lock`** (revised after a follow-up
+  cross-vendor audit): a session-level lock released right after the `CREATE
+  EXTENSION` statement — but before that statement's enclosing transaction
+  actually commits — doesn't serialize what OTHER transactions can SEE (Postgres
+  visibility is governed by commit, not by when an advisory lock happens to be
+  released), so the original session-lock version of this fix still raced. The
+  transaction-scoped form releases at this transaction's commit or rollback
+  instead, closing that gap, and has no manual-unlock step to fail inside an
+  already-aborted transaction if `CREATE EXTENSION` itself hard-fails.
 
 Session-scoped advisory locks live on the *specific connection* that
 acquired them — but §7 picks `postgres.js`, whose default `postgres(url)`

@@ -24,15 +24,37 @@ export class ClockRegressionError extends StorageError {
   constructor(message: string, cause?: unknown) { super(message, cause); }
 }
 
+/**
+ * Catch-all for a real driver/database error (has a SQLSTATE or Node network `.code`) that
+ * doesn't match any of this module's specific translations. **Added after a cross-vendor
+ * re-audit found the interface's own Requirement ("a raw postgres.js error object SHALL NOT
+ * escape the adapter layer," `specs/temporal-kv/spec.md`) taken literally** — the previous
+ * `default: return err` branch let anything not explicitly enumerated (a statement-cancellation
+ * `57014`, an `undefined_table` `42P01`, an unlisted network code) through unchanged, which is
+ * exactly the raw-error leak that Requirement exists to prevent. This class exists so that
+ * promise is actually kept for every case, not just the ones this file happened to enumerate,
+ * without inventing a bespoke class per SQLSTATE this project doesn't otherwise care about.
+ */
+export class UnrecognizedPostgresError extends StorageError {
+  readonly code = "UNRECOGNIZED_POSTGRES_ERROR" as const;
+  constructor(message: string, cause?: unknown) { super(message, cause); }
+}
+
 /** Shape of the fields postgres.js's `PostgresError` actually carries — narrower than `Error`,
  *  declared locally rather than imported since postgres.js does not export a named error class
- *  (`err instanceof Error && typeof err.code === "string"` is the real duck-typed contract). */
+ *  (`err instanceof Error && typeof err.code === "string"` is the real duck-typed contract).
+ *  **Revised after a cross-vendor re-audit**: the `code` check is now REQUIRED, not optional —
+ *  a plain application-level `Error`/`TypeError` unrelated to Postgres has no `.code` at all, so
+ *  requiring one here is what actually distinguishes "this looks like a real driver/database
+ *  error" from "this is an arbitrary bug elsewhere in the codebase that happened to be an
+ *  `Error` instance." That distinction matters for the new catch-all below — wrapping a random
+ *  application bug as though it were a Postgres error would hide it, not translate it. */
 interface PgDriverError extends Error {
-  code?: string;
+  code: string;
 }
 
 function isPgDriverError(err: unknown): err is PgDriverError {
-  return err instanceof Error;
+  return err instanceof Error && typeof (err as { code?: unknown }).code === "string";
 }
 
 /**
@@ -101,6 +123,6 @@ export function translatePostgresError(
     case "23514":
       return new ClockRegressionError(err.message, err);
     default:
-      return err;
+      return new UnrecognizedPostgresError(err.message, err);
   }
 }

@@ -259,6 +259,15 @@ describe("PgTemporalKV", () => {
       await expect(kv().put("ns", "sc", "unsafe-key-3", value))
         .rejects.toBeInstanceOf(ValidationError);
     });
+
+    it("listKeys with a prefix containing a NUL byte rejects with ValidationError before touching SQL (Codex re-audit finding)", async () => {
+      const iterate = async () => {
+        const keys = [];
+        for await (const k of kv().listKeys("ns", "sc", "unsafe\u0000prefix")) keys.push(k);
+        return keys;
+      };
+      await expect(iterate()).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   describe("Transaction key reuse (UB001 -> TransactionKeyReuseError), exercised at the trigger level per spec.md's scope note", () => {

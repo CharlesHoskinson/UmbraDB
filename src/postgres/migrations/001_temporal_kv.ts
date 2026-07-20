@@ -26,17 +26,36 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   // for exactly this case: two concurrent `CREATE EXTENSION IF NOT EXISTS` calls can both pass
   // the precheck and race inserting the catalog row, and one fails outright instead of
   // no-op'ing. Fix: a second, schema-INDEPENDENT advisory lock (class `3`, fixed key `0` — a
-  // constant, not derived from `schema`, so every schema's migration serializes around this
-  // one global operation) held only for the extension-creation statement itself, not the rest
-  // of this migration (which is already schema-scoped and doesn't need to serialize globally).
-  await sql`select pg_advisory_lock(3, 0)`;
-  try {
-    await sql`
-      CREATE EXTENSION IF NOT EXISTS btree_gist
-    `;
-  } finally {
-    await sql`select pg_advisory_unlock(3, 0)`;
-  }
+  // constant, not derived from `schema`) that every schema's migration acquires before this
+  // statement.
+  //
+  // **Revised AGAIN after a follow-up cross-vendor re-audit found the first fix (a session-level
+  // `pg_advisory_lock`/`pg_advisory_unlock` pair around just this one statement) still didn't
+  // work**: this `up()` function always runs inside `migrate.ts`'s `withReservedTransaction`
+  // (a real `BEGIN`/`COMMIT`), and `CREATE EXTENSION`'s effect on `pg_extension` — like any DML
+  // — is only visible to OTHER sessions once that transaction actually COMMITS, not the instant
+  // the statement itself finishes executing. Releasing the lock right after the statement (but
+  // before the enclosing COMMIT) let a second migration acquire the now-free lock, find the
+  // extension not yet visible in its own snapshot, and race the same catalog insert anyway —
+  // the exact original defect, just delayed by one lock-acquisition. It also meant a genuine
+  // `CREATE EXTENSION` failure (not the benign "already exists" case) would abort this
+  // transaction and make the `finally`'s `pg_advisory_unlock` itself fail (SQLSTATE `25P02`,
+  // "current transaction is aborted") — and a session-level lock is NOT released by ROLLBACK,
+  // so it would leak on the pooled connection, potentially wedging every future migration's
+  // extension step.
+  //
+  // Fix: `pg_advisory_xact_lock`, not `pg_advisory_lock` — transaction-scoped, released
+  // automatically at this transaction's COMMIT *or* ROLLBACK, no manual unlock and therefore no
+  // unlock-inside-an-aborted-transaction failure mode. Because release now happens at COMMIT
+  // (not at statement completion), a second migration blocked on this lock only proceeds once
+  // the first's entire transaction — including its CREATE EXTENSION — has actually committed,
+  // so its own subsequent statement genuinely sees the extension as installed. The lock is held
+  // for the rest of this transaction rather than just this one statement, which is an
+  // acceptable, negligible cost for a one-time migration step.
+  await sql`select pg_advisory_xact_lock(3, 0)`;
+  await sql`
+    CREATE EXTENSION IF NOT EXISTS btree_gist
+  `;
 
   // updated_at truncates clock_timestamp() to millisecond precision. Found by actually running
   // the test suite, not by any prior audit: Postgres timestamptz carries microsecond precision,

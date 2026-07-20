@@ -181,12 +181,25 @@ should be re-verified end-to-end through the public API too.
 - **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection (this
   is the property this Requirement actually exists to guarantee — see the note above)
 
-#### Scenario: Sequential puts to the same key in separate transactions are unaffected
+#### Scenario: Sequential puts to the same key in separate transactions succeed, outside the millisecond-collision caveat
 - **WHEN** `put(ns, scope, key, v1)` commits in one transaction, then `put(ns, scope, key, v2)`
-  is issued in a separate transaction immediately afterward (arbitrarily close in wall-clock
-  time)
+  is issued in a separate transaction immediately afterward, with the two writes' truncated
+  `clock_timestamp()` values (millisecond precision, `Formal/STORAGE_ALGEBRA.md` §1's second Law
+  T4 caveat) landing in DIFFERENT milliseconds
 - **THEN** the second `put` SHALL succeed normally
 - **AND** `getAt({version: 1})` SHALL still return `v1`'s value afterward
+
+**Revised 2026-07-20 by a follow-up cross-vendor audit — the prior wording of this Scenario
+("arbitrarily close in wall-clock time") overclaimed unconditional success, contradicting the
+already-documented millisecond-truncation caveat.** If the two writes' truncated instants land
+in the SAME millisecond, `valid_from` (the first write's timestamp) equals `valid_to` (the
+second write's timestamp) for the history row the trigger would insert, violating
+`kv_history_range`'s `CHECK (valid_from < valid_to)` and rejecting the second `put` with
+`ClockRegressionError` (SQLSTATE `23514`) — even though the two writes are in genuinely separate
+transactions, not the same-transaction-reuse case this Requirement's main Scenario covers. This
+is the accepted, narrower tradeoff `Formal/STORAGE_ALGEBRA.md` already documents in exchange for
+fixing the far worse `now()`-based data-loss bug; it is a real, disclosed limitation, not an
+edge case this Scenario should paper over by claiming unconditional success.
 
 ### Requirement: listKeys streams without materializing the full result set first, and orders results correctly
 

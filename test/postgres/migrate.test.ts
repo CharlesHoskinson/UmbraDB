@@ -57,43 +57,75 @@ describe("runMigrations", () => {
     // genuinely concurrently up to the point both try `CREATE EXTENSION IF NOT EXISTS
     // btree_gist` -- which touches one shared, database-global catalog row regardless of
     // schema. Without the class-3 global lock around just that statement, this races.
-    const schemaA = "ext_race_a";
-    const schemaB = "ext_race_b";
-    const sqlA = createClient({ connectionString: container.getConnectionUri(), schema: schemaA });
-    const sqlB = createClient({ connectionString: container.getConnectionUri(), schema: schemaB });
+    //
+    // Revised after a follow-up cross-vendor re-audit found this test non-representative when
+    // run against the SUITE'S shared container: by this point in the file, earlier tests have
+    // already installed btree_gist, so both concurrent calls here would hit the cheap
+    // "already exists, skipping" no-op path regardless of whether the locking fix works at
+    // all -- the test would pass even against a reverted fix. A FRESH, dedicated container
+    // (btree_gist genuinely not yet installed) is required to actually exercise the slow
+    // first-time installation path where the original race lived.
+    const freshContainer = await new PostgreSqlContainer("postgres:17-alpine").start();
     try {
-      await Promise.all([
-        runMigrations(sqlA, { schema: schemaA }),
-        runMigrations(sqlB, { schema: schemaB }),
-      ]);
-      const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
-      const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
-      expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
-      expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
-      const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
-      expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
+      const schemaA = "ext_race_a";
+      const schemaB = "ext_race_b";
+      const sqlA = createClient({ connectionString: freshContainer.getConnectionUri(), schema: schemaA });
+      const sqlB = createClient({ connectionString: freshContainer.getConnectionUri(), schema: schemaB });
+      try {
+        const before = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
+        expect(before[0]!.n).toBe(0); // confirms this run actually exercises the fresh-install path, not a no-op
+        await Promise.all([
+          runMigrations(sqlA, { schema: schemaA }),
+          runMigrations(sqlB, { schema: schemaB }),
+        ]);
+        const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
+        const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
+        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+        const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
+        expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
+      } finally {
+        await sqlA.end({ timeout: 5 });
+        await sqlB.end({ timeout: 5 });
+      }
     } finally {
-      await sqlA.end({ timeout: 5 });
-      await sqlB.end({ timeout: 5 });
+      await freshContainer.stop();
     }
-  }, 30_000);
+  }, 60_000);
 
   it("does not leave search_path or the advisory lock dangling on the connection after completion (Codex audit finding #4)", async () => {
+    // Revised after a follow-up cross-vendor re-audit found the original version of this test
+    // non-functional: it checked search_path on a SEPARATE, freshly-created pool that was never
+    // configured with the migrated schema in the first place (createClient without an explicit
+    // schema defaults to "umbradb"), so the assertion was unconditionally true regardless of
+    // whether the actual fix works -- Postgres search_path is session-local, so one connection
+    // can never observe another's. Fixed by capping THIS SAME pool at maxConnections: 1 (so the
+    // single connection it holds is necessarily the one that ran the migration) and asserting
+    // against it directly, plus a session-independent pg_locks check that doesn't depend on
+    // connection reuse at all and also covers the class-3 global lock from finding #5.
     const schema = "cleanup_test";
-    const sql = createClient({ connectionString: container.getConnectionUri(), schema });
+    // Deliberately NOT passing `schema` here -- if this pool's own startup search_path were
+    // "cleanup_test", RESET search_path (migrate.ts) would restore it right back to that same
+    // value, making the assertion below pass trivially regardless of whether the fix works.
+    const sql = createClient({ connectionString: container.getConnectionUri(), maxConnections: 1 });
     try {
       await runMigrations(sql, { schema });
-      // Force the SAME physical connection to be reused by capping the pool at 1, then run an
-      // ordinary query with NO schema qualification -- if search_path were still `schema,
-      // public` on this connection, `_migrations` (unqualified) would resolve; it must not,
-      // proving search_path was actually reset rather than merely widened and left in place.
-      const soloSql = createClient({ connectionString: container.getConnectionUri(), maxConnections: 1 });
-      try {
-        const searchPath = await soloSql<{ search_path: string }[]>`show search_path`;
-        expect(searchPath[0]!.search_path).not.toContain(schema);
-      } finally {
-        await soloSql.end({ timeout: 5 });
-      }
+
+      const searchPath = await sql<{ search_path: string }[]>`show search_path`;
+      expect(searchPath[0]!.search_path).not.toContain(schema);
+      // Unqualified lookup: if search_path still resolved to `schema`, this would find the
+      // migrated table; it must not, resolving through this pool's own default ("umbradb")
+      // search_path instead, which has no such table.
+      const unqualified = await sql<{ reg: string | null }[]>`select to_regclass('_migrations')::text as reg`;
+      expect(unqualified[0]!.reg).toBeNull();
+
+      // Session-independent check that doesn't rely on connection reuse at all -- covers both
+      // the per-schema class-1 lock (finding #4) and the global class-3 lock (finding #5).
+      const locks = await sql<{ n: number }[]>`
+        select count(*)::int as n from pg_locks where locktype = 'advisory' and classid in (1, 3)
+      `;
+      expect(locks[0]!.n).toBe(0);
+
       // The migration's own advisory lock (class 1) must not still be held -- a fresh
       // migration run against the SAME schema must not block waiting for it.
       await expect(runMigrations(sql, { schema })).resolves.toBeUndefined();

@@ -2,6 +2,7 @@ import { StorageError, ValidationError } from "../interfaces/storage-errors.js";
 import {
   ExpectedVersionSchema,
   HistoryUnavailableError,
+  hasPostgresUnsafeText,
   JsonValueSchema,
   KeySchema,
   NamespaceSchema,
@@ -317,13 +318,23 @@ export class PgTemporalKV implements TemporalKV {
    * resumed `yield` does nothing for an abort that fires WHILE a batch fetch is genuinely
    * blocked (waiting on the network/server) — the loop is simply not running any code at that
    * moment to notice. This version races each `iterator.next()` call itself against the abort
-   * event, so a blocked fetch is abandoned (not the underlying server-side query cancelled,
-   * which this adapter has no mechanism for — but the client-side wait ends and the cursor is
-   * released) the moment abort fires, not only after the next batch happens to arrive anyway.
-   * The per-row check before each `yield` is kept for the case where a signal aborts while a
-   * batch's rows are being yielded one at a time. `iterator.return()` is called unconditionally
-   * in `finally`, on every exit path (abort, error, or normal completion, including a plain
-   * `break` in the caller's `for await...of`), so the cursor is never left open.
+   * event, so a blocked fetch is abandoned the moment abort fires, not only after the next
+   * batch happens to arrive anyway. The per-row check before each `yield` is kept for the case
+   * where a signal aborts while a batch's rows are being yielded one at a time.
+   *
+   * **Revised AGAIN after a follow-up cross-vendor re-audit found `iterator.return()` alone
+   * does not actually stop a blocked fetch, verified against the installed `postgres.js`
+   * source (`node_modules/postgres/src/query.js`):** the cursor's `return()` implementation
+   * only signals anything via a `prev` resolver that is set INSIDE the callback fired when a
+   * batch arrives — before the first batch ever arrives, `prev` is still unset, so `return()`
+   * is a silent no-op. Calling only `iterator.return()` on abort therefore left a genuinely
+   * blocked first-batch fetch running server-side indefinitely, with the connection never
+   * cleanly freed. Fix: keep a reference to the underlying `Query` object (`query`, below,
+   * captured BEFORE calling `.cursor()` on it) and call its own `query.cancel()` — a real,
+   * documented Postgres-protocol query cancellation, not dependent on any batch having arrived
+   * — from the abort listener itself, in addition to (not instead of) the existing
+   * `iterator.return()` in `finally`, which still matters for the case where a batch already
+   * arrived and the cursor is mid-stream.
    *
    * One residual, structural limitation this cannot fully close: if the CONSUMER stops calling
    * `.next()` on this generator entirely (neither continuing iteration nor explicitly calling
@@ -340,20 +351,33 @@ export class PgTemporalKV implements TemporalKV {
   ): AsyncIterable<Key> {
     assertNoTx(opts?.tx, "listKeys");
     this.validateNamespaceScope(namespace, scope);
+    // Found missing by a follow-up cross-vendor re-audit: prefix has no dedicated Zod schema
+    // of its own (it's a raw string, not a Namespace/Scope/Key/JsonValue), so the same
+    // NUL/lone-surrogate check every other string input gets was previously skipped for it.
+    if (hasPostgresUnsafeText(prefix)) {
+      throw new ValidationError(
+        "PgTemporalKV listKeys: prefix must not contain a NUL byte or an unpaired UTF-16 surrogate",
+        [{ path: "prefix", message: "PostgreSQL cannot store either" }],
+      );
+    }
     const signal = opts?.signal;
     if (signal?.aborted) throw abortError(signal);
     const escaped = escapeLikePrefix(prefix) + "%";
 
-    const cursor = this.sql<{ key: string }[]>`
+    const query = this.sql<{ key: string }[]>`
       SELECT key FROM ${this.sql(this.schema)}.kv_current
       WHERE ns = ${namespace} AND scope = ${scope} AND key LIKE ${escaped} ESCAPE '\\'
       ORDER BY key
-    `.cursor(256);
+    `;
+    const cursor = query.cursor(256);
     const iterator = cursor[Symbol.asyncIterator]();
 
     let onAbort: (() => void) | undefined;
     const abortedWhileWaiting = signal && new Promise<never>((_resolve, reject) => {
-      onAbort = () => reject(abortError(signal));
+      onAbort = () => {
+        query.cancel();
+        reject(abortError(signal));
+      };
       signal.addEventListener("abort", onAbort, { once: true });
     });
 
