@@ -180,6 +180,31 @@ above), and (b) `clock_timestamp()`, not `now()`, being used for
 `valid_from`/`valid_to`/`updated_at` (the original `now()`-based design
 was the actual T4-breaking bug; corrected here and in `design.md` §2).
 
+**Second residual caveat, found only by actually running the implementation
+(no prior review — Opus or cross-vendor — caught this one, since it only
+manifests when you observe real `Date` round-tripping, not from reading the
+design):** Postgres `timestamptz` carries microsecond precision; JS `Date`
+carries only milliseconds. A caller who reads `writtenAt` back from `put`
+or `get` and passes it into a later `getAt({at: ...})` call is handing back
+a value already truncated the moment it left Postgres — if the stored
+instant were left at full microsecond precision, the round-tripped,
+millisecond-truncated `Date` could land strictly *before* the true
+`valid_from`, making the interval-containment lookup miss the row entirely
+(T4 broken in practice, not merely the visibility-timestamp distinction
+above). Fix: `updated_at`/`valid_from`/`valid_to` are stored ALREADY
+truncated to millisecond precision (`date_trunc('milliseconds',
+clock_timestamp())`, `migrations/001_temporal_kv.ts`), so the value read
+back and the value round-tripped are bit-for-bit identical. This narrows,
+rather than eliminates, the same-key-serialization argument above: two
+writes to the *same* key in different transactions landing within the same
+truncated millisecond now collide (the older write's `valid_to` and the
+newer's `valid_from` become numerically equal, tripping
+`kv_history_range`'s `CHECK (valid_from < valid_to)`, SQLSTATE `23514`,
+translated to `ClockRegressionError`) — far rarer than the bug it replaces
+(requires sub-millisecond-apart *serialized* writes to one key, not just a
+backward clock step), and explicitly accepted here rather than silently
+possible.
+
 **Law T5 — temporal coherence, now split into its two actually-distinct
 parts.** For a fixed `k`, the set of `[valid_from, valid_to)` intervals in
 `kv_history` (plus the live `kv_current` row) must:

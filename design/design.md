@@ -102,7 +102,15 @@ CREATE TABLE kv_current (
   key          text NOT NULL,
   value        jsonb NOT NULL,
   version      bigint NOT NULL,
-  updated_at   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  -- Truncated to millisecond precision, found necessary only by actually
+  -- running the implementation against a real database: Postgres timestamptz
+  -- carries microseconds but JS Date carries only milliseconds, so a caller
+  -- round-tripping a writtenAt Date into getAt({at:...}) would otherwise
+  -- reconstruct an instant strictly earlier than the true valid_from,
+  -- missing the row (Law T4 broken in practice — see
+  -- Formal/STORAGE_ALGEBRA.md §1's second T4 caveat for the residual
+  -- same-millisecond-collision tradeoff this introduces instead).
+  updated_at   timestamptz NOT NULL DEFAULT date_trunc('milliseconds', clock_timestamp()),
   -- Transaction-reuse guard (see the note above): NOT the same value as
   -- updated_at's clock_timestamp() — this must be constant across every
   -- statement in one transaction, which only txid_current() guarantees.
@@ -152,7 +160,7 @@ CREATE OR REPLACE FUNCTION kv_current_history_trigger() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
   now_xact bigint := txid_current();
-  now_ts   timestamptz := clock_timestamp();
+  now_ts   timestamptz := date_trunc('milliseconds', clock_timestamp());
 BEGIN
   -- Law T4 well-definedness (Formal/STORAGE_ALGEBRA.md §1): reject a second
   -- write to this key within the current transaction rather than silently

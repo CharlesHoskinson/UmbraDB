@@ -108,7 +108,14 @@ export async function up(sql: Sql, schema: string): Promise<void> {
       key          text NOT NULL,
       value        jsonb NOT NULL,
       version      bigint NOT NULL,
-      updated_at   timestamptz NOT NULL DEFAULT clock_timestamp(),
+      -- Truncated to millisecond precision — found necessary only by
+      -- actually running this implementation against a real database, not
+      -- by any prior design review. See Formal/STORAGE_ALGEBRA.md §1's
+      -- second Law T4 caveat: a JS Date can't represent Postgres's
+      -- microsecond precision, so a round-tripped writtenAt would otherwise
+      -- reconstruct an instant strictly earlier than the true valid_from
+      -- and miss the row on a subsequent getAt({at:...}).
+      updated_at   timestamptz NOT NULL DEFAULT date_trunc('milliseconds', clock_timestamp()),
       updated_xact bigint NOT NULL DEFAULT txid_current(),
       PRIMARY KEY (ns, scope, key)
     )
@@ -145,7 +152,7 @@ export async function up(sql: Sql, schema: string): Promise<void> {
     LANGUAGE plpgsql AS $trigger$
     DECLARE
       now_xact bigint := txid_current();
-      now_ts   timestamptz := clock_timestamp();
+      now_ts   timestamptz := date_trunc('milliseconds', clock_timestamp());
     BEGIN
       IF OLD.updated_xact = now_xact THEN
         RAISE EXCEPTION USING
@@ -420,12 +427,16 @@ each tied to a specific law from `Formal/STORAGE_ALGEBRA.md` §1:
   row afterward (an audit finding: the original draft only discussed
   validating what comes back).
 - **`listKeys`** — implemented as an `AsyncIterable` backed by
-  `postgres.js`'s `sql.cursor()`, not a `SELECT` materialized into an array
-  first, per `design-interfaces.md` §1.2's in-process-streaming
-  requirement. **More adapter work than a one-line description implies**
-  (caught by review): `sql.cursor()` yields *batches* (arrays of rows), not
-  individual rows, so the adapter needs a wrapping generator that flattens
-  each batch and maps each row to its `Key` (not just "yield the cursor
+  `postgres.js`'s cursor API — `` sql`...`.cursor(size) ``, a method chained
+  off the query itself (NOT a `sql.cursor()` method on the client; verified
+  directly against the installed `.d.ts` while implementing task 0.1, and
+  corrected here after an earlier draft of this design named it wrong) —
+  not a `SELECT` materialized into an array first, per `design-interfaces.md`
+  §1.2's in-process-streaming requirement. **More adapter work than a
+  one-line description implies** (caught by review): the cursor yields
+  *batches* (arrays of rows), not individual rows, so the adapter needs a
+  wrapping generator that flattens each batch and maps each row to its
+  `Key` (not just "yield the cursor
   directly"). **Prefix matching, fixed after audit:** the query MUST NOT use
   a naive `LIKE prefix || '%'` — Postgres `LIKE` treats `%`, `_`, and `\` in
   `prefix` itself as pattern syntax, so a caller's prefix containing any of
@@ -485,7 +496,7 @@ error would fall through to a generic/untranslated failure instead).
 | (connection-level failures, no SQLSTATE — driver throws before a query even reaches the server) | connection refused / unreachable host | `ConnectionError` |
 | `23P01` | `kv_history_no_overlap` exclusion violation | a distinguishable, catchable error (not `TemporalKVError` itself — this constraint is not expected to fire under normal `PgTemporalKV` operation since the trigger is designed not to produce overlaps; its purpose is defense-in-depth, so a generic but distinguishable `StorageError` subclass is sufficient here, not a new `TemporalKV`-specific error type) |
 | `UB001` (custom, `design/design.md` §2's trigger) | same-transaction second write to one key | `TransactionKeyReuseError` (`src/interfaces/temporal-kv.ts`) |
-| `23514` (`check_violation`, `kv_history_range`) | a backward wall-clock STEP (not drift — an NTP correction) between two writes to the same key makes `valid_from` (the older write's `updated_at`) exceed `valid_to` (the new write's `clock_timestamp()`) | a distinguishable, catchable error (not `TemporalKVError`, since it isn't a data-model violation — the rare underlying cause is the deployment's clock, not the storage layer, and there is no CALLER-fixable retry available). Found by a follow-up review: inherent to choosing `clock_timestamp()` over a monotonic source, and previously undocumented — see `Formal/STORAGE_ALGEBRA.md` §1's Law T4 accepted-caveat paragraph for the underlying tradeoff. |
+| `23514` (`check_violation`, `kv_history_range`) | EITHER (a) a backward wall-clock STEP (not drift — an NTP correction) between two writes to the same key makes `valid_from` (the older write's `updated_at`) exceed `valid_to` (the new write's timestamp), OR (b) two writes to the SAME key in different transactions landing within the same truncated millisecond, making `valid_from = valid_to` exactly — (b) found only by actually running the implementation, once `updated_at` was truncated to millisecond precision to fix the Date round-trip bug (see the millisecond-truncation comment on `kv_current.updated_at` above and `Formal/STORAGE_ALGEBRA.md` §1's second Law T4 caveat) | a distinguishable, catchable error (not `TemporalKVError`, since it isn't a data-model violation — the underlying cause is either the deployment's clock or a rare same-millisecond collision, and there is no CALLER-fixable retry available beyond "try again"). |
 
 ## 5. Test infrastructure
 
