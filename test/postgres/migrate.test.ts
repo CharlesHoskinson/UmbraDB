@@ -29,7 +29,7 @@ describe("runMigrations", () => {
         select count(*)::text as count from ${sql("idempotent_test")}._migrations
       `;
       expect(second[0]!.count).toBe(first[0]!.count);
-      expect(Number(first[0]!.count)).toBe(2); // 000_schema + 001_temporal_kv
+      expect(Number(first[0]!.count)).toBe(3); // 000_schema + 001_temporal_kv + 002_checkpoint_store
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -45,7 +45,7 @@ describe("runMigrations", () => {
         runMigrations(sqlB, { schema }),
       ]);
       const rows = await sqlA<{ name: string }[]>`select name from ${sqlA(schema)}._migrations order by name`;
-      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store"]);
     } finally {
       await sqlA.end({ timeout: 5 });
       await sqlB.end({ timeout: 5 });
@@ -80,8 +80,8 @@ describe("runMigrations", () => {
         ]);
         const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
         const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
-        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
-        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv"]);
+        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store"]);
+        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store"]);
         const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
         expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
       } finally {
