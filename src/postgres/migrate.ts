@@ -5,6 +5,7 @@ import { translatePostgresError } from "./errors.js";
 import * as migration000 from "./migrations/000_schema.js";
 import * as migration001 from "./migrations/001_temporal_kv.js";
 import * as migration002 from "./migrations/002_checkpoint_store.js";
+import * as migration003 from "./migrations/003_watermarks.js";
 
 interface Migration {
   name: string;
@@ -33,7 +34,7 @@ async function withReservedTransaction<T>(reserved: ISql, fn: () => Promise<T>):
   }
 }
 
-const migrations: Migration[] = [migration000, migration001, migration002];
+const migrations: Migration[] = [migration000, migration001, migration002, migration003];
 
 export interface RunMigrationsOptions {
   schema: string;
