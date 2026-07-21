@@ -9,3 +9,6 @@ require mathlib from git
 
 @[default_target]
 lean_lib UmbraDBFormal
+
+@[default_target]
+lean_lib UmbraDBFormalTest

@@ -48,6 +48,7 @@ review gate.
 - Create: `Formal/Lean/lean-toolchain`
 - Create: `Formal/Lean/lakefile.lean`
 - Create: `Formal/Lean/UmbraDBFormal.lean`
+- Create: `Formal/Lean/UmbraDBFormalTest.lean`
 - Create: `Formal/Lean/UmbraDBFormal/APISmoke.lean`
 - Create: `Formal/Lean/UmbraDBFormalTest/APISmoke.lean`
 - Generate: `Formal/Lean/lake-manifest.json`
@@ -55,7 +56,7 @@ review gate.
 **Interfaces:**
 - Consumes: the approved toolchain and API list in
   `Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md` §§6–6.1.
-- Produces: Lake library `UmbraDBFormal`; declarations
+- Produces: default Lake libraries `UmbraDBFormal` and `UmbraDBFormalTest`; declarations
   `watermark_overwrite`, `checkpoint_union_comm`, `checkpoint_union_assoc`,
   `checkpoint_union_idem`, and `adjacent_Ico_disjoint`.
 
