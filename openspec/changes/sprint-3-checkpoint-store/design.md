@@ -1,7 +1,8 @@
 # Design — Sprint 3: CheckpointStore
 
 Implementation-level detail for `src/interfaces/checkpoint-store.ts` against the schema
-`design/design.md` §3 already specifies, with two corrections (§2 below) this change makes at a
+`design/design.md` §3 already specifies, with two corrections (§2 below) and one addition (the
+persisted manifest-metadata columns `manifest_hash`/`label`, §5) this change makes at a
 level of detail that document never went to, and against `Formal/STORAGE_ALGEBRA.md` §2's Laws
 C1/C2a/C2b.
 
@@ -45,8 +46,11 @@ rationale (`sprint-1-setup-and-temporal-kv/design.md` §1).
    `design/design.md` §3's `hash bytea PRIMARY KEY` column assumes; no new dependency).
 4. Within one transaction (§8 below): upsert every chunk (`INSERT ... ON CONFLICT (hash) DO
    UPDATE SET created_at = now()`, `design/design.md` §3, unchanged), claim the next sequence
-   number (§2's `ckpt_sequence_counters`), insert the manifest row, insert one
-   `ckpt_manifest_chunks` row per chunk **at its position in the split** (§2's fix), and commit.
+   number (§2's `ckpt_sequence_counters`), insert the manifest row — **with `complete = true`,
+   `manifest_hash` (§5), and `label` (§5) written explicitly in the INSERT's column list;
+   `complete` must never be left to the schema's `DEFAULT false`, see §2.3 for why that would be
+   a total silent failure, not a cosmetic one** — insert one `ckpt_manifest_chunks` row per chunk
+   **at its position in the split** (§2's fix), and commit.
 
 ## 2. Schema — two corrections to `design/design.md` §3
 
@@ -79,13 +83,25 @@ caught if a caller happens to check it against an independently-known expected l
 
 ```sql
 CREATE TABLE ckpt_manifest_chunks (
-  manifest_id bigint  NOT NULL REFERENCES ckpt_manifests(id),
+  manifest_id bigint  NOT NULL REFERENCES ckpt_manifests(id) ON DELETE CASCADE,
   position    integer NOT NULL,          -- 0-indexed order within this manifest's payload
   chunk_hash  bytea   NOT NULL REFERENCES ckpt_chunks(hash),
   PRIMARY KEY (manifest_id, position)
 );
 CREATE INDEX ckpt_manifest_chunks_by_hash ON ckpt_manifest_chunks (chunk_hash);
 ```
+
+The same fix declares `manifest_id`'s FK `ON DELETE CASCADE` — also a correction, not a
+convenience: `design/design.md` §3's original declaration has no delete action (Postgres's
+default, `NO ACTION`), so `prune`'s step-1 `DELETE FROM ckpt_manifests` (§3 below) would raise
+SQLSTATE 23503 (`foreign_key_violation`) for any manifest that still has junction rows — which
+is *every* manifest `save()` ever produced. As originally written, GC could never delete a
+single manifest; the two-step pass was dead on arrival. `CASCADE` is chosen over the alternative
+(an explicit `DELETE FROM ckpt_manifest_chunks WHERE manifest_id IN (...)` prepended inside the
+same transaction) because it is one less statement to keep in lockstep with step 1's retention
+predicate, and because the cascade removes the junction rows *in the same statement* as the
+manifest delete — atomically producing exactly the "no junction row references this hash" state
+step 2's `NOT EXISTS` reclaim check needs to see within the same pass.
 
 `chunk_hash` is no longer part of the primary key, so the same hash can legally occupy two
 different positions in one manifest. The GC reclaim query (§3 below) is unaffected — it only
@@ -131,35 +147,68 @@ RETURNING next_seq - 1 AS claimed_seq;
 First call for a given `(w, net)`: the `INSERT` branch fires, `next_seq` takes its `DEFAULT 2`,
 `RETURNING next_seq - 1` yields `1` — matching the interface's documented "start at 1." Every
 subsequent call for the same key hits the `DO UPDATE` branch, which Postgres executes under the
-same per-row lock semantics as any other `UPDATE` (a second concurrent claim blocks until the
-first's statement completes, exactly the same serialization argument Law T1 already relies on for
-TemporalKV's `version` column) — so claims are gapless and monotonic under concurrent callers by
-construction, not by an application-level retry loop. This table is genuinely new schema, not
-present in `design/design.md` §3 at all; it exists solely to make `seq` allocation well-defined.
+same per-row lock semantics as any other `UPDATE` — and, because this claim runs mid-transaction
+(before the manifest and junction inserts, §1 step 4), the row lock is held **until the claiming
+save's whole transaction commits or rolls back**, not merely until the claiming statement
+completes: a second concurrent claim for the same `(w, net)` blocks behind the first save's
+*entire write phase* (the same serialization argument Law T1 already relies on for TemporalKV's
+`version` column, just held for a longer span). So claims are gapless and monotonic under
+concurrent callers by construction, not by an application-level retry loop; the cost, stated
+plainly, is that concurrent `save` calls to the same `(walletId, networkId)` fully serialize —
+acceptable for this project's stated single-process, single-writer deployment
+(`src/interfaces/transaction-lease.ts`'s own revision note), and different `(w, net)` pairs are
+unaffected (distinct counter rows, distinct locks). A rolled-back `save` releases the lock and
+undoes its increment along with the rest of its transaction, so a failed save consumes no
+sequence number. This table is genuinely new schema, not present in `design/design.md` §3 at
+all; it exists solely to make `seq` allocation well-defined.
 
-### 2.3 `complete`: kept, but currently always true
+One boundary detail, easy to miss because it is invisible in the SQL: `next_seq`/`seq` are
+`bigint` columns, and Sprint 1's `createClient` configures the driver's bigint mapping globally
+(`types: { bigint: postgres.BigInt }`, `src/postgres/client.ts`) — so every `seq` value the
+driver hands back is a JS `bigint`, while `CheckpointSequence` is `number`
+(`src/interfaces/checkpoint-store.ts` line 5). The adapter coerces the driver's `bigint` to a JS
+`number` at this boundary — asserting it is within `Number.MAX_SAFE_INTEGER` first — before the
+value reaches *any* interface-typed return (`CheckpointSummary.sequence` from `save`/`load`/
+`history`, `PruneResult.prunedSequences`); nothing downstream of that coercion handles `bigint`.
+
+### 2.3 `complete`: kept, and explicitly written `true` by every `save()`
 
 `design/design.md` §3's `ckpt_manifests.complete boolean NOT NULL DEFAULT false` and its prune
-query's `WHERE m.complete` filter are both kept unchanged. **Noted here because this sprint's
-`save()` is a single all-or-nothing transaction** (manifest insert + every junction row insert,
-per §1 above) — there is no code path in this interface that could ever leave a manifest visible
-with `complete = false`: either the whole transaction commits (manifest fully written, chunks and
-all) or none of it does. `complete` is therefore always `true` for any manifest `save()` produces,
-and the prune query's filter on it is currently redundant-but-harmless defense-in-depth, not a
-load-bearing mechanism this module relies on. It is kept rather than dropped because (a) it is
-part of the schema `design/design.md` §3 already specifies and this sprint implements that
-document rather than redesigning it, and (b) it costs nothing to leave in place for a
-hypothetical future incremental/streaming write path that this interface does not have today.
+query's `WHERE m.complete` filter are both kept unchanged — and **`save()`'s manifest `INSERT`
+sets `complete = true` explicitly in its column list (§1 step 4), never relying on the schema
+default**. That explicit write is load-bearing, not style: transaction atomicity governs whether
+the manifest row *exists*, not what its columns *contain*. An `INSERT` that omitted the column
+would commit — atomically, durably — a row with `complete = false` via the `DEFAULT`, and since
+`load` (§4), `history` (§5), and `prune` (§3) all filter on `complete`, every subsequent read
+for every wallet would find zero rows: the store would be totally, silently non-functional while
+every `save` call appears to succeed. (Flipping the schema default to `true` instead is
+deliberately *not* the fix — the default stays `false` and the INSERT stays explicit, so a
+future write path that forgets the column fails visibly in tests rather than becoming
+implicitly-complete by default.)
+
+With that explicit write in place, `complete` is always `true` for any manifest `save()`
+produces — because `save()` *writes* `true`, and because `save()` is a single all-or-nothing
+transaction (manifest insert + every junction row insert, per §1 above) there is additionally no
+code path that could leave a partially-written manifest visible at all. The read-side filter is
+therefore redundant-but-harmless defense-in-depth, not a load-bearing mechanism this module
+relies on. It is kept rather than dropped because (a) it is part of the schema
+`design/design.md` §3 already specifies and this sprint implements that document rather than
+redesigning it, and (b) it costs nothing to leave in place for a hypothetical future
+incremental/streaming write path that this interface does not have today.
 **No task in this change may add a code path that ever sets it `false`** — if one is ever needed,
 that is new interface surface requiring its own design/spec update, not something to bolt on here.
 
-## 3. `prune` — two-step GC, unchanged from `design/design.md` §3
+## 3. `prune` — two-step GC, `design/design.md` §3's pass plus §2.1's cascade
 
 ```sql
 -- Precondition, enforced in application code before this SQL runs (ValidationError, not a SQL
 -- guard): retainCount >= 1. retainCount = 0 makes OFFSET evaluate to -1, which Postgres rejects
 -- outright.
--- 1. prune old superseded manifests for this (w, net):
+-- 1. prune old superseded manifests for this (w, net). Deleting a manifest CASCADEs its
+--    ckpt_manifest_chunks rows in the same statement (ON DELETE CASCADE, §2.1) — load-bearing
+--    twice over: without it this DELETE raises SQLSTATE 23503 on every manifest that has
+--    junction rows (i.e. always), and with it the junction rows are already gone when step 2's
+--    NOT EXISTS runs, in the same pass.
 DELETE FROM ckpt_manifests m
 WHERE m.w = $1 AND m.net = $2 AND m.complete
   AND m.seq < (
@@ -171,7 +220,11 @@ RETURNING seq;
 
 -- 2. reclaim chunks no longer referenced by any surviving manifest, past the grace window
 -- (unchanged 15-minute constant, design/design.md §3). RETURNING lets the adapter sum
--- reclaimedBytes without a second query.
+-- reclaimedBytes without a second query. Grace-window rationale (design/design.md §3, stated
+-- there in full): save's `ON CONFLICT ... DO UPDATE SET created_at = now()` refresh is
+-- load-bearing for this DELETE's safety — without it, a chunk being re-referenced by a
+-- not-yet-committed save (whose manifest row READ COMMITTED cannot yet see, so NOT EXISTS is
+-- satisfied) would keep its ORIGINAL created_at and be reclaimed out from under that save.
 DELETE FROM ckpt_chunks c
 WHERE c.created_at < now() - interval '15 minutes'
   AND NOT EXISTS (
@@ -180,9 +233,19 @@ WHERE c.created_at < now() - interval '15 minutes'
 RETURNING octet_length(c.data) AS reclaimed_bytes;
 ```
 
-Both statements run inside the same transaction (§8), manifest prune first — a chunk the pruned
-manifest referenced becomes reclaimable to the *second* statement in the *same* pass, matching
-`design/design.md` §3's stated ordering. `PruneResult.prunedSequences` is the first query's
+Both statements run inside the same transaction (§8), manifest prune first — step 1's cascade
+removes the pruned manifests' junction rows in the same statement, so a chunk a pruned manifest
+referenced becomes reclaimable to the *second* statement in the *same* pass, matching
+`design/design.md` §3's stated ordering. This transaction runs at **READ COMMITTED** — Postgres's
+default, and what `withTransaction` uses when no `isolation` option is passed (§8) — and that is
+a stated dependency, not an incidental default: the grace-window TOCTOU argument above relies on
+READ COMMITTED's per-row re-evaluation semantics, under which the reclaim `DELETE` rechecks each
+candidate row against the latest committed state and simply skips rows a concurrent transaction
+changed. Under `repeatable read` or `serializable`, the same race would instead surface as
+SQLSTATE 40001 (a Sprint 2 `TransactionFaultError`, `faultKind: "serialization-failure"`) rather
+than a correct skip. `PgCheckpointStore` must not pass an `isolation` override for this internal
+transaction — and no caller can, since the interface deliberately exposes no `tx`/isolation
+option (§8). `PruneResult.prunedSequences` is the first query's
 `RETURNING seq` list; `reclaimedChunks`/`reclaimedBytes` are the second query's row count and
 summed `reclaimed_bytes`. Per `src/interfaces/checkpoint-store.ts`'s own `PruneResult` doc: a
 chunk that lost its last reference in this call but hasn't cleared the grace window yet is
@@ -211,8 +274,10 @@ WHERE w = $1 AND net = $2 AND complete
 ORDER BY seq DESC LIMIT 1;
 -- 0 rows => CheckpointNotFoundError(walletId, networkId, sequence)
 
--- 2. fetch this manifest's chunks in order
-SELECT mc.position, c.hash, c.data
+-- 2. fetch this manifest's chunks in order. mc.chunk_hash MUST be projected alongside c.hash:
+--    in the missing-chunk case c.hash is NULL by construction, so the manifest's own recorded
+--    hash is the only place the missing chunk's identity exists.
+SELECT mc.position, mc.chunk_hash, c.hash, c.data
 FROM ckpt_manifest_chunks mc
 LEFT JOIN ckpt_chunks c ON c.hash = mc.chunk_hash
 WHERE mc.manifest_id = $1
@@ -220,9 +285,13 @@ ORDER BY mc.position;
 ```
 
 For each row: `c.hash IS NULL` (the `LEFT JOIN` found no matching `ckpt_chunks` row at all, since
-a plain `JOIN` would just silently omit that position instead of surfacing it) → `ChunkMissingError
-(chunkHash)`; else re-hash `c.data` and compare to `mc.chunk_hash` → mismatch is
-`ChunkIntegrityError(chunkHash, expectedHash)`. Concatenate `data` across all positions in
+a plain `JOIN` would just silently omit that position instead of surfacing it) →
+`ChunkMissingError(mc.chunk_hash)` — the error's hash comes from the manifest's recorded
+`mc.chunk_hash`, necessarily, since `c.hash` is `NULL` exactly when this error fires; else
+re-hash `c.data` and compare to `mc.chunk_hash` → mismatch is
+`ChunkIntegrityError(actualRehash, mc.chunk_hash)`, with the manifest-recorded `mc.chunk_hash`
+(not `c.hash`) as the `expectedHash` — both error paths source their "expected" identity from
+the same authoritative column, the manifest entry the interface doc defines them against. Concatenate `data` across all positions in
 ascending order into the returned `CheckpointRecord.data`. A gap in `position` (e.g. a manifest
 with positions `0, 1, 3` and no `2`) is a `ManifestCorruptError` — this should be structurally
 impossible given `save()` always inserts a dense `0..n-1` range in the same transaction as the
@@ -249,15 +318,25 @@ ckpt_chunks c ON c.hash = mc.chunk_hash WHERE mc.manifest_id = $1` per returned 
 single query joining and aggregating across the page — an implementation choice for task 2.1,
 not a correctness question either way). `manifestHash` — `CheckpointSummary.manifestHash` per the
 interface — is a content hash **of the manifest's own ordered chunk-hash list**, not stored as a
-column; computed as `SHA-256(concat of chunk_hash bytes in position order)` at write time and
-persisted as a new `ckpt_manifests.manifest_hash bytea NOT NULL` column (added in the migration,
-§6) so `history()`/`load()` don't need to recompute it from the junction table on every read.
+column in `design/design.md` §3's schema; computed as `SHA-256(concat of chunk_hash bytes in
+position order)` at write time and persisted as a new `ckpt_manifests.manifest_hash bytea NOT
+NULL` column (added in the migration, §6) so `history()`/`load()` don't need to recompute it from
+the junction table on every read. `label` — `CheckpointSummary.label`, the optional free-text
+label the interface documents as "surfaced in history()" (`SaveCheckpointOptionsSchema`) —
+likewise has no home anywhere in `design/design.md` §3's schema: persisted as a new
+`ckpt_manifests.label text` (nullable) column, written from `opts.label` at `save()` time and
+returned verbatim by `history()`/`load()` (`NULL` maps to an absent `label` field, never coerced
+to an empty string). These two columns are the one *addition* this change makes to
+`design/design.md` §3's tables (scoped explicitly in proposal.md's "What changes" §1, alongside
+the two corrections) — both exist because the interface's `CheckpointSummary` requires data that
+schema simply never stored.
 
 ## 6. Migration (`002_checkpoint_store.ts`)
 
 Schema-qualified via `sql(schema)`, matching `001_temporal_kv.ts`'s established pattern exactly —
-`ckpt_chunks`, `ckpt_manifests` (now including `manifest_hash bytea NOT NULL`, §5), the corrected
-`ckpt_manifest_chunks` (§2.1), `ckpt_sequence_counters` (§2.2), and both indexes
+`ckpt_chunks`, `ckpt_manifests` (now including `manifest_hash bytea NOT NULL` and `label text`,
+§5), the corrected `ckpt_manifest_chunks` (`(manifest_id, position)` PK and the `ON DELETE
+CASCADE` manifest FK, §2.1), `ckpt_sequence_counters` (§2.2), and both indexes
 (`ckpt_manifests_lookup`, `ckpt_manifest_chunks_by_hash`). No trigger, no extension — this module
 needs neither `btree_gist` nor any `plpgsql` function, unlike TemporalKV.
 
@@ -287,6 +366,29 @@ select) — per the interface's own silence on transactional participation for t
 they run directly against the pooled `sql` with no `withTransaction` wrapper, matching
 `PgTemporalKV.get`/`getAt`'s existing precedent of not wrapping single reads in a transaction
 either.
+
+One clarification to preempt a reader checking the wrong file: `resolveTransaction` is an
+adapter-internal export of Sprint 2's Postgres module (`src/postgres/transaction-lease.ts` on
+`origin/sprint-2-transaction-lease`), **not** part of the public
+`src/interfaces/transaction-lease.ts` file — by design, per that interface's own "that plumbing
+never appears in this interface" rule. Verifying §8's contract means checking the branch's
+adapter module, not the committed interface file, which will (correctly) never contain it.
+
+**Cancellation (`opts.signal`).** Every `CheckpointStore` method accepts an optional
+`AbortSignal` (`SaveCheckpointOptions`/`HistoryOptions`' intersected `signal?`; `load`/`prune`'s
+inline `opts`), and this design honors it rather than silently ignoring a declared parameter.
+All four methods reject with `AbortError` up front, before issuing any statement, when the
+signal is already aborted at call time. `save`/`prune` additionally forward the signal to
+`withTransaction` as `TransactionOptions.signal` — Sprint 2's documented cancellation contract
+("abort rolls back and rejects with `AbortError`") — so an abort landing mid-transaction
+persists nothing: no manifest, junction, or chunk row, and no consumed sequence number (the §2.2
+counter increment rolls back with the rest). For `load`/`history`, the stated tradeoff: these
+are single-shot promise reads with no cursor to interrupt (unlike Sprint 1 `listKeys`'
+mid-iteration abort requirement, which exists precisely because iteration has a natural
+interruption boundary — `sprint-1-setup-and-temporal-kv/specs/temporal-kv/spec.md`), so the
+signal is checked before each statement (`load` has two, §4; `history` one, §5), but a statement
+already in flight runs to completion. Abort granularity is per-statement, best-effort, and
+documented here as an accepted tradeoff rather than left silent.
 
 **Reconciliation task, tracked explicitly (proposal.md's "accepted dependency" note):** if
 Sprint 2's Codex-clearing pass changes `TransactionLeaseLayer`'s method signatures,

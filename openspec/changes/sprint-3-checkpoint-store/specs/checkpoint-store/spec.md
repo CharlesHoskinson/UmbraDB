@@ -22,6 +22,19 @@ bytes each, except the final chunk, which SHALL contain exactly the remaining by
 - **WHEN** `save` is called with `data` shorter than `chunkSize`
 - **THEN** exactly one chunk SHALL be produced, containing all of `data`
 
+### Requirement: save rejects invalid options with ValidationError before any chunking or hashing work
+
+`PgCheckpointStore.save` SHALL validate `opts` against `SaveCheckpointOptionsSchema` and, when
+validation fails, SHALL reject with `ValidationError` before any chunk is produced, any hash is
+computed, or any database statement is issued (per `src/interfaces/checkpoint-store.ts`'s
+`@throws` contract for `save`).
+
+#### Scenario: A chunkSize above the schema's 16 MiB bound is rejected with no work done
+- **WHEN** `save` is called with `opts.chunkSize` greater than `16 * 1024 * 1024`
+- **THEN** the call SHALL reject with `ValidationError`
+- **AND** no chunk SHALL have been hashed or written, no manifest row created, and no sequence
+  number consumed for that `(walletId, networkId)`
+
 ### Requirement: Chunk storage is content-addressed and globally deduplicated
 
 `PgCheckpointStore` SHALL write each chunk keyed by its SHA-256 content hash, SHALL NOT create a
@@ -78,6 +91,13 @@ and independently per distinct `(walletId, networkId)` pair.
 - **THEN** each pair's first checkpoint SHALL be assigned sequence `1`, independent of the other
   pair's sequence progression
 
+#### Scenario: A rolled-back save consumes no sequence number
+- **WHEN** a `save` call's internal transaction rolls back after claiming a sequence number
+  (whatever the rollback cause — a fault, an abort, or a deliberate rollback)
+- **THEN** the next successful `save` for that `(walletId, networkId)` SHALL be assigned the
+  sequence number the rolled-back call had claimed
+- **AND** the assigned sequence numbers across all successful saves SHALL remain gapless
+
 ### Requirement: load always fully verifies chunk integrity before returning
 
 `PgCheckpointStore.load` SHALL rehash every chunk in the resolved manifest and compare it against
@@ -100,12 +120,29 @@ that chunk's recorded hash before returning, for every call, with no unverified/
 - **THEN** `load` SHALL reject with `ChunkMissingError` carrying that chunk hash
 - **AND** SHALL NOT reject with a generic or null-reference error instead
 
+### Requirement: load rejects a structurally-corrupt manifest with ManifestCorruptError
+
+`PgCheckpointStore.load` SHALL verify that the resolved manifest's recorded chunk positions form
+a dense `0..n-1` range and SHALL reject with `ManifestCorruptError` when they do not — a
+defense-in-depth structural check (`design.md` §4): `save`'s single-transaction write makes a
+position gap impossible on any normal path, so a gap can only mean out-of-band corruption.
+
+#### Scenario: A manifest with a gap in its position range is rejected
+- **WHEN** `load` resolves a manifest whose junction rows record positions `0, 1, 3` with no `2`
+  (injected out-of-band — no `save` path can produce this)
+- **THEN** the call SHALL reject with `ManifestCorruptError` carrying a reason that identifies
+  the structural failure
+- **AND** SHALL NOT return a `CheckpointRecord` with the gap silently concatenated over
+
 ### Requirement: load and history distinguish "no checkpoint" from "checkpoint exists elsewhere"
 
 `PgCheckpointStore.load` SHALL reject with `CheckpointNotFoundError` when no checkpoint exists for
 the given `(walletId, networkId)`, and separately when a specific requested `sequence` does not
 exist for an otherwise-valid `(walletId, networkId)` — both cases populating the error with the
-`walletId`/`networkId`/`sequence` actually requested.
+`walletId`/`networkId`/`sequence` actually requested. `PgCheckpointStore.history`, by contrast,
+SHALL resolve with an empty array — not an error — when the requested pair has no checkpoints:
+absence is an error only for `load` (the interface's "lookup vs. load" rule,
+`src/interfaces/checkpoint-store.ts`).
 
 #### Scenario: No checkpoint exists for the wallet+network at all
 - **WHEN** `load` is called for a `(walletId, networkId)` with zero saved checkpoints
@@ -120,6 +157,13 @@ exist for an otherwise-valid `(walletId, networkId)` — both cases populating t
 - **WHEN** `load` is called with `sequence` omitted for a `(walletId, networkId)` with at least
   one saved checkpoint
 - **THEN** the call SHALL return the checkpoint with the highest assigned sequence number
+
+#### Scenario: history for a wallet+network with no checkpoints resolves empty
+- **WHEN** `history` is called for a `(walletId, networkId)` with zero saved checkpoints, while
+  a different `(walletId, networkId)` pair does have saved checkpoints
+- **THEN** the call SHALL resolve with an empty array
+- **AND** SHALL NOT reject with `CheckpointNotFoundError`, and SHALL NOT include the other
+  pair's checkpoints
 
 ### Requirement: history is newest-first, scoped per wallet+network, and supports cursor paging with no gap or duplicate
 
@@ -216,3 +260,45 @@ calls for that checkpoint.
 #### Scenario: Payloads differing only in chunk order report different manifestHash
 - **WHEN** two payloads produce the same set of chunk hashes but in a different order
 - **THEN** their `manifestHash` values SHALL differ
+
+### Requirement: CheckpointSummary metadata is populated and label round-trips
+
+Every `CheckpointSummary` returned by `save`, `load`, or `history` SHALL carry the checkpoint's
+actual `byteLength` (equal to the saved `data.byteLength`), its actual `chunkCount`, and a
+populated `createdAt`; when `opts.label` was given at `save` time, the summary SHALL carry that
+label unchanged (`design.md` §5's `label` column), and SHALL carry no label when none was given.
+
+#### Scenario: A label given at save time is returned by history and load
+- **WHEN** `save` is called with `opts.label` set, and that checkpoint is later returned by
+  `history` and by `load`
+- **THEN** both SHALL carry that exact label
+- **AND** a checkpoint saved without a label SHALL carry no `label` field value, not an
+  empty-string one
+
+#### Scenario: byteLength, chunkCount, and createdAt reflect the saved payload
+- **WHEN** a checkpoint is saved from `data` of length `L` that split into `n` chunks
+- **THEN** every summary returned for it SHALL report `byteLength = L` and `chunkCount = n`
+- **AND** `createdAt` SHALL be a populated `Date`, not a missing or unmapped driver value
+
+### Requirement: An aborted opts.signal rejects with AbortError and persists nothing
+
+`PgCheckpointStore.save`, `load`, `history`, and `prune` SHALL each reject with `AbortError` —
+before issuing any database statement — when their `opts.signal` is already aborted at call
+time. `save` and `prune` SHALL forward the signal to the internal `withTransaction`
+(`TransactionOptions.signal`, Sprint 2's cancellation contract), so an abort landing while the
+transaction is in flight rolls it back and rejects with `AbortError`, persisting nothing.
+`load`/`history` SHALL check the signal before each statement; a statement already in flight
+runs to completion (`design.md` §8's stated per-statement abort granularity).
+
+#### Scenario: A call with an already-aborted signal is rejected before any database work
+- **WHEN** any of `save`/`load`/`history`/`prune` is called with an `opts.signal` that is
+  already aborted
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** no database statement SHALL have been issued by that call
+
+#### Scenario: Aborting a save mid-transaction persists nothing and consumes no sequence number
+- **WHEN** `save`'s `opts.signal` is aborted while its internal transaction is still in flight
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** no manifest, junction row, or chunk written by that call SHALL be visible afterward
+- **AND** the next successful `save` for that `(walletId, networkId)` SHALL be assigned the
+  sequence number the aborted call had claimed (no gap)

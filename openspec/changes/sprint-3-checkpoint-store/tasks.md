@@ -16,16 +16,20 @@ Sprint 1/2's own review cadence.
   this file (or a follow-up commit) stating either "no reconciliation needed, shapes match
   `design.md` §8 exactly" or listing what changed and where §8 was updated.
 - [ ] 0.1 Write `src/postgres/migrations/002_checkpoint_store.ts` (`design.md` §6): `ckpt_chunks`,
-  `ckpt_manifests` (with `manifest_hash bytea NOT NULL`, `design.md` §5), the corrected
-  `ckpt_manifest_chunks` (`(manifest_id, position)` PK, `design.md` §2.1 — NOT the
-  `(manifest_id, chunk_hash)` PK in `design/design.md` §3, which this change's own §2.1
+  `ckpt_manifests` (with `manifest_hash bytea NOT NULL` and `label text`, `design.md` §5), the
+  corrected `ckpt_manifest_chunks` (`(manifest_id, position)` PK and the `manifest_id ... ON
+  DELETE CASCADE` FK, `design.md` §2.1 — NOT the `(manifest_id, chunk_hash)` PK / no-delete-action
+  FK in `design/design.md` §3, which this change's own §2.1
   supersedes for this table only), `ckpt_sequence_counters` (`design.md` §2.2), and both indexes.
   Add the migration to `src/postgres/migrate.ts`'s `migrations` array.
   **Acceptance:** after `runMigrations`, all four tables and both indexes exist (verified via
   `information_schema`/`pg_constraint`, not just "the migration didn't error" — same standard
   Sprint 1 task 0.4 used); a test asserts `ckpt_manifest_chunks`'s primary key is specifically
   `(manifest_id, position)`, not `(manifest_id, chunk_hash)` (a schema-shape regression here would
-  silently reintroduce the repeated-chunk bug `design.md` §2.1 fixes).
+  silently reintroduce the repeated-chunk bug `design.md` §2.1 fixes); a test asserts the
+  `manifest_id` FK's delete action is specifically CASCADE (`pg_constraint.confdeltype = 'c'`) —
+  without it, every real `prune` fails with SQLSTATE 23503 and GC cannot run at all
+  (`design.md` §2.1/§3).
 - [ ] 0.2 **Repeated-chunk regression test, direct SQL level.** Before any adapter code exists:
   insert one manifest row, then insert two `ckpt_manifest_chunks` rows for it referencing the
   **same** `chunk_hash` at positions `0` and `2` (with a different chunk at position `1`) —
@@ -41,13 +45,22 @@ Sprint 1/2's own review cadence.
   `PgTransactionLeaseLayer.withTransaction` (`design.md` §8). **Acceptance:** `tsc --noEmit`
   passes with `PgCheckpointStore implements CheckpointStore`; a test saves data whose length is
   not an exact multiple of `DEFAULT_CHUNK_SIZE` and confirms the last chunk is the correct
-  (shorter) remainder, not padded or truncated.
+  (shorter) remainder, not padded or truncated; a test reads the saved manifest row back via
+  direct SQL and asserts `complete = true` — the INSERT must write it explicitly, `design.md`
+  §2.3: if the schema's `DEFAULT false` leaked through, `load`/`history`/`prune`'s `complete`
+  filters would all see zero rows while every save appeared to succeed (and no code path in this
+  sprint may ever write `complete = false`, per §2.3's closing rule).
 - [ ] 1.2 **Sequence allocation test.** Concurrently call `save` many times (e.g. 20, via
   `Promise.all`) for the same `(walletId, networkId)` and assert the resulting `seq` values are
   exactly `1..20` with no gap and no repeat (`design.md` §2.2's claim that the upsert-increment is
   gapless under concurrency, not just under sequential calls). Separately, confirm two different
   `(walletId, networkId)` pairs each independently start at `1` (the `ckpt_sequence_counters` PK
-  is `(w, net)`, not global).
+  is `(w, net)`, not global). Also assert every returned `sequence` is a JS `number`
+  (`typeof === "number"`), not the driver's `bigint` — `design.md` §2.2's boundary coercion,
+  which Sprint 1's global `types: { bigint: postgres.BigInt }` mapping makes necessary — and
+  that a deliberately rolled-back `save` (force a mid-transaction failure after the sequence
+  claim) consumes no number: the next successful save receives the sequence the failed one had
+  claimed, keeping the assigned run gapless.
 - [ ] 1.3 **Dedup test.** Save two checkpoints (same or different wallets) that share at least one
   identical chunk of content; confirm `ckpt_chunks` has exactly one row for that hash after both
   saves (global cross-wallet dedup, `design/design.md` §3's chunk-write idempotence, Law C1). Also
@@ -58,6 +71,13 @@ Sprint 1/2's own review cadence.
   identical `data` twice as two separate checkpoints and confirms both manifests report the same
   `manifestHash` in their `CheckpointSummary` (same chunk sequence ⇒ same manifest hash,
   independent of `seq`).
+- [ ] 1.5 **`save` options-validation test** (`design.md` §1 step 1, the spec's ValidationError
+  requirement): call `save` with `opts.chunkSize` above `SaveCheckpointOptionsSchema`'s 16 MiB
+  bound and confirm it rejects with `ValidationError` before any work — the same standard
+  `prune`'s `retainCount` validation (task 3.1) already gets. **Acceptance:** the test asserts
+  the rejection type AND, via direct SQL after the rejected call, that no `ckpt_chunks` or
+  `ckpt_manifests` row was written and no sequence number was consumed (the next valid save for
+  that `(walletId, networkId)` still receives the next expected number).
 
 ## 2. Read path
 
@@ -73,11 +93,32 @@ Sprint 1/2's own review cadence.
   cursor paging. **Acceptance:** a test saves N checkpoints and pages through `history` with a
   `limit` smaller than N, confirming the `before` cursor from one page correctly continues into
   the next with no duplicate and no gap; a test confirms `history` is scoped per
-  `(walletId, networkId)` — a second wallet's checkpoints never appear in the first's history.
+  `(walletId, networkId)` — a second wallet's checkpoints never appear in the first's history;
+  a test confirms `history` for a pair with zero checkpoints resolves `[]`, not an error (the
+  spec's "lookup vs. load" distinction); a test confirms each returned `CheckpointSummary`
+  carries the save-time `label` round-tripped (and no label when none was given — never an empty
+  string), `byteLength` equal to the original `data.byteLength`, the correct `chunkCount`, and a
+  populated `createdAt` `Date` (the spec's summary-metadata requirement).
 - [ ] 2.3 `CheckpointNotFoundError` coverage: a test calls `load` for a `(walletId, networkId)`
   with zero checkpoints, and separately for a valid wallet+network but a `sequence` that was
   never written, confirming both reject with `CheckpointNotFoundError` carrying the right
   `walletId`/`networkId`/`sequence` fields (not a generic not-found error).
+- [ ] 2.4 **`ManifestCorruptError` coverage** (`design.md` §4's dense-position check): via direct
+  SQL (test-only, bypassing `save` — no `save` path can produce this, which is exactly why the
+  check is defense-in-depth), give one manifest junction rows at positions `0, 1, 3` with no
+  `2`, then call `load` for it. **Acceptance:** `load` rejects with `ManifestCorruptError` whose
+  `reason` names the structural failure — not a silently short-concatenated payload, not a
+  generic error, and not `ChunkMissingError` (the chunks all exist; the *manifest's shape* is
+  what is wrong).
+- [ ] 2.5 **Cancellation (`opts.signal`) coverage** (`design.md` §8's cancellation paragraph, the
+  spec's `AbortError` requirement): for each of `save`/`load`/`history`/`prune`, calling with an
+  already-aborted signal rejects with `AbortError` and issues no statement; for `save`, aborting
+  the signal while the internal transaction is in flight rejects with `AbortError`, leaves no
+  manifest/junction/chunk row visible, and consumes no sequence number (the next save receives
+  the aborted call's number — overlaps deliberately with 1.2's rollback-gaplessness check, from
+  the abort path specifically). **Acceptance:** every assertion above is made explicitly; the
+  mid-transaction abort case verifies row absence and sequence reuse via direct SQL, not just
+  the rejection type.
 
 ## 3. GC (`prune`)
 
@@ -85,7 +126,11 @@ Sprint 1/2's own review cadence.
   chunk-reclaim, both inside one transaction, `retainCount < 1` rejected with `ValidationError`
   before either statement runs. **Acceptance:** a test with `retainCount = 0` confirms
   `ValidationError` and confirms neither manifests nor chunks changed (no partial effect from the
-  rejected call).
+  rejected call); a test prunes a manifest that has junction rows and confirms the manifest
+  delete succeeds (no SQLSTATE 23503) with its junction rows cascade-deleted in the same pass
+  (`design.md` §2.1's `ON DELETE CASCADE` — the exact failure the original no-delete-action FK
+  guaranteed); review confirms the `withTransaction` call passes no `isolation` override
+  (READ COMMITTED, `design.md` §3's stated dependency for the grace-window TOCTOU argument).
 - [ ] 3.2 **Off-by-one regression test** (`design/design.md` §3's own documented fix — re-verify
   it against this sprint's real implementation, don't just trust the SQL comment): save `N`
   checkpoints for one `(w, net)`, `prune(retainCount = k)`, confirm exactly the `k` newest survive
@@ -119,9 +164,14 @@ Sprint 1/2's own review cadence.
   public `CheckpointStore` surface) since the public API has no "list all chunk hashes" method.
 - [ ] 4.3 P8 (Law C2a, black-box, no adapter-private access needed): after random interleaved
   `save`/`prune` sequences, reload every checkpoint `history()` still lists via `load` and confirm
-  none throws `ChunkIntegrityError` or `CheckpointNotFoundError` — the public-API formulation of
-  "no reachable chunk is ever reclaimed," per that document's own framing of P8 as the practical
-  version of C2a's safety property.
+  none throws `ChunkIntegrityError`, `ChunkMissingError`, or `CheckpointNotFoundError` — the
+  public-API formulation of "no reachable chunk is ever reclaimed," per that document's own
+  framing of P8 as the practical version of C2a's safety property. (`ChunkMissingError` is
+  asserted here beyond `Formal/STORAGE_ALGEBRA.md` §5's literal P8 wording, which omits it — a
+  chunk reclaimed while still referenced surfaces as exactly this error, per
+  `src/interfaces/checkpoint-store.ts`'s own doc for it, so it is the most direct C2a-violation
+  signal this property can catch; found by this change's review, that document is not modified
+  here.)
 
 ## 5. Sprint close-out
 
