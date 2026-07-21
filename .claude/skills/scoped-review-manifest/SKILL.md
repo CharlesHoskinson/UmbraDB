@@ -8,7 +8,7 @@ description: |
   (see the skip rule below) — never for design-panel adversarial/completeness roles or
   the Codex cold audit, which must stay NONE-mode (no manifest, full independent
   exploration).
-allowed-tools: Bash(git*), Bash(python*), Bash(graphify*), Bash(wc*), Bash(grep*), Bash(rm*), Bash(cat*)
+allowed-tools: Bash(git*), Bash(python*), Bash(graphify*), Bash(wc*), Bash(grep*), Bash(rm*), Bash(cat*), Bash(sort*)
 license: MIT
 metadata:
   author: umbradb-project
@@ -49,23 +49,32 @@ dodge this check even though the cumulative diff wouldn't.
 
 ```bash
 git diff --name-only <base> | wc -l
+git ls-files --others --exclude-standard | wc -l
 git diff --shortstat <base>
 git diff <base> -- '*.ts' | grep -E '^[+-][^+-].*\bexport\b'
 ```
 
-The third command is the actual check for "no exported/public symbol changed" — the first
-two commands alone cannot see this (they report counts and line stats, not content), so
-don't mark this condition satisfied without running it. Adjust the path filter/grep if
-this repo's export idioms change; the point is inspecting real diff content, not diff
-stats.
+The same untracked-file gap that Step 2 exists to close applies here too: `git diff
+<base>` alone never reports untracked new files, so measuring size from it alone can
+misclassify an untracked-only change (e.g. several new not-yet-`git add`ed files) as
+"≤2 files, &lt;150 lines" when it isn't — add the `git ls-files --others
+--exclude-standard` count into the file-count total, and if there are any untracked files
+at all, treat their line count as unmeasured by `--shortstat` (don't assume zero; if in
+doubt, don't skip). The fourth command is the actual check for "no exported/public symbol
+changed" — the first three commands alone cannot see this (they report counts and line
+stats, not content), so don't mark this condition satisfied without running it. Adjust the
+path filter/grep if this repo's export idioms change; the point is inspecting real diff
+content, not diff stats.
 
 If **all** of these hold, skip this skill entirely (PUSH auditors explore independently
 for this round instead, same as any NONE-mode role) — building a manifest for a change
 this small can cost more tokens than it saves:
 
-- 2 or fewer files touched, **and**
-- under ~150 changed lines, **and**
-- the third command above returned nothing, **and**
+- 2 or fewer files touched **counting both commands' output combined** (tracked + untracked), **and**
+- under ~150 changed lines **and zero untracked files** (an untracked file's real line count
+  isn't visible to `--shortstat`, so its mere presence disqualifies the skip — don't guess
+  its size), **and**
+- the fourth command above returned nothing, **and**
 - the diff is docs-only or test-only.
 
 This threshold is a starting estimate (see CLAUDE.md's baseline note) — if a calibrated

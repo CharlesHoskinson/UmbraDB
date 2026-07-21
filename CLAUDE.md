@@ -14,7 +14,10 @@ openspec changes and code — a stale graph gives wrong answers to "what does th
 Concretely, add "re-run `graphify --update` and commit `graphify-out/`" as a step in every
 sprint's own `tasks.md` close-out section (alongside the existing `ROADMAP.md`-update task), not
 just as a one-off manual reminder — each sprint's own task list is the durable place this gets
-tracked and reviewed, the same as everything else in this project's process.
+tracked and reviewed, the same as everything else in this project's process. (`graphify --update`
+here means the Claude-Code slash invocation `/graphify --update`; the equivalent direct CLI
+subcommand, if invoking `graphify` outside the assistant, is `graphify update .` — the bare form
+`graphify --update` is not a real CLI invocation on its own.)
 
 `graphify-out/.graphify_python` and `graphify-out/.graphify_root` are machine-local absolute
 paths (the interpreter path and scan root on whichever machine last ran the pipeline) — do not
@@ -197,18 +200,23 @@ Skip the manifest step entirely (PULL access is still fine) when a change touche
 under ~150 changed lines, with no exported/public symbol signature changed, and it's a docs-only
 or test-only diff. Measure all four against `<base>` through the actual current working tree (same
 range as mechanism step 2), not `<base>..HEAD` — a not-yet-committed change would otherwise measure
-as zero-diff-size and always skip regardless of its real size. The first two conditions are
-checkable directly (`git diff --name-only <base> | wc -l`, `git diff --shortstat <base>`); the "no
-exported/public symbol changed" condition is **not** derivable from those same two commands and
-needs its own check — e.g. `git diff <base> -- '*.ts' | grep -E '^[+-].*\bexport\b'` (or equivalent
-for this repo's actual export idioms) returning nothing. Don't claim this condition is satisfied
-without actually running that check; a diff-stats-only read cannot see it. All four conditions must
-hold (measured against the branch's actual divergence point from `main`, not a single latest
-commit, so splitting a large change into several small commits doesn't dodge this rule). Building a
-manifest for a change this small can cost more than just reading it directly (a caveat the closest
-analog tool's own authors concede about themselves). The 150-line threshold is a starting
-estimate, not a measured constant — recalibrate it once real per-sprint token measurements exist
-(see the baseline below). Skipping the manifest never means skipping the sprint close-out's own
+as zero-diff-size and always skip regardless of its real size, **and** count any untracked new
+files (`git ls-files --others --exclude-standard`) into the file total, treating their presence at
+all as disqualifying the line-count condition — plain `git diff` never reports untracked files, so
+their real size isn't visible to `--shortstat` and can't be assumed small. The first two conditions
+are checkable directly (`git diff --name-only <base> | wc -l` plus the untracked count above,
+`git diff --shortstat <base>`); the "no exported/public symbol changed" condition is **not**
+derivable from those same commands and needs its own check — e.g. `git diff <base> -- '*.ts' |
+grep -E '^[+-][^+-].*\bexport\b'` (the `[^+-]` after the leading marker excludes diff hunk headers
+like `+++`/`---` from matching; or equivalent for this repo's actual export idioms) returning
+nothing. Don't claim this condition is satisfied without actually running that check; a
+diff-stats-only read cannot see it. All four conditions must hold (measured against the branch's
+actual divergence point from `main`, not a single latest commit, so splitting a large change into
+several small commits doesn't dodge this rule). Building a manifest for a change this small can
+cost more than just reading it directly (a caveat the closest analog tool's own authors concede
+about themselves). The 150-line threshold is a starting estimate, not a measured constant —
+recalibrate it once real per-sprint token measurements exist (see the baseline below). Skipping
+the manifest never means skipping the sprint close-out's own
 graph update — that still runs regardless of diff size.
 
 See the `scoped-review-manifest` skill for the concrete implementation of the mechanism above.
