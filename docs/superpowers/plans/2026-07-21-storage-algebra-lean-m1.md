@@ -74,7 +74,7 @@ leanprover/lean4:v4.32.0
 import Lake
 open Lake DSL
 
-package "umbradb-formal" where
+package UmbraDBFormalTest where
   version := v!"0.1.0"
 
 require mathlib from git
