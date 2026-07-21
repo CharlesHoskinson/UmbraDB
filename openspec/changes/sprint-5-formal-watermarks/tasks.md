@@ -24,7 +24,7 @@ specified persona review passes or all findings are fixed and re-reviewed.
   reviews after Graphify regeneration; resolve every blocking finding before Lean proof edits.
   - **Acceptance:** three distinct read-only persona reports name the exact planning files and
     return `PASS`; `git diff --check` exits 0.
-- [ ] 0.5 Commit and push the audited planning tranche, then open a draft sprint PR.
+- [x] 0.5 Commit and push the audited planning tranche, then open a draft sprint PR.
   - **Acceptance:** `git status --short` is clean, `git rev-parse HEAD` equals
     `git rev-parse origin/formal/storage-algebra-lean-m3a-watermarks`, and the GitHub PR is draft.
 
