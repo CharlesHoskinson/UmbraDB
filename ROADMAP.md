@@ -61,7 +61,26 @@ but verified equivalent to the reference behavior it's replacing.
   tests passing (unit + P6-P8 property tests) after a 3-round Opus panel +
   Fable 5 consolidation + 4-round Codex GPT-5.6 Sol audit on the spec, then
   a 2-auditor (spec-compliance + code-quality) review of the implementation.
-- [ ] Watermarks — not yet drafted.
+- [x] Watermarks (`sprint-4-watermarks`) — `PgWatermarks` (`set`/`get`), the
+  single `fillfactor = 90` `watermarks` table with no secondary index (a
+  hard HOT-eligibility invariant), the top-level-null application-level
+  guard, the large-integer-as-decimal-string caller convention, and
+  `resolveTransaction`-based `opts.tx` composition (no dedicated lease
+  layer needed); 155/155 tests passing project-wide (23 new: 22 unit + P9
+  property test) after a research-round-informed draft, 3-round Opus panel
+  + Fable 5 consolidation + Codex GPT-5.6 Sol audit on the spec, then a
+  2-auditor (spec-compliance + code-quality) review of the implementation
+  plus a final whole-sprint differential-review gate. This completes all
+  four modules in this milestone's checklist — see the note below on what
+  that does and doesn't mean for Milestone 2 as a whole.
+
+**Note:** all four modules above now have their own implementation done
+and reviewed, but per this milestone's own opening framing ("not just
+'its own tests pass,' but verified equivalent to the reference behavior
+it's replacing"), the differential state-equivalence gate itself is a
+separate, still-outstanding cross-cutting item — see Milestone 3 and the
+1.0.0 checklist below, where it's tracked jointly with Milestone 3, not
+resolved by this or any single sprint.
 
 ## Milestone 3 — Testing
 

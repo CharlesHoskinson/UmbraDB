@@ -7,7 +7,7 @@ Sprint 1-3's own review cadence.
 
 ## 0. Schema
 
-- [ ] 0.1 Write `src/postgres/migrations/003_watermarks.ts` (`design.md` §1/§9): the single
+- [x] 0.1 Write `src/postgres/migrations/003_watermarks.ts` (`design.md` §1/§9): the single
   `watermarks` table, schema-qualified via `sql(schema)`, with `WITH (fillfactor = 90)` and the
   `updated_at DEFAULT now()` intra-transaction-caveat comment. Add the migration to
   `src/postgres/migrate.ts`'s `migrations` array. **Also do the citation re-verification design.md
@@ -35,7 +35,7 @@ Sprint 1-3's own review cadence.
   `design.md` §1 makes; a test asserts no index exists on `value` or `updated_at` beyond the
   primary key (`design.md` §1's hard invariant), so a future migration can't accidentally violate
   it without at least one existing test needing to change.
-- [ ] 0.2 **HOT-update regression smoke test against the real `watermarks` table** (**revised a
+- [x] 0.2 **HOT-update regression smoke test against the real `watermarks` table** (**revised a
   second time, after actually building and running the two-table differential-comparison version
   Codex's audit called for**: that version was implemented exactly as specified — two scratch
   tables, `fillfactor=90` vs. the default `100`, 200 filler rows each, 50 fixed-size `UPDATE`
@@ -59,7 +59,7 @@ Sprint 1-3's own review cadence.
   contribution versus the default. The initial insert is excluded from the calculation (never HOT
   by definition).
 
-- [ ] 0.3 **Interface doc-only change** (`design.md` §4): add a TSDoc note to
+- [x] 0.3 **Interface doc-only change** (`design.md` §4): add a TSDoc note to
   `src/interfaces/watermarks.ts`'s `WatermarkValue`/`WatermarkValueSchema` documenting the
   large-integer-as-decimal-string convention (values that could exceed
   `Number.MAX_SAFE_INTEGER` MUST be encoded as a decimal string, not a bare JSON number),
@@ -73,7 +73,7 @@ Sprint 1-3's own review cadence.
 
 ## 1. `set`
 
-- [ ] 1.1 Implement `PgWatermarks.set` (`design.md` §2) against `src/interfaces/watermarks.ts`
+- [x] 1.1 Implement `PgWatermarks.set` (`design.md` §2) against `src/interfaces/watermarks.ts`
   exactly, composing `resolveTransaction` for `opts.tx` (not `withTransaction` — this module opens
   no transaction of its own, `design.md` §6). **Acceptance:** `tsc --noEmit` passes with
   `PgWatermarks implements Watermarks`; a test calls `set` with an invalid value (e.g. a value
@@ -93,13 +93,13 @@ Sprint 1-3's own review cadence.
   actual `sql`/`postgres.js` usage, that limitation must be recorded explicitly in the test's own
   comment (state which of the two guarantees — "no row persisted" vs. "no statement issued" — is
   actually being verified), not silently treated as equivalent.
-- [ ] 1.2 **Non-object JSON root test** (`design.md` §2's `sql.json()` requirement, the spec's
+- [x] 1.2 **Non-object JSON root test** (`design.md` §2's `sql.json()` requirement, the spec's
   round-trip requirement): call `set` with a bare number and, separately, a bare string as the
   entire `value`, and confirm `get` returns each exactly. **Acceptance:** both cases pass without a
   type-inference error from the driver (the specific failure mode `design.md` §2 cites,
   `porsager/postgres#386`) — a regression here would mean `sql.json()` was dropped from the
   implementation.
-- [ ] 1.3 **Transaction participation test** (`design.md` §6, the spec's tx-handle requirement):
+- [x] 1.3 **Transaction participation test** (`design.md` §6, the spec's tx-handle requirement):
   open a transaction via `PgTransactionLeaseLayer.withTransaction`, call `set` with that
   transaction's handle as `opts.tx`, and confirm `get` — called with the SAME handle, before the
   transaction commits — sees the just-set value. Separately, confirm a `set` inside a transaction
@@ -111,7 +111,7 @@ Sprint 1-3's own review cadence.
   `TransactionHandleInvalidError` with no statement issued — the contract
   `src/interfaces/transaction-lease.ts` documents for every `opts.tx`-accepting storage-layer
   method, and the spec's stale-or-fabricated-handle scenario.
-- [ ] 1.4 **Large-integer convention pair, made actually diagnostic** (**corrected per Codex's
+- [x] 1.4 **Large-integer convention pair, made actually diagnostic** (**corrected per Codex's
   audit, which found the original single decimal-string round-trip test redundant with 1.2's
   plain bare-string case — a quoted decimal string never gets numerically coerced regardless of
   its digit count, so that test alone proves nothing specific to the large-integer risk it claims
@@ -134,7 +134,7 @@ Sprint 1-3's own review cadence.
 
 ## 2. `get`
 
-- [ ] 2.1 Implement `PgWatermarks.get` (`design.md` §3) against `src/interfaces/watermarks.ts`
+- [x] 2.1 Implement `PgWatermarks.get` (`design.md` §3) against `src/interfaces/watermarks.ts`
   exactly. **Acceptance:** a test calls `get` for a `(kind, key)` pair that was never `set` and
   confirms the call resolves `undefined`, not an error; a test calls `set` three times in
   sequence for one `(kind, key)` and confirms `get` returns exactly the third (most recent) value;
@@ -148,14 +148,14 @@ Sprint 1-3's own review cadence.
 
 ## 3. Cancellation and errors
 
-- [ ] 3.1 **Cancellation (`opts.signal`) coverage** (`design.md` §7, the spec's `AbortError`
+- [x] 3.1 **Cancellation (`opts.signal`) coverage** (`design.md` §7, the spec's `AbortError`
   requirement): for both `set` and `get`, calling with an already-aborted signal rejects with
   `AbortError` and issues no statement; separately, aborting the signal after the call has already
   begun does NOT interrupt it — the call completes its ordinary outcome (matching Sprint 3's
   corrected understanding of `withAbort`'s pre-check-only contract, not the mid-flight-cancellation
   claim that sprint's earlier draft made and later corrected). **Acceptance:** both assertions are
   made explicitly for both methods, not just one.
-- [ ] 3.2 **Connection-failure translation test** (`design.md` §8): force a connection failure
+- [x] 3.2 **Connection-failure translation test** (`design.md` §8): force a connection failure
   (e.g. an invalid connection string, matching the existing pattern in `migrate.test.ts`/
   `temporal-kv.test.ts`) and confirm `set`/`get` reject with `ConnectionError`, not a raw
   `postgres.js` error. **Acceptance:** both methods are asserted separately, not just one; the
@@ -168,7 +168,7 @@ Sprint 1-3's own review cadence.
 
 ## 4. Property test (`Formal/STORAGE_ALGEBRA.md` §5)
 
-- [ ] 4.1 P9 (Law W1): `fast-check` property — `get` after N random `set`s to one key returns the
+- [x] 4.1 P9 (Law W1): `fast-check` property — `get` after N random `set`s to one key returns the
   last value; `set` of an equal value twice in a row is indistinguishable from `set` once (same
   resulting row, same returned value). **Acceptance:** the property test asserts both halves of
   P9's stated definition explicitly (last-value-wins AND idempotent-repeat-is-indistinguishable),
@@ -182,11 +182,11 @@ Sprint 1-3's own review cadence.
 
 ## 5. Sprint close-out
 
-- [ ] 5.1 Whole-sprint differential review: an Opus auditor re-reads this proposal/design against
+- [x] 5.1 Whole-sprint differential review: an Opus auditor re-reads this proposal/design against
   the actual committed code and confirms every "Acceptance" criterion above was actually checked
   — a CI run passing is not sufficient evidence on its own, per every prior sprint's close-out
   standard.
-- [ ] 5.2 Update `ROADMAP.md`'s Milestone 2 checklist (mark Watermarks done — this completes
+- [x] 5.2 Update `ROADMAP.md`'s Milestone 2 checklist (mark Watermarks done — this completes
   Milestone 2's four-module checklist) and `design/tasks.md`'s phase-map table (mark the §4 row
   superseded) so the roadmap doesn't drift from what's actually been built. **Corrected per
   Codex's audit, which found the prior wording understated `ROADMAP.md`'s own framing**: the
@@ -199,6 +199,6 @@ Sprint 1-3's own review cadence.
   this or any single sprint) remains open. State plainly: this sprint completes the fourth and
   final module's own implementation; the cross-cutting differential-equivalence gate that
   Milestone 2's own prose ties to "done" is separately tracked and still outstanding.
-- [ ] 5.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit
+- [x] 5.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit
   the refreshed `graphify-out/` outputs in this close-out commit, so the knowledge graph doesn't
   silently drift stale behind this sprint's new openspec change and code.
