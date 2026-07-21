@@ -20,14 +20,14 @@ Postgres operational pitfall this project hasn't hit yet; (2) how real productio
 storage; (3) JSONB round-trip pitfalls specific to an opaque, caller-defined progress value. All
 three are cited by section number throughout `design.md` below.
 
-**Headline finding, stated up front because it corrects this repo's own prior documentation**:
+**Headline finding, stated up front because it extends this repo's own prior documentation**:
 `design/design.md` §4 currently says Watermarks needs "no design change" from its original sketch.
 That is right about the *logical* schema (`(kind, key, value, updated_at)` is validated almost
-exactly by Debezium's own `debezium_offset_storage` table) but wrong about *physical storage
+exactly by Debezium's own `debezium_offset_storage` table) but didn't consider *physical storage
 parameters* — a table updated on every sync tick is exactly the shape (few rows, extremely
 frequent per-row `UPDATE`) that benefits from an explicit `fillfactor` tuned for HOT (Heap-Only
-Tuple) updates, which the original sketch never considered. This proposal is the first document
-to specify that correction.
+Tuple) updates, a level of detail the original sketch never went to. This proposal is the first
+document to specify that addition.
 
 ## What changes
 

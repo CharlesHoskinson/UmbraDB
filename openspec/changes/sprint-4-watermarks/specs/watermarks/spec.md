@@ -1,7 +1,12 @@
 # watermarks (implementation)
 
 The Postgres-backed implementation of `src/interfaces/watermarks.ts`. Extends (does not replace)
-the interface-level requirements already implied by that file's own TSDoc contract.
+the interface-level requirements already implied by that file's own TSDoc contract. Requirements
+below follow EARS (Easy Approach to Requirements Syntax): each is one of Ubiquitous ("The system
+SHALL..."), Event-driven ("WHEN \<trigger>, the system SHALL..."), Unwanted-behavior ("IF
+\<trigger>, THEN the system SHALL..."), State-driven ("WHILE \<state>, the system SHALL..."), or
+Optional-feature ("WHERE \<feature>, the system SHALL...") form — as in Sprint 2's
+`specs/transaction-lease/spec.md`.
 
 ## ADDED Requirements
 
@@ -14,6 +19,23 @@ fails, SHALL reject with `ValidationError` before issuing any database statement
 - **WHEN** `set` is called with a `value` that fails `WatermarkValueSchema` (e.g. containing a
   `bigint`, `undefined`, or a JavaScript `Date` instance nested inside it)
 - **THEN** the call SHALL reject with `ValidationError`
+- **AND** no row in `watermarks` SHALL be inserted or updated as a result
+
+### Requirement: set rejects a top-level null value with ValidationError before any statement
+
+IF `set` is called with a `value` that is exactly `null` at its top level, THEN `PgWatermarks.set`
+SHALL reject with `ValidationError` before issuing any database statement — an application-level
+guard in `set` itself, not a `WatermarkValueSchema` change. The shared schema structurally admits
+a top-level JSON `null`, but the driver would bind a JavaScript `null` parameter as a
+wire-protocol SQL NULL (not the JSONB literal `'null'`) against the `value jsonb NOT NULL`
+column, surfacing as a mistranslated generic error instead of a clean boundary rejection
+(`design.md` §2's top-level-null guard, with the verified driver-source reasoning).
+
+#### Scenario: A top-level null value is rejected with no statement issued
+- **WHEN** `set(kind, key, null)` is called with `null` as the entire value
+- **THEN** the call SHALL reject with `ValidationError` — specifically NOT
+  `UnrecognizedPostgresError` and NOT a raw driver-level `not_null_violation` (SQLSTATE 23502)
+  error
 - **AND** no row in `watermarks` SHALL be inserted or updated as a result
 
 ### Requirement: set is an idempotent, unconditional overwrite (Law W1)
@@ -67,7 +89,11 @@ or a different `key`.
 `PgWatermarks.set` and `get` SHALL, when given a non-`undefined` `opts.tx`, resolve it via the
 shared transaction-handle registry and issue their statement against that transaction-scoped
 connection rather than the pooled connection — participating in the caller's ambient transaction
-exactly as `TemporalKV`'s equivalent methods already do.
+exactly as `TemporalKV`'s equivalent methods already do. IF the supplied handle does not resolve
+to a live transaction — reused after its transaction committed or rolled back, or fabricated —
+THEN the method SHALL reject with `TransactionHandleInvalidError` before issuing any statement
+(`src/interfaces/transaction-lease.ts`'s own documented contract for every `opts.tx`-accepting
+storage-layer method).
 
 #### Scenario: A set issued inside a caller's transaction is visible to a get using the same handle before commit
 - **WHEN** a transaction is opened via `TransactionLeaseLayer.withTransaction`, and `set` is
@@ -80,6 +106,13 @@ exactly as `TemporalKV`'s equivalent methods already do.
   back (not committed)
 - **THEN** a subsequent `get` for that same `(kind, key)`, outside that transaction, SHALL NOT
   reflect the rolled-back value
+
+#### Scenario: A stale or fabricated transaction handle is rejected with TransactionHandleInvalidError
+- **WHEN** `set` or `get` is called with `opts.tx` set to a `TransactionHandle` whose transaction
+  has already committed or rolled back, or to a fabricated handle that never named a live
+  transaction
+- **THEN** the call SHALL reject with `TransactionHandleInvalidError`
+- **AND** no database statement SHALL have been issued by that call
 
 ### Requirement: an already-aborted opts.signal rejects before any statement; a later abort has no effect
 
@@ -102,14 +135,36 @@ pre-check-only `withAbort` contract this module shares with `PgTemporalKV.get`/`
 - **AND** the call SHALL NOT reject with `AbortError` solely because the signal aborted after it
   had already begun
 
+#### Scenario: A get whose signal aborts after the call has begun likewise completes normally
+- **WHEN** `get`'s `opts.signal` is aborted after the call has already begun (its statement
+  already dispatched)
+- **THEN** the call SHALL complete its ordinary outcome (resolving the stored value, or
+  `undefined` for a never-set pair)
+- **AND** the call SHALL NOT reject with `AbortError` solely because the signal aborted after it
+  had already begun
+
 ### Requirement: Postgres errors surface as the shared StorageError hierarchy
 
-Driver-level failures SHALL be translated into the project's shared `StorageError` subclasses
-before reaching the caller; a raw `postgres.js` error object SHALL NOT escape the adapter layer.
+`set` and `get` SHALL each translate driver-level failures into the project's shared
+`StorageError` subclasses before they reach the caller; a raw `postgres.js` error object SHALL
+NOT escape the adapter layer from either method. This binds `get` no less than `set`: the "get
+never throws for an unset cursor" requirement above is about a *missing key*, not about `get`
+never throwing at all — the interface's module-level doc names `ConnectionError` as a failure
+mode of both methods. (The interface also inherits `SerializationFailedError` as a third shared
+failure mode; it is not independently triggerable on the current `sql.json()` path, per
+`design.md` §8, so it is acknowledged here for contract parity with the interface rather than
+given its own scenario.)
 
-#### Scenario: A connection failure surfaces as ConnectionError
-- **WHEN** the underlying Postgres connection cannot be established
+#### Scenario: A connection failure during set surfaces as ConnectionError
+- **WHEN** `set` is called and the underlying Postgres connection cannot be established
 - **THEN** the call SHALL reject with `ConnectionError`
+- **AND** SHALL NOT reject with a raw driver-level error type
+
+#### Scenario: A connection failure during get surfaces as ConnectionError, not undefined
+- **WHEN** `get` is called against a connection that cannot be established (e.g. a dead
+  connection)
+- **THEN** the call SHALL reject with `ConnectionError` — a failure to ask the database is not
+  the same as a missing cursor, so the call SHALL NOT resolve `undefined`
 - **AND** SHALL NOT reject with a raw driver-level error type
 
 ### Requirement: a non-object JSON value round-trips correctly
@@ -125,3 +180,28 @@ array.
 #### Scenario: A bare string watermark value round-trips exactly
 - **WHEN** `set(kind, key, "block-1234")` is called with a bare string as the entire value
 - **THEN** `get(kind, key)` SHALL resolve `"block-1234"` exactly
+
+#### Scenario: A large integer encoded as a decimal string round-trips exactly
+- **WHEN** `set(kind, key, "9007199254740993")` is called — a cursor value above
+  `Number.MAX_SAFE_INTEGER`, encoded as a decimal string per `design.md` §4's documented
+  large-integer convention
+- **THEN** `get(kind, key)` SHALL resolve the string `"9007199254740993"` exactly, digit for
+  digit — proving the convention's recommended encoding actually survives the full driver/JSONB
+  round-trip (the bare-number precision-loss failure mode itself is established Node.js
+  `JSON.parse` behavior and is not re-proven here)
+
+### Requirement: T is a caller assertion — no runtime validation beyond the erased WatermarkValue shape
+
+`PgWatermarks.set<T>`/`get<T>` SHALL perform no runtime validation of `T` beyond the erased
+`WatermarkValue` shape: a caller who writes one shape under a `kind` and reads it back with a
+mismatched `T` SHALL receive the stored value unchanged — "a type lie, not a runtime error," in
+the interface's own words (`src/interfaces/watermarks.ts`'s documented caller-assertion
+contract). This requirement exists as a regression guard: if runtime `T`-validation were ever
+added later, that would be a contract change, and this is what catches it.
+
+#### Scenario: Reading with a mismatched T returns the stored value, not a runtime error
+- **WHEN** `set(kind, key, v)` stores a value of one shape (e.g. an object cursor), and `get<T>`
+  is then called for the same `(kind, key)` with a `T` naming a different shape (e.g. a bare
+  number)
+- **THEN** the call SHALL resolve with the stored value exactly as written
+- **AND** SHALL NOT reject with `ValidationError` or any other runtime type error

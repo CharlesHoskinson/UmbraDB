@@ -50,6 +50,13 @@ single-row cursor table (`spo_stake_refresh_state`) — not directly reusable he
 module's whole purpose is serving multiple heterogeneous `kind`s generically, but its shape
 (implicit key + value + `updated_at`) is the same pattern in miniature.
 
+(One hedge on the external citations here and in §4 — the Debezium/Sui/Aptos file paths, the
+Midnight indexer's `spo_stake_refresh_state` table, "Postgres docs §9.9.5": all were genuinely
+fetched by the pre-draft research round, but per `design/design.md` §2's own precedent for
+exactly this kind of external claim, confirm them against freshly-fetched source, file:line,
+when task 0.1 lands, rather than treating a repo-internal review pass as their final
+verification.)
+
 **What the sketch didn't consider — physical storage parameters, added here.** This table is
 updated on every sync tick: potentially many writes per second per `(kind, key)` for an actively
 syncing wallet. That is exactly the workload shape (few rows, extremely high per-row `UPDATE`
@@ -139,6 +146,28 @@ ${true}::jsonb\`` fails type inference without this). `sql.json()` is already th
 established pattern for exactly this case (`temporal-kv.ts`'s `putImpl`, `const jsonValue =
 sql.json(value as JsonValue)`) — reused here unchanged, not a new decision.
 
+**Top-level `null` guard — a new, Watermarks-specific application-level check, not present in
+TemporalKV.** `WatermarkValueSchema = JsonValueSchema` is built on `z.json()`
+(`src/interfaces/temporal-kv.ts`), whose type structurally admits a top-level JSON `null` — so
+`set(kind, key, null)` is a schema-valid call. But it would never reach Postgres as the JSONB
+literal `'null'`: verified directly against the installed driver source
+(`node_modules/postgres/src/connection.js`, the `Bind()` function), `if (x === null) return
+b.i32(0xFFFFFFFF)` writes the wire-protocol NULL marker for ANY parameter whose value is exactly
+`null`, regardless of the parameter's declared type — including the `jsonb` OID `sql.json()`
+assigns. Against this table's `value jsonb NOT NULL` column that raises SQLSTATE 23502
+(`not_null_violation`), which `translatePostgresError` has no specific mapping for — it falls
+through to the generic `UnrecognizedPostgresError` default branch, a mistranslated, confusing
+error in place of a clean boundary rejection. `set` therefore rejects `value === null` with
+`ValidationError` directly in application code, before any statement is issued — mirroring how
+`PgCheckpointStore.prune` validates `retainCount` in application code because no Zod schema
+covers it. This is deliberately NOT a `WatermarkValueSchema` change: the schema is shared with
+`TemporalKV` (§4 gives the identical scope reasoning for the large-integer convention), so
+narrowing it would change that already-implemented, already-audited module's contract as a side
+effect. And it is deliberately narrower than ideal: `TemporalKV.put` has the same latent
+`sql.json()`-against-`jsonb NOT NULL` exposure and is NOT fixed here — out of a Watermarks-only
+sprint's scope — so this guard must not be read as implying TemporalKV is safe; it is a known,
+pre-existing gap left for a future change to close at its own boundary.
+
 No CAS, no version, no history: `set` unconditionally overwrites, matching Law W1 exactly
 (`set(set(x, v), v) = set(x, v)`, `Formal/STORAGE_ALGEBRA.md` §3). Cancellation is pre-check-only
 `withAbort` (§6 below) — no transaction to roll back on a late abort, no lock wait, no cursor;
@@ -163,9 +192,15 @@ is the one place in the whole storage layer where `get` never needs to distingui
 from anything else, since there is no retention window (contrast `TemporalKV.getAt`'s
 `HistoryUnavailableError`) and no reachability concern (contrast `CheckpointStore.load`'s several
 corruption errors) to distinguish it from. `T` narrows the erased `WatermarkValue` at the type
-level only — the runtime check is against `WatermarkValueSchema`'s already-erased shape, exactly
-like `TemporalKV.get<T>`'s own documented caller-assertion contract; a caller that writes one
-shape under a `kind` and reads a different `T` gets a type lie, not a runtime error, by design.
+level only, exactly like `TemporalKV.get<T>`'s own documented caller-assertion contract; a caller
+that writes one shape under a `kind` and reads a different `T` gets a type lie, not a runtime
+error, by design. To be explicit about a real asymmetry an implementer could otherwise miss:
+`get` does NOT re-validate the stored value against `WatermarkValueSchema` on read — unlike
+`PgTemporalKV.get`, which validates every returned row via `toEntry`'s
+`VersionedEntrySchema.safeParse` (`temporal-kv.ts`). Here the row's `value` is returned exactly
+as the driver parsed it; validation runs once, at the `set` boundary, and nowhere on the read
+path. The interface JSDoc's "runtime validates only the erased shape" phrasing describes the
+write-side check, not a read-side one that does not exist.
 
 ## 4. Large-integer cursor values — a documented convention, not a schema change
 
