@@ -1,5 +1,6 @@
 import { ConnectionError, StorageError } from "../interfaces/storage-errors.js";
 import { TransactionKeyReuseError } from "../interfaces/temporal-kv.js";
+import { TransactionFaultError } from "../interfaces/transaction-lease.js";
 
 /**
  * SQLSTATE `23P01` (exclusion_violation) firing on `kv_history_no_overlap` — NOT `23505`
@@ -64,6 +65,20 @@ interface PgDriverError extends Error {
 
 function isPgDriverError(err: unknown): err is PgDriverError {
   return err instanceof Error && typeof (err as { code?: unknown }).code === "string";
+}
+
+/**
+ * SQLSTATE `57014` (`query_canceled`) is CONTEXTUAL — it fires for a `statement_timeout`
+ * cancellation, an operator-issued `pg_cancel_backend()`, or this project's own explicit
+ * `query.cancel()` calls (`listKeys`, lease acquisition's mid-wait abort) alike, so it cannot be
+ * given one universal translation in the shared table below (`openspec/changes/
+ * sprint-2-transaction-lease/design.md` §3/§5). Centralized here (moved out of
+ * `transaction-lease.ts`, which has two separate call sites that both need it — lease
+ * acquisition's own timeout, and `withTransaction`'s) so both agree on the exact same check
+ * rather than maintaining two copies.
+ */
+export function isStatementTimeout(err: unknown): boolean {
+  return isPgDriverError(err) && err.code === "57014";
 }
 
 /**
@@ -143,6 +158,14 @@ export function translatePostgresError(
       return new ExclusionViolationError(err.message, err);
     case "23514":
       return new ClockRegressionError(err.message, err);
+    // Added for Sprint 2 (openspec/changes/sprint-2-transaction-lease/design.md §5):
+    // withTransaction reuses this shared table for these two, unlike the two CONTEXTUAL 57014
+    // cases (lease-acquisition timeout, transaction timeout), which are handled directly in
+    // their own call sites via isStatementTimeout, not here.
+    case "40001":
+      return new TransactionFaultError(`serialization failure: ${err.message}`, "serialization-failure", err);
+    case "40P01":
+      return new TransactionFaultError(`deadlock detected: ${err.message}`, "deadlock", err);
     default:
       return new UnrecognizedPostgresError(err.message, err);
   }

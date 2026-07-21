@@ -32,7 +32,7 @@ export async function stopTestDatabase(): Promise<void> {
   await container?.stop();
 }
 
-export function registerSuiteLifecycle(): { sql: () => UmbraDBSql } {
+export function registerSuiteLifecycle(): { sql: () => UmbraDBSql; connectionUri: () => string } {
   let sql: UmbraDBSql;
   beforeAll(async () => {
     sql = await startTestDatabase();
@@ -40,5 +40,8 @@ export function registerSuiteLifecycle(): { sql: () => UmbraDBSql } {
   afterAll(async () => {
     await stopTestDatabase();
   });
-  return { sql: () => sql };
+  // Exposed so a test that needs its OWN dedicated, small (e.g. maxConnections: 1) pool against
+  // the SAME database -- rather than the shared suite pool, whose physical connection a given
+  // query lands on is not deterministic -- doesn't have to spin up a second container.
+  return { sql: () => sql, connectionUri: () => container.getConnectionUri() };
 }

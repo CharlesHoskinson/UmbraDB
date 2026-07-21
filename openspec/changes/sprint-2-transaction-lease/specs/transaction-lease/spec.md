@@ -40,6 +40,28 @@ duration, THEN the system SHALL reject `withTransaction` with `TransactionFaultE
 - **THEN** the call SHALL reject with `TransactionFaultError` (`faultKind: "timeout"`)
 - **AND** any write `fn` performed before the slow statement SHALL NOT be visible afterward
 
+### Requirement: Aborting opts.signal before withTransaction starts rejects with AbortError
+
+IF `opts.signal` is already aborted when `withTransaction` is called, THEN the system SHALL
+reject with `AbortError` before opening any transaction, and `fn` SHALL NOT be invoked.
+`opts.signal` follows the same pre-check-only contract already established for `PgTemporalKV`'s
+methods (`src/postgres/temporal-kv.ts`'s `withAbort`): `fn` is arbitrary caller code with no
+mechanism for this layer to interrupt partway through, so an abort that fires AFTER `fn` has
+begun executing has no effect on that already-started transaction — a real, disclosed narrowing
+of the cancellation contract, not a gap this sprint attempts to close.
+
+#### Scenario: An already-aborted signal rejects before any transaction opens
+- **WHEN** `withTransaction(fn, {signal})` is called with a `signal` that is already aborted
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** `fn` SHALL NOT be invoked
+
+#### Scenario: A signal aborted after withTransaction has already started does not affect that call
+- **WHEN** `withTransaction(fn, {signal})` is called, `fn` begins executing and performs a write,
+  and `signal` is then aborted before `fn` returns
+- **THEN** the call SHALL proceed to commit or roll back based on `fn`'s own outcome, exactly as
+  if the abort had not happened
+- **AND** it SHALL NOT reject with `AbortError` solely because of that abort
+
 ### Requirement: A resolved transaction handle always refers to its own live transaction
 
 WHILE a `withTransaction` callback is executing, the system SHALL make the `TransactionHandle`
@@ -114,6 +136,45 @@ IF `opts.timeoutMs` is given and elapses before the lease becomes available, THE
 - **THEN** the call SHALL resolve `null`
 - **AND** it SHALL NOT reject
 
+### Requirement: Connection loss during lease acquisition or holding surfaces as LeaseFaultError
+
+IF reserving a connection for `acquireLease`/`tryAcquireLease` fails, THEN the system SHALL
+reject with `LeaseFaultError` (`faultKind: "reserve-failed"`). IF a lease's held connection is
+lost (closed, crashed, or otherwise unusable) before `releaseLease` is called, THEN a subsequent
+`releaseLease` call for that lease SHALL reject with `LeaseFaultError` (`faultKind:
+"connection-lost"`), not `LeaseNotHeldError` — the lease was genuinely held, not double-released.
+
+#### Scenario: A reservation failure during acquireLease surfaces as LeaseFaultError
+- **WHEN** `acquireLease(key)` is called and the underlying connection pool cannot reserve a
+  connection (e.g. the database is unreachable)
+- **THEN** the call SHALL reject with `LeaseFaultError` (`faultKind: "reserve-failed"`)
+
+#### Scenario: A dead held connection surfaces as LeaseFaultError on release, not LeaseNotHeldError
+- **WHEN** `releaseLease(lease)` is called after the connection backing `lease` has already been
+  lost (e.g. the backend process was killed)
+- **THEN** the call SHALL reject with `LeaseFaultError` (`faultKind: "connection-lost"`)
+
+### Requirement: Aborting opts.signal during lease acquisition rejects with AbortError
+
+IF `opts.signal` is already aborted when `acquireLease`/`tryAcquireLease` is called, THEN the
+system SHALL reject with `AbortError` before reserving any connection. IF `opts.signal` aborts
+while waiting for the lock, THEN the system SHALL reject with `AbortError`; IF the lock had
+already been acquired by the moment the abort is observed, THEN the system SHALL release it
+before rejecting, so an aborted caller never leaks a held lease.
+
+#### Scenario: An already-aborted signal rejects before any connection is reserved
+- **WHEN** `acquireLease(key, {signal})` is called with a `signal` that is already aborted
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** no connection SHALL be reserved
+
+#### Scenario: Aborting while waiting for a contended lease releases nothing and rejects
+- **WHEN** `acquireLease(key, {signal})` is called while another caller holds `key`, and `signal`
+  is aborted before the lock becomes available
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** a subsequent `acquireLease(key)` by another caller SHALL succeed once the original
+  holder releases it (the aborted caller never acquired the lock, so there is nothing for it to
+  release)
+
 ### Requirement: releaseLease rejects a lease that is not currently held
 
 IF `releaseLease` is called with a `Lease` whose token does not correspond to a currently-held
@@ -128,8 +189,9 @@ lease (already released, or its connection already closed), THEN the system SHAL
 ### Requirement: withLease always releases its lease, even when fn throws
 
 The system SHALL release the lease acquired by `withLease` regardless of whether `fn` resolves
-or rejects, and SHALL propagate `fn`'s own error unchanged (a release failure SHALL be logged,
-not thrown, so it never masks `fn`'s error).
+or rejects, and SHALL propagate `fn`'s own error unchanged (a release failure SHALL be swallowed,
+not thrown, so it never masks `fn`'s error — corrected by review from an earlier draft's claim
+that it would be "logged," which this project has no logging infrastructure to actually do).
 
 #### Scenario: withLease releases the lease when fn throws
 - **WHEN** `withLease(key, fn)` is called and `fn` throws an error

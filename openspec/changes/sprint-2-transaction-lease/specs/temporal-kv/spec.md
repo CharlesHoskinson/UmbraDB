@@ -6,10 +6,15 @@ now that `Transaction/Lease` exists and `PgTemporalKV`'s `opts.tx` is wired to i
 
 ## MODIFIED Requirements
 
-### Requirement: A caller-supplied transaction handle is honored, not rejected
+### Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored
 
 Supersedes Sprint 1's requirement of the same name (which required rejection, since no
-Transaction/Lease implementation existed yet to honor a handle with). WHEN any of
+Transaction/Lease implementation existed yet to honor a handle with) — **the header above is
+copied verbatim from Sprint 1's `specs/temporal-kv/spec.md`, not paraphrased**, since openspec's
+`## MODIFIED Requirements` mechanism matches a delta to its baseline by EXACT `### Requirement:`
+header text; a paraphrased header (found by review to be the case in an earlier draft of this
+file) silently fails to supersede the original, leaving both the old ("rejected outright") and
+new ("honored") requirement text simultaneously live and contradictory. WHEN any of
 `put`/`get`/`getAt`/`listKeys` is called with a non-`undefined` `opts.tx`, the system SHALL
 resolve that handle via `resolveTransaction` and route that method's query through the resulting
 connection, so the operation genuinely participates in the caller's transaction. IF the handle
@@ -41,11 +46,17 @@ Sprint 1 could only exercise `TransactionKeyReuseError` (`UB001`) via a direct, 
 test, since `opts.tx` was rejected outright — see that change's own scope note on this
 Requirement, now superseded. WHEN a `withTransaction` callback calls `put()` twice against the
 SAME `(ns, scope, key)` using the transaction's handle as `opts.tx`, the system SHALL reject the
-second call with `TransactionKeyReuseError`, reachable through the public API without any
-trigger-level test scaffolding.
+second call's underlying statement with `UB001`, and — because a failed statement aborts the
+entire enclosing Postgres transaction, not just that one statement — `withTransaction` itself
+SHALL reject with `TransactionKeyReuseError` and roll back EVERY write attempted inside that same
+`fn`, including the first (otherwise valid) `put()` call, reachable through the public API
+without any trigger-level test scaffolding.
 
-#### Scenario: A second put to the same key in one real transaction rejects through the public API
-- **WHEN** a `withTransaction` callback calls `put(ns, scope, key, v1, {tx: handle})` followed
-  by `put(ns, scope, key, v2, {tx: handle})`
-- **THEN** the second call SHALL reject with `TransactionKeyReuseError`
-- **AND** the first `put`'s version SHALL remain the current value after the transaction commits
+#### Scenario: Two puts to the same key inside one transaction reject and roll back together, through the public API
+- **WHEN** a key already has a committed value from a prior, separate write, and a
+  `withTransaction` callback then calls `put(ns, scope, key, v1, {tx: handle})` followed by
+  `put(ns, scope, key, v2, {tx: handle})`
+- **THEN** `withTransaction` SHALL reject with `TransactionKeyReuseError`
+- **AND** the key's value SHALL be unchanged from its prior, already-committed value — NEITHER
+  `v1` NOR `v2` SHALL be visible, since the whole transaction rolls back together, not just the
+  second write

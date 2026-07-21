@@ -1,19 +1,28 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ValidationError } from "../../src/interfaces/storage-errors.js";
-import { VersionConflictError } from "../../src/interfaces/temporal-kv.js";
-import type { TransactionHandle } from "../../src/interfaces/transaction-lease.js";
+import { TransactionKeyReuseError, VersionConflictError } from "../../src/interfaces/temporal-kv.js";
+import {
+  Rollback,
+  TransactionHandleInvalidError,
+  type TransactionHandle,
+} from "../../src/interfaces/transaction-lease.js";
 import type { UmbraDBSql } from "../../src/postgres/client.js";
-import { PgTemporalKV, TransactionParticipationNotSupportedError } from "../../src/postgres/temporal-kv.js";
+import { PgTemporalKV } from "../../src/postgres/temporal-kv.js";
+import { PgTransactionLeaseLayer } from "../../src/postgres/transaction-lease.js";
 import { registerSuiteLifecycle, TEST_SCHEMA } from "./setup.js";
 
-/** A fake handle for exercising the opts.tx-rejection path only — deliberately never a real
- *  transaction, since Sprint 1's adapter must reject before running any query regardless. */
+/** A fabricated handle, never issued by any real `withTransaction` call — for exercising
+ *  `TransactionHandleInvalidError` without needing an actually-ended transaction. */
 const FAKE_TX = { __brand: "TransactionHandle", id: "fake" } as unknown as TransactionHandle;
 
 const { sql: getSql } = registerSuiteLifecycle();
 
 function kv(): PgTemporalKV {
   return new PgTemporalKV(getSql(), TEST_SCHEMA);
+}
+
+function txLayer(): PgTransactionLeaseLayer {
+  return new PgTransactionLeaseLayer(getSql());
 }
 
 async function truncateAll(sql: UmbraDBSql): Promise<void> {
@@ -147,12 +156,79 @@ describe("PgTemporalKV", () => {
     });
   });
 
-  describe("opts.tx rejection (deferred wiring, tasks.md 1.6)", () => {
-    it("put rejects a non-undefined opts.tx before running any query", async () => {
-      await expect(kv().put("ns", "sc", "tx-key", { a: 1 }, { tx: FAKE_TX }))
-        .rejects.toBeInstanceOf(TransactionParticipationNotSupportedError);
-      const row = await kv().get("ns", "sc", "tx-key");
+  describe("opts.tx participation (Sprint 2: sprint-2-transaction-lease/design.md §4)", () => {
+    it("two puts to different keys inside one withTransaction both commit together", async () => {
+      await txLayer().withTransaction(async (tx) => {
+        await kv().put("ns", "sc", "txp-a", { v: 1 }, { tx });
+        await kv().put("ns", "sc", "txp-b", { v: 2 }, { tx });
+      });
+      const a = await kv().get("ns", "sc", "txp-a");
+      const b = await kv().get("ns", "sc", "txp-b");
+      expect(a?.value).toEqual({ v: 1 });
+      expect(b?.value).toEqual({ v: 2 });
+    });
+
+    it("two puts to different keys inside one withTransaction that rolls back leave neither write visible", async () => {
+      await expect(
+        txLayer().withTransaction(async (tx) => {
+          await kv().put("ns", "sc", "txp-c", { v: 1 }, { tx });
+          await kv().put("ns", "sc", "txp-d", { v: 2 }, { tx });
+          throw new Rollback({ kind: "callback-requested" });
+        }),
+      ).rejects.toBeInstanceOf(Error);
+      const c = await kv().get("ns", "sc", "txp-c");
+      const d = await kv().get("ns", "sc", "txp-d");
+      expect(c).toBeNull();
+      expect(d).toBeNull();
+    });
+
+    it("a second put to the same key inside one withTransaction rejects with TransactionKeyReuseError, reachable through the public API", async () => {
+      // The second put's rejection must NOT be caught inside fn -- postgres.js's own
+      // transaction-scope tracks every query's outcome independently (its `handler(q)` attaches
+      // `q.catch(e => uncaughtError = e)` to EVERY query dispatched on this transaction,
+      // regardless of whether the caller also awaits/catches it) and re-throws that raw,
+      // untranslated error once fn returns normally, even if fn itself already handled the
+      // rejection -- Postgres considers the whole transaction poisoned once any statement
+      // fails, matching real server-side transaction-abort semantics. Letting it propagate
+      // naturally (the realistic caller pattern -- a real caller wouldn't catch-and-continue
+      // after a data-integrity conflict mid-transaction either) means putImpl's own translation
+      // (with full keyContext) is what withTransaction's overall rejection carries.
+      //
+      // The FIRST write to this key must happen in its own, already-committed, SEPARATE
+      // transaction beforehand (matching Sprint 1's own analogous trigger-level test's
+      // structure exactly) -- UB001 fires when a row's OLD.updated_xact equals the CURRENT
+      // transaction's txid, so it requires TWO writes to the same key WITHIN one transaction.
+      // Putting both writes inside the SAME withTransaction call (an earlier version of this
+      // test's mistake) means the whole transaction -- including the first, otherwise-valid
+      // write -- rolls back together once the second one fails; there is no partial-commit
+      // outcome to observe, since a failed statement aborts the entire enclosing transaction.
+      await kv().put("ns", "sc", "txp-reuse", { v: 1 });
+      await tick();
+      await expect(
+        txLayer().withTransaction(async (tx) => {
+          await kv().put("ns", "sc", "txp-reuse", { v: 2 }, { tx });
+          await kv().put("ns", "sc", "txp-reuse", { v: 3 }, { tx });
+        }),
+      ).rejects.toBeInstanceOf(TransactionKeyReuseError);
+      const current = await kv().get("ns", "sc", "txp-reuse");
+      expect(current?.value).toEqual({ v: 1 });
+      expect(current?.version).toBe(1n);
+    });
+
+    it("put with a fabricated (never-issued) transaction handle rejects with TransactionHandleInvalidError before running any query", async () => {
+      await expect(kv().put("ns", "sc", "txp-fake", { a: 1 }, { tx: FAKE_TX }))
+        .rejects.toBeInstanceOf(TransactionHandleInvalidError);
+      const row = await kv().get("ns", "sc", "txp-fake");
       expect(row).toBeNull();
+    });
+
+    it("put with a handle from an already-ended transaction rejects with TransactionHandleInvalidError", async () => {
+      let staleHandle: TransactionHandle | undefined;
+      await txLayer().withTransaction(async (tx) => {
+        staleHandle = tx;
+      });
+      await expect(kv().put("ns", "sc", "txp-stale", { a: 1 }, { tx: staleHandle }))
+        .rejects.toBeInstanceOf(TransactionHandleInvalidError);
     });
   });
 
