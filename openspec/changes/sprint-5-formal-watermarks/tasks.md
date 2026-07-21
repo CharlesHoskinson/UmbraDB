@@ -84,11 +84,11 @@ specified persona review passes or all findings are fixed and re-reviewed.
     `origin/main` from task 3.1, `git diff origin/main -- Formal/Lean/lean-toolchain
     Formal/Lean/lakefile.lean Formal/Lean/lake-manifest.json package.json package-lock.json` is
     empty and exits 0 with `--exit-code`.
-- [ ] 3.5 Commit the final generated/status tranche, then obtain final PASS verdicts from the three
+- [x] 3.5 Commit the final generated/status tranche, then obtain final PASS verdicts from the three
   independent read-only personas on that exact commit.
   - **Acceptance:** all three reports cite `git rev-parse HEAD`, inspect the committed diff, and
     return `PASS` with no unresolved blocker; `git status --short` is clean.
-- [ ] 3.6 Push the exact audited head, require its green GitHub trust run, and record validation and
+- [x] 3.6 Push the exact audited head, require its green GitHub trust run, and record validation and
   audit evidence in the draft PR before requesting review.
   - **Acceptance:** `git rev-parse HEAD` equals the SHA returned by `git ls-remote --heads origin
     refs/heads/formal/storage-algebra-lean-m3a-watermarks`; the GitHub Actions run for that SHA is

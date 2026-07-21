@@ -435,8 +435,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/proposal.md": {
-    "mtime": 1784677214.650973,
-    "ast_hash": "51062a0743c01db30410665fb9615ae1",
+    "mtime": 1784677520.232526,
+    "ast_hash": "120e44fbb1b74d52b74bb4f341574861",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md": {
@@ -445,8 +445,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/tasks.md": {
-    "mtime": 1784676811.9914474,
-    "ast_hash": "66344b3ba46756d80e39691c73490605",
+    "mtime": 1784677520.232526,
+    "ast_hash": "3129c4d42ad6c3dfbdd947cdf645abd9",
     "semantic_hash": ""
   }
 }
