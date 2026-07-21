@@ -71,9 +71,45 @@ export interface UmbraDBConnectionOptions {
  * properties) so it becomes the ONE place this information lives; every adapter's constructor
  * defaults its own `schema` parameter to `sql.umbradbSchema` instead of a separate literal.
  */
+/**
+ * `postgres.js`'s own `parseOptions` (verified against the installed source,
+ * `node_modules/postgres/src/index.js`) builds its final `connection` object as
+ * `{ application_name: ..., ...o.connection, ...queryStringParams }` — i.e. a connection
+ * string's OWN query-string parameters are spread in LAST, after (and so silently overriding)
+ * the explicit `connection: { search_path: schema }` this function sets below. **Found by a
+ * fifth-round cross-vendor re-audit**: `createClient({ connectionString: uri +
+ * "?search_path=public", schema: "tenant_a" })` would actually connect with `search_path=public`
+ * while this module's own `umbradbSchema` property kept reporting `"tenant_a"` — a real,
+ * silent schema-isolation violation that every other module in this codebase (migrate.ts's
+ * lock keying, PgTemporalKV's default schema) trusts `umbradbSchema` to reflect accurately.
+ * Reject a conflicting `search_path` query parameter up front, rather than let it silently win —
+ * matching this file's existing "malformed config fails fast, here, with a clear message" style
+ * (`assertValidSchemaName`), not a downstream symptom discovered later.
+ */
+function assertNoConflictingSearchPath(connectionString: string): void {
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    return; // Not a URL-shaped string (e.g. a bare "postgresql://" with no host) -- postgres.js's
+             // own parsing will reject it; nothing for this guard to check.
+  }
+  if (url.searchParams.has("search_path")) {
+    throw new Error(
+      "connectionString must not set a \"search_path\" query parameter -- it silently " +
+      "overrides createClient's own \"schema\" option (postgres.js merges query-string " +
+      "connection parameters after explicit ones). Pass the desired schema via the " +
+      "\"schema\" option instead.",
+    );
+  }
+}
+
 export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   const schema = opts.schema ?? DEFAULT_SCHEMA;
   assertValidSchemaName(schema);
+  if (opts.connectionString !== undefined) {
+    assertNoConflictingSearchPath(opts.connectionString);
+  }
   const options = {
     ...(opts.maxConnections !== undefined ? { max: opts.maxConnections } : {}),
     connection: { search_path: schema },

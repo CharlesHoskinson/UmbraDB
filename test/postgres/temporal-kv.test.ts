@@ -275,7 +275,12 @@ describe("PgTemporalKV", () => {
         lockAcquired();
         await new Promise<void>((resolveRelease) => { releaseLock = resolveRelease; });
       });
-      await lockHeld;
+      // Found by a fifth-round cross-vendor re-audit: awaiting `lockHeld` alone hangs until this
+      // test's own timeout if BEGIN/LOCK TABLE itself fails, since `lockAcquired()` is only ever
+      // called on the success path -- `lockTxDone` can only settle before that by REJECTING (it
+      // can't resolve normally until `releaseLock()` fires, much later), so racing the two
+      // surfaces a genuine setup failure immediately instead of masking it as a timeout.
+      await Promise.race([lockHeld, lockTxDone]);
 
       try {
         const controller = new AbortController();
@@ -363,6 +368,13 @@ describe("PgTemporalKV", () => {
     it("a second UPDATE to the same kv_current row within one transaction is rejected", async () => {
       const sql = getSql();
       await kv().put("ns", "sc", "reuse-key", { a: 1 });
+      // Found by a fifth-round cross-vendor re-audit: this initial put and the transaction's own
+      // FIRST update below are two separate auto-committing statements against the same key --
+      // exposed to the same documented millisecond-collision caveat as every other site this
+      // project has fixed. Without crossing a boundary, the first UPDATE below could itself
+      // raise ClockRegressionError (23514), never reaching the second UPDATE this test exists to
+      // exercise the UB001 trigger check with.
+      await tick();
       await expect(
         sql.begin(async (tx) => {
           await tx`UPDATE ${tx(TEST_SCHEMA)}.kv_current SET value = ${tx.json({ a: 2 })}, version = version + 1
