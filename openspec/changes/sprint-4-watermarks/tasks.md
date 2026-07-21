@@ -16,7 +16,18 @@ Sprint 1-3's own review cadence.
   Debezium/Sui/Aptos file paths and the Midnight indexer's `spo_stake_refresh_state` table
   (design.md §1) still resolve against freshly-fetched upstream source, and record either "matches
   as cited" or what changed, in this file or a follow-up commit — matching `design/design.md`
-  §2's own precedent for this kind of external claim. **Acceptance:** after `runMigrations`, the
+  §2's own precedent for this kind of external claim. **Re-verification result (recorded here,
+  post-implementation):** re-checked against live upstream source via the GitHub API. Debezium's
+  `debezium-storage/debezium-storage-jdbc/src/main/java/io/debezium/storage/jdbc/offset/
+  JdbcOffsetBackingStoreConfig.java` — matches as cited, present at that exact path on `main`.
+  Sui's migration — matches as cited: `crates/sui-pg-db/migrations/2025-03-28-225607_watermarks/
+  up.sql` (the specific timestamp `design.md` §1 elided with `...`). Aptos's `processor_status` —
+  matches as cited: `rust/processor/src/db/postgres/migrations/2024-11-26-215016_processor_status/
+  up.sql` and `rust/processor/src/db/postgres/models/processor_status.rs` in
+  `aptos-labs/aptos-indexer-processors`. The Midnight indexer's `spo_stake_refresh_state` table was
+  **not** independently re-verified in this pass — it isn't part of this repo or any public
+  GitHub-searchable one available here, so the earlier research round's finding stands unconfirmed
+  by this specific re-check. **Acceptance:** after `runMigrations`, the
   table exists with exactly the columns/PK `design.md` §1 specifies (verified via
   `information_schema`, not just "the migration didn't error"); a test asserts the table's
   `reloptions` (via `pg_class.reloptions` or `SHOW (fillfactor)` equivalent) actually includes

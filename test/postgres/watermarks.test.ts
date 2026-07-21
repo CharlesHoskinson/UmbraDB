@@ -25,10 +25,15 @@ async function rawConnection(): Promise<postgres.Sql> {
   return postgres(connectionUri(), { max: 1, connection: { search_path: TEST_SCHEMA } });
 }
 
-/** Sum of n_tup_ins + n_tup_upd for the watermarks table -- used as a real, driver-independent
- *  proxy for "no statement was issued," since Postgres itself tracks this regardless of which
- *  connection issued the (non-)statement. */
+/** Sum of n_tup_ins + n_tup_upd for the watermarks table -- used as a proxy for "no row-changing
+ *  statement was issued." Forces this backend's own accumulated stats to flush first (PG15+;
+ *  matches the HOT test's own settle discipline above), since without it a just-issued INSERT/
+ *  UPDATE could go uncounted here and produce a false "unchanged" reading. Still only a proxy,
+ *  not a query-level spy: a SELECT, or an INSERT that fails a constraint before the row is
+ *  counted (e.g. a NOT NULL violation), would not move this counter either way -- callers combine
+ *  this with a direct row-count assertion where that distinction matters. */
 async function watermarksWriteActivity(sql: UmbraDBSql): Promise<number> {
+  await sql`SELECT pg_stat_force_next_flush()`;
   const rows = await sql<{ n: number }[]>`
     SELECT (coalesce(n_tup_ins, 0) + coalesce(n_tup_upd, 0))::int AS n
     FROM pg_stat_user_tables WHERE schemaname = ${TEST_SCHEMA} AND relname = 'watermarks'
@@ -88,41 +93,51 @@ describe("HOT-update behavior of the real watermarks table (task 0.2)", () => {
   // isolates fillfactor=90's specific contribution versus the default.
   it("repeated same-key updates to the real watermarks table achieve a high HOT-update ratio", async () => {
     const sql = getSql();
-    const s = store();
-    await s.set("hot", "k", { v: 0 });
+    // pg_stat_force_next_flush() only flushes the CALLING backend's own accumulated stats, so
+    // the whole loop -- the sets, the flush, and the settle-poll -- runs on one pinned reserved
+    // connection, not the ambient pool, matching the discipline design.md/tasks.md called for.
+    // The cast is safe here: PgWatermarks is given its schema explicitly, so it never reads
+    // `.umbradbSchema` off this connection at runtime.
+    const reserved = await sql.reserve();
+    try {
+      const s = new PgWatermarks(reserved as unknown as UmbraDBSql, TEST_SCHEMA);
+      await s.set("hot", "k", { v: 0 });
 
-    await sql`SELECT pg_stat_force_next_flush()`;
-    const before = await sql<{ n_tup_upd: number; n_tup_hot_upd: number }[]>`
-      SELECT n_tup_upd::int, n_tup_hot_upd::int FROM pg_stat_user_tables
-      WHERE schemaname = ${TEST_SCHEMA} AND relname = 'watermarks'
-    `;
-
-    const UPDATE_ITERATIONS = 50;
-    for (let i = 0; i < UPDATE_ITERATIONS; i++) {
-      await s.set("hot", "k", { v: i });
-    }
-
-    let after: { n_tup_upd: number; n_tup_hot_upd: number } | undefined;
-    const MAX_ATTEMPTS = 20;
-    const POLL_INTERVAL_MS = 50;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      await sql`SELECT pg_stat_force_next_flush()`;
-      const rows = await sql<{ n_tup_upd: number; n_tup_hot_upd: number }[]>`
+      await reserved`SELECT pg_stat_force_next_flush()`;
+      const before = await reserved<{ n_tup_upd: number; n_tup_hot_upd: number }[]>`
         SELECT n_tup_upd::int, n_tup_hot_upd::int FROM pg_stat_user_tables
         WHERE schemaname = ${TEST_SCHEMA} AND relname = 'watermarks'
       `;
-      const candidate = rows[0]!;
-      if (candidate.n_tup_upd - before[0]!.n_tup_upd >= UPDATE_ITERATIONS) {
-        after = candidate;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    }
-    if (!after) throw new Error(`stats did not settle after ${MAX_ATTEMPTS} attempts`);
 
-    const updDelta = after.n_tup_upd - before[0]!.n_tup_upd;
-    const hotUpdDelta = after.n_tup_hot_upd - before[0]!.n_tup_hot_upd;
-    expect(hotUpdDelta / updDelta).toBeGreaterThanOrEqual(0.9);
+      const UPDATE_ITERATIONS = 50;
+      for (let i = 0; i < UPDATE_ITERATIONS; i++) {
+        await s.set("hot", "k", { v: i });
+      }
+
+      let after: { n_tup_upd: number; n_tup_hot_upd: number } | undefined;
+      const MAX_ATTEMPTS = 20;
+      const POLL_INTERVAL_MS = 50;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await reserved`SELECT pg_stat_force_next_flush()`;
+        const rows = await reserved<{ n_tup_upd: number; n_tup_hot_upd: number }[]>`
+          SELECT n_tup_upd::int, n_tup_hot_upd::int FROM pg_stat_user_tables
+          WHERE schemaname = ${TEST_SCHEMA} AND relname = 'watermarks'
+        `;
+        const candidate = rows[0]!;
+        if (candidate.n_tup_upd - before[0]!.n_tup_upd >= UPDATE_ITERATIONS) {
+          after = candidate;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
+      if (!after) throw new Error(`stats did not settle after ${MAX_ATTEMPTS} attempts`);
+
+      const updDelta = after.n_tup_upd - before[0]!.n_tup_upd;
+      const hotUpdDelta = after.n_tup_hot_upd - before[0]!.n_tup_hot_upd;
+      expect(hotUpdDelta / updDelta).toBeGreaterThanOrEqual(0.9);
+    } finally {
+      reserved.release();
+    }
   }, 30_000);
 });
 
@@ -231,13 +246,26 @@ describe("PgWatermarks", () => {
       expect(await s.get("k", "big")).toBe("9007199254740993");
     });
 
-    it("the same magnitude as a bare JSON number silently loses precision on round-trip -- the documented risk, as an executable fact", async () => {
+    it("the same magnitude as a bare JSON number is silently corrupted on read -- the documented risk, as an executable fact", async () => {
+      // A JS numeric LITERAL `9007199254740993` (2^53 + 1) is already rounded to
+      // 9007199254740992 by the JS parser before it ever reaches set() -- a test built that way
+      // would only prove a round-trip of the already-rounded value, demonstrating nothing about
+      // the actual failure mode design.md §4 documents. To prove the real risk, the numeric
+      // literal is embedded directly in the SQL TEXT below, NOT bound as a parameter: a bound
+      // parameter cast with `$n::jsonb` gets JSON-encoded by the driver as a JSON STRING first
+      // (matching how `sql.json()` treats any JS value elsewhere in this codebase), which would
+      // silently retest the already-covered string case above instead of a genuine bare JSON
+      // number. Written into the query text, Postgres's own jsonb input parser reads it as an
+      // exact, arbitrary-precision numeric with no JS number ever involved on the write side; the
+      // corruption this test demonstrates happens only afterward, in get()'s JSON.parse on the
+      // way out.
+      const sql = getSql();
+      await sql.unsafe(
+        `INSERT INTO ${TEST_SCHEMA}.watermarks (kind, key, value, updated_at) VALUES ($1, $2, '9007199254740993'::jsonb, now())`,
+        ["k", "bignum-raw"],
+      );
       const s = store();
-      await s.set("k", "bignum", 9007199254740993);
-      // Silently corrupted to the nearest representable double -- NOT the original value. This
-      // is the executable proof of the exact failure mode design.md §4's convention exists to
-      // avoid, not just a check that the string-encoded workaround round-trips.
-      expect(await s.get("k", "bignum")).toBe(9007199254740992);
+      expect(await s.get<number>("k", "bignum-raw")).toBe(9007199254740992);
     });
   });
 
@@ -259,7 +287,10 @@ describe("PgWatermarks", () => {
       await s.set("kindA", "keyA", "vA");
       await s.set("kindB", "keyA", "vB");
       await s.set("kindA", "keyB", "vC");
+      // Three independent pairs, cross-checked: each resolves only its own value.
       expect(await s.get("kindA", "keyA")).toBe("vA");
+      expect(await s.get("kindB", "keyA")).toBe("vB");
+      expect(await s.get("kindA", "keyB")).toBe("vC");
     });
 
     it("T is a caller assertion only -- no runtime validation beyond the erased WatermarkValue shape", async () => {
