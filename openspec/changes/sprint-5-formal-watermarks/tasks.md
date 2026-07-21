@@ -25,8 +25,9 @@ specified persona review passes or all findings are fixed and re-reviewed.
   - **Acceptance:** three distinct read-only persona reports name the exact planning files and
     return `PASS`; `git diff --check` exits 0.
 - [x] 0.5 Commit and push the audited planning tranche, then open a draft sprint PR.
-  - **Acceptance:** `git status --short` is clean, `git rev-parse HEAD` equals
-    `git rev-parse origin/formal/storage-algebra-lean-m3a-watermarks`, and the GitHub PR is draft.
+  - **Acceptance:** `git status --short` is clean, `git rev-parse HEAD` equals the SHA returned by
+    `git ls-remote --heads origin refs/heads/formal/storage-algebra-lean-m3a-watermarks`, and the
+    GitHub PR is draft.
 
 ## 1. Executable Watermarks model
 
@@ -64,8 +65,10 @@ specified persona review passes or all findings are fixed and re-reviewed.
 ## 3. Close-out
 
 - [ ] 3.1 Integrate current `main` into the clean, committed proof branch before final artifacts.
-  - **Acceptance:** `git merge-base --is-ancestor origin/main HEAD` exits 0 and
-    `git status --short` is clean.
+  - **Acceptance:** explicitly fetch `refs/heads/main:refs/remotes/origin/main`, verify
+    `git rev-parse origin/main` equals the SHA returned by `git ls-remote --heads origin
+    refs/heads/main`, then require `git merge-base --is-ancestor origin/main HEAD` to exit 0 and
+    `git status --short` to be clean.
 - [ ] 3.2 Update README, ROADMAP, OpenSpec, and formal research status without claiming SQL
   refinement or completion of CheckpointStore C1/C2.
   - **Acceptance:** targeted `rg` review finds one consistent W1 status, and the updated
@@ -77,14 +80,16 @@ specified persona review passes or all findings are fixed and re-reviewed.
 - [ ] 3.4 Run the complete release matrix from the integrated tree, including Node checks after a
   clean install in a fresh worktree.
   - **Acceptance:** Lean trust/build/leanchecker, strict OpenSpec validation, `npm ci`, TypeScript,
-    TypeDoc, Vitest, actionlint, and `git diff --check` exit 0; `git diff origin/main --
-    Formal/Lean/lean-toolchain Formal/Lean/lakefile.lean Formal/Lean/lake-manifest.json package.json
-    package-lock.json` is empty and exits 0 with `--exit-code`.
+    TypeDoc, Vitest, actionlint, and `git diff --check` exit 0; against the explicitly refreshed
+    `origin/main` from task 3.1, `git diff origin/main -- Formal/Lean/lean-toolchain
+    Formal/Lean/lakefile.lean Formal/Lean/lake-manifest.json package.json package-lock.json` is
+    empty and exits 0 with `--exit-code`.
 - [ ] 3.5 Commit the final generated/status tranche, then obtain final PASS verdicts from the three
   independent read-only personas on that exact commit.
   - **Acceptance:** all three reports cite `git rev-parse HEAD`, inspect the committed diff, and
     return `PASS` with no unresolved blocker; `git status --short` is clean.
 - [ ] 3.6 Push the exact audited head, require its green GitHub trust run, and record validation and
   audit evidence in the draft PR before requesting review.
-  - **Acceptance:** local and remote branch SHAs are equal, the GitHub Actions run for that SHA is
+  - **Acceptance:** `git rev-parse HEAD` equals the SHA returned by `git ls-remote --heads origin
+    refs/heads/formal/storage-algebra-lean-m3a-watermarks`; the GitHub Actions run for that SHA is
     successful, and the PR body/comment records the validation matrix plus all persona verdicts.

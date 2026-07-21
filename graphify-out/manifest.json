@@ -420,8 +420,8 @@
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md": {
-    "mtime": 1784675539.7717812,
-    "ast_hash": "72dbfa276274c76f33dd82f9f81e25a5",
+    "mtime": 1784675860.002334,
+    "ast_hash": "a4e918f7ef7d60c353d619b042fc5ae1",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/design.md": {
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/tasks.md": {
-    "mtime": 1784675691.2098477,
-    "ast_hash": "c6e7cd418945fefc9429bfa016767b98",
+    "mtime": 1784675859.9983344,
+    "ast_hash": "3f40a30ebd29f86ebf4c6860c0038667",
     "semantic_hash": ""
   }
 }

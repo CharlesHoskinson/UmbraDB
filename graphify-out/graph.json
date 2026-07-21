@@ -9107,7 +9107,7 @@
       "label": "1. Executable Watermarks model",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L31",
+      "source_location": "L32",
       "_origin": "ast",
       "id": "openspec_changes_sprint_5_formal_watermarks_tasks_1_executable_watermarks_model",
       "community": 61,
@@ -9118,7 +9118,7 @@
       "label": "2. W1 theorem tranche",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L44",
+      "source_location": "L45",
       "_origin": "ast",
       "id": "openspec_changes_sprint_5_formal_watermarks_tasks_2_w1_theorem_tranche",
       "community": 61,
@@ -9129,7 +9129,7 @@
       "label": "3. Close-out",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L64",
+      "source_location": "L65",
       "_origin": "ast",
       "id": "openspec_changes_sprint_5_formal_watermarks_tasks_3_close_out",
       "community": 61,
@@ -10230,7 +10230,7 @@
       "community": 11,
       "norm_label": "tier 1 / tier 2 postgres schema split",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_tier_split"
+      "id": "design_design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "label": "FerretDB Mongo-compatibility shim evaluated and rejected",
@@ -10244,7 +10244,7 @@
       "community": 15,
       "norm_label": "ferretdb mongo-compatibility shim evaluated and rejected",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_ferretdb_rejection"
+      "id": "design_design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "label": "kv_current/kv_history temporal-table design",
@@ -10258,7 +10258,7 @@
       "community": 11,
       "norm_label": "kv_current/kv_history temporal-table design",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "id": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "label": "TransactionKeyReuseError / txid_current() fix",
@@ -10272,7 +10272,7 @@
       "community": 11,
       "norm_label": "transactionkeyreuseerror / txid_current() fix",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "id": "design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "label": "kv_history retention policy (pg_cron)",
@@ -10286,7 +10286,7 @@
       "community": 11,
       "norm_label": "kv_history retention policy (pg_cron)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_kv_history_retention"
+      "id": "design_design_design_design_design_design_design_design_design_kv_history_retention"
     },
     {
       "label": "Content-addressed checkpoint chunker",
@@ -10300,7 +10300,7 @@
       "community": 15,
       "norm_label": "content-addressed checkpoint chunker",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "id": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "label": "ckpt_manifest_chunks junction table (original, later corrected)",
@@ -10314,7 +10314,7 @@
       "community": 15,
       "norm_label": "ckpt_manifest_chunks junction table (original, later corrected)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "id": "design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "label": "watermarks table schema sketch",
@@ -10328,7 +10328,7 @@
       "community": 12,
       "norm_label": "watermarks table schema sketch",
       "community_name": "Design \u2014 Sprint 4: Watermarks",
-      "id": "design_design_design_design_design_design_design_design_watermarks_schema"
+      "id": "design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "label": "Postgres advisory-lock writer lease (corrected design)",
@@ -10342,7 +10342,7 @@
       "community": 39,
       "norm_label": "postgres advisory-lock writer lease (corrected design)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "id": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "label": "Advisory-lock class registry (classes 1/2/3)",
@@ -10356,7 +10356,7 @@
       "community": 39,
       "norm_label": "advisory-lock class registry (classes 1/2/3)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_advisory_lock_registry"
+      "id": "design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "label": "private_state_salts table / per-scope salt derivation",
@@ -10370,7 +10370,7 @@
       "community": 9,
       "norm_label": "private_state_salts table / per-scope salt derivation",
       "community_name": "design-interfaces.md",
-      "id": "design_design_design_design_design_design_design_design_private_state_salts"
+      "id": "design_design_design_design_design_design_design_design_design_private_state_salts"
     },
     {
       "label": "postgres.js driver choice",
@@ -10384,7 +10384,7 @@
       "community": 11,
       "norm_label": "postgres.js driver choice",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
+      "id": "design_design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "label": "Testcontainers vs pg-mem test-infrastructure decision",
@@ -10398,7 +10398,7 @@
       "community": 15,
       "norm_label": "testcontainers vs pg-mem test-infrastructure decision",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_test_infra_decision"
+      "id": "design_design_design_design_design_design_design_design_design_test_infra_decision"
     },
     {
       "label": "Module \u2192 Postgres module mapping table",
@@ -10412,7 +10412,7 @@
       "community": 9,
       "norm_label": "module \u2192 postgres module mapping table",
       "community_name": "design-interfaces.md",
-      "id": "design_design_design_design_design_design_design_design_module_mapping_table"
+      "id": "design_design_design_design_design_design_design_design_design_module_mapping_table"
     },
     {
       "label": "State-equivalence merge-blocker gate",
@@ -10426,7 +10426,7 @@
       "community": 15,
       "norm_label": "state-equivalence merge-blocker gate",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_design_design_state_equivalence_gate"
+      "id": "design_design_design_design_design_design_design_design_design_state_equivalence_gate"
     },
     {
       "label": "Remove MongoDB dependency rationale",
@@ -23210,7 +23210,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -23220,7 +23220,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -23230,7 +23230,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "references",
@@ -23240,7 +23240,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_ferretdb_rejection"
+      "target": "design_design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "relation": "references",
@@ -23250,7 +23250,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_kv_history_retention"
+      "target": "design_design_design_design_design_design_design_design_design_kv_history_retention"
     },
     {
       "relation": "references",
@@ -23260,7 +23260,7 @@
       "source_location": "\u00a79",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_module_mapping_table"
+      "target": "design_design_design_design_design_design_design_design_design_module_mapping_table"
     },
     {
       "relation": "references",
@@ -23270,7 +23270,7 @@
       "source_location": "\u00a77",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
+      "target": "design_design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "relation": "references",
@@ -23280,7 +23280,7 @@
       "source_location": "\u00a76",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_private_state_salts"
+      "target": "design_design_design_design_design_design_design_design_design_private_state_salts"
     },
     {
       "relation": "references",
@@ -23290,7 +23290,7 @@
       "source_location": "\u00a710",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_state_equivalence_gate"
+      "target": "design_design_design_design_design_design_design_design_design_state_equivalence_gate"
     },
     {
       "relation": "references",
@@ -23300,7 +23300,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -23310,7 +23310,7 @@
       "source_location": "\u00a78",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_test_infra_decision"
+      "target": "design_design_design_design_design_design_design_design_design_test_infra_decision"
     },
     {
       "relation": "references",
@@ -23320,7 +23320,7 @@
       "source_location": "\u00a70",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_tier_split"
+      "target": "design_design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "relation": "references",
@@ -23330,7 +23330,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "references",
@@ -23340,7 +23340,7 @@
       "source_location": "\u00a74",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -23350,7 +23350,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "contains",
@@ -28043,7 +28043,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
@@ -28054,7 +28054,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L44",
+      "source_location": "L45",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
@@ -28065,7 +28065,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
-      "source_location": "L64",
+      "source_location": "L65",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
@@ -28843,7 +28843,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a76",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_private_state_salts",
+      "source": "design_design_design_design_design_design_design_design_design_private_state_salts",
       "target": "design_design_interfaces_privatestateprovider"
     },
     {
@@ -28863,7 +28863,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a79",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_module_mapping_table",
+      "source": "design_design_design_design_design_design_design_design_design_module_mapping_table",
       "target": "design_design_interfaces_checkpointwalletstatestore"
     },
     {
@@ -28874,7 +28874,7 @@
       "source_location": "\u00a70",
       "weight": 1.0,
       "source": "sprint1_design_schema_naming",
-      "target": "design_design_design_design_design_design_design_design_tier_split"
+      "target": "design_design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "relation": "rationale_for",
@@ -28883,8 +28883,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a71",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_ferretdb_rejection",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_design_ferretdb_rejection",
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -28894,7 +28894,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "design_proposal_mongo_removal",
-      "target": "design_design_design_design_design_design_design_design_ferretdb_rejection"
+      "target": "design_design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "relation": "semantically_similar_to",
@@ -28903,8 +28903,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72-\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_checkpoint_chunker",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_checkpoint_chunker",
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -28913,8 +28913,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_kv_history_retention",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_kv_history_retention",
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -28923,8 +28923,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_transactionkeyreuseerror",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_transactionkeyreuseerror",
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -28934,7 +28934,7 @@
       "source_location": "context",
       "weight": 1.0,
       "source": "openspec_config_correctness_rule",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28944,7 +28944,7 @@
       "source_location": "\u00a74",
       "weight": 1.0,
       "source": "sprint1_design_getat_single_statement",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28954,7 +28954,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_ts_functions",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28964,7 +28964,7 @@
       "source_location": "\u00a72.2",
       "weight": 1.0,
       "source": "sprint3_design_seq_allocator",
-      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28974,7 +28974,7 @@
       "source_location": "\u00a74a",
       "weight": 1.0,
       "source": "sprint1_design_error_translation",
-      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "references",
@@ -28984,7 +28984,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint1_spec_transaction_key_reuse",
-      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "conceptually_related_to",
@@ -28993,8 +28993,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original",
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -29004,7 +29004,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint3_design_chunking",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -29014,7 +29014,7 @@
       "source_location": "What changes",
       "weight": 1.0,
       "source": "sprint3_proposal_schema_changes",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -29024,7 +29024,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint3_spec_grace_window",
-      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -29034,7 +29034,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "design_tasks_retired_plan",
-      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "references",
@@ -29044,7 +29044,7 @@
       "source_location": "\u00a72.1",
       "weight": 1.0,
       "source": "sprint3_design_manifest_position_fix",
-      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "rationale_for",
@@ -29054,7 +29054,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "sprint4_design_accepted_tradeoffs",
-      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -29064,7 +29064,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint4_design_fillfactor",
-      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -29074,7 +29074,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint4_proposal_headline_finding",
-      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -29083,8 +29083,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a75",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_advisory_lock_registry",
-      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "source": "design_design_design_design_design_design_design_design_design_advisory_lock_registry",
+      "target": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -29094,7 +29094,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint2_design_withtransaction",
-      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -29104,7 +29104,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint2_proposal_scope",
-      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -29114,7 +29114,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint2_spec_law_l1",
-      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -29124,7 +29124,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_concurrency_lock",
-      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -29134,7 +29134,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint2_design_lease_acquisition",
-      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -29144,7 +29144,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint1_design_connection_factory",
-      "target": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
+      "target": "design_design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "relation": "rationale_for",
@@ -29153,7 +29153,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a710",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_design_state_equivalence_gate",
+      "source": "design_design_design_design_design_design_design_design_design_state_equivalence_gate",
       "target": "design_proposal_mongo_removal"
     },
     {
@@ -29668,5 +29668,5 @@
       "source_file": "openspec/changes/sprint-3-checkpoint-store/design.md"
     }
   ],
-  "built_at_commit": "1f1675b3596e115281c2f61843a792ee455db5fc"
+  "built_at_commit": "60e282b224a90847992bd136d99726154bfd5875"
 }

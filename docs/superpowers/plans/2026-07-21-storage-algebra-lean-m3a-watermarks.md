@@ -73,6 +73,11 @@ elaborated axiom audits, and `leanchecker`.
 ## Verification matrix
 
 ```text
+git fetch origin refs/heads/main:refs/remotes/origin/main
+test "$(git rev-parse origin/main)" = \
+  "$(git ls-remote --heads origin refs/heads/main | cut -f1)"
+git merge-base --is-ancestor origin/main HEAD
+
 graphify update .
 graphify diagnose multigraph --graph graphify-out/graph.json --json
 
@@ -97,7 +102,8 @@ git diff --exit-code origin/main -- Formal/Lean/lean-toolchain Formal/Lean/lakef
   Formal/Lean/lake-manifest.json package.json package-lock.json
 git diff --check
 git status --short
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/formal/storage-algebra-lean-m3a-watermarks)"
+test "$(git rev-parse HEAD)" = "$(git ls-remote --heads origin \
+  refs/heads/formal/storage-algebra-lean-m3a-watermarks | cut -f1)"
 gh run list --commit "$(git rev-parse HEAD)" --workflow lean.yml
 ```
 
