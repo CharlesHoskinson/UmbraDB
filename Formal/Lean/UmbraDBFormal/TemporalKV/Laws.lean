@@ -1,4 +1,6 @@
 import Mathlib.Data.List.TakeWhile
+import Mathlib.Data.List.Chain
+import Mathlib.Order.Interval.Set.Disjoint
 import Mathlib.Tactic.DefEqTransformations
 import UmbraDBFormal.TemporalKV.Model
 
@@ -172,6 +174,81 @@ private theorem wellFormed_tail [LT Time] {first : Event Value Time}
       change True
       trivial
   | cons second rest => exact hwf.right
+
+/-- Consecutive projected intervals reuse exactly the same boundary, so the validity chain has no
+gaps by construction. -/
+theorem adjacent_intervals_gap_free (history : History Value Time) :
+    (validityIntervals history).IsChain
+      (fun left right ↦ left.validTo = some right.validFrom) := by
+  induction history with
+  | nil => simp [validityIntervals]
+  | cons first history ih =>
+      cases history with
+      | nil => simp [validityIntervals]
+      | cons second rest =>
+          cases rest with
+          | nil => simp [validityIntervals]
+          | cons third rest =>
+              simp only [validityIntervals, List.isChain_cons_cons]
+              exact ⟨True.intro, ih⟩
+
+private theorem validityInterval_validFrom_le_of_mem [Preorder Time]
+    {interval : ValidityInterval Time} {point : Time}
+    (hmem : point ∈ interval.asSet) : interval.validFrom ≤ point := by
+  cases interval with
+  | mk validFrom validTo =>
+      cases validTo with
+      | none => simpa [ValidityInterval.asSet] using hmem
+      | some validTo =>
+          have : validFrom ≤ point ∧ point < validTo := by
+            simpa [ValidityInterval.asSet] using hmem
+          exact this.1
+
+private theorem validityIntervals_start_ge [LinearOrder Time]
+    {first : Event Value Time} {rest : History Value Time}
+    (hwf : WellFormed (first :: rest)) :
+    ∀ interval ∈ validityIntervals (first :: rest),
+      first.writtenAt ≤ interval.validFrom := by
+  induction rest generalizing first with
+  | nil =>
+      intro interval hmem
+      simp only [validityIntervals, List.mem_singleton] at hmem
+      subst interval
+      exact le_rfl
+  | cons second rest ih =>
+      intro interval hmem
+      simp only [validityIntervals, List.mem_cons] at hmem
+      rcases hmem with hinterval | hinterval
+      · subst interval
+        exact le_rfl
+      · have hpair : first.writtenAt < second.writtenAt := by
+          simpa only [WellFormed] using hwf.left
+        exact hpair.le.trans (ih (wellFormed_tail hwf) interval hinterval)
+
+/-- The half-open historical windows and live tail derived from a well-formed history are pairwise
+disjoint. -/
+theorem intervals_pairwise_disjoint [LinearOrder Time]
+    (history : History Value Time) (hwf : WellFormed history) :
+    (validityIntervals history).Pairwise
+      (fun left right ↦ Disjoint left.asSet right.asSet) := by
+  induction history with
+  | nil => simp [validityIntervals]
+  | cons first history ih =>
+      cases history with
+      | nil => simp [validityIntervals]
+      | cons second rest =>
+          rw [validityIntervals, List.pairwise_cons]
+          constructor
+          · intro interval hmem
+            apply Set.disjoint_left.mpr
+            intro point hfirst hinterval
+            change point ∈ Set.Ico first.writtenAt second.writtenAt at hfirst
+            have hstart : second.writtenAt ≤ interval.validFrom :=
+              validityIntervals_start_ge (wellFormed_tail hwf) interval hmem
+            have hlower : interval.validFrom ≤ point :=
+              validityInterval_validFrom_le_of_mem hinterval
+            exact (not_lt_of_ge (hstart.trans hlower)) hfirst.2
+          · exact ih (wellFormed_tail hwf)
 
 private def expectedAtTime [LinearOrder Time] (query : Time) (version : Version)
     (candidate : Option (VersionedEntry Value Time)) (history : History Value Time) :

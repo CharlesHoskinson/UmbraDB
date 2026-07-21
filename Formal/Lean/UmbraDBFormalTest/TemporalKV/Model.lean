@@ -26,6 +26,20 @@ example :
 
 example : current ([] : History Nat Nat) = none := rfl
 
+example : validityIntervals ([] : History Nat Nat) = [] := rfl
+
+example :
+    validityIntervals ([{ value := 7, writtenAt := 10 }] : History Nat Nat) =
+      [{ validFrom := 10, validTo := none }] := rfl
+
+example :
+    validityIntervals
+        ([{ value := 7, writtenAt := 10 }, { value := 8, writtenAt := 12 },
+          { value := 9, writtenAt := 15 }] : History Nat Nat) =
+      [{ validFrom := 10, validTo := some 12 },
+        { validFrom := 12, validTo := some 15 },
+        { validFrom := 15, validTo := none }] := rfl
+
 example :
     current ([{ value := 7, writtenAt := 10 }, { value := 8, writtenAt := 11 }] :
       History Nat Nat) = some { value := 8, version := 2, writtenAt := 11 } := rfl

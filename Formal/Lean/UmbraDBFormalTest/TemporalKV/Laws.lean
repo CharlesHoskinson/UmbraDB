@@ -78,6 +78,30 @@ example :
   decide
 
 example :
+    (validityIntervals
+      ([{ value := 3, writtenAt := 5 }, { value := 4, writtenAt := 8 },
+        { value := 5, writtenAt := 13 }] : History Nat Nat)).IsChain
+      (fun left right ↦ left.validTo = some right.validFrom) := by
+  apply adjacent_intervals_gap_free
+
+example :
+    (validityIntervals
+      ([{ value := 3, writtenAt := 5 }, { value := 4, writtenAt := 8 },
+        { value := 5, writtenAt := 13 }] : History Nat Nat)).Pairwise
+      (fun left right ↦ Disjoint left.asSet right.asSet) := by
+  apply intervals_pairwise_disjoint
+  decide
+
+example :
+    (8 : Nat) ∉
+        ValidityInterval.asSet ({ validFrom := 5, validTo := some 8 } :
+          ValidityInterval Nat) ∧
+      (8 : Nat) ∈
+        ValidityInterval.asSet ({ validFrom := 8, validTo := some 13 } :
+          ValidityInterval Nat) := by
+  simp [ValidityInterval.asSet]
+
+example :
     (runAttempts ([] : History Nat Nat)
       [{ value := 3, writtenAt := 5, expectation := .unconditional },
         { value := 4, writtenAt := 8, expectation := .unconditional }]).2 =

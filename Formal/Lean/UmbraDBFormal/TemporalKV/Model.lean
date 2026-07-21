@@ -1,5 +1,6 @@
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Nat.Basic
+import Mathlib.Order.Interval.Set.Basic
 
 namespace UmbraDBFormal.TemporalKV
 
@@ -39,6 +40,26 @@ inductive Outcome (Value Time : Type*) where
 deriving DecidableEq, Repr
 
 abbrev History (Value Time : Type*) := List (Event Value Time)
+
+/-- The validity window owned by one event. `none` denotes the live, open-ended tail. -/
+structure ValidityInterval (Time : Type*) where
+  validFrom : Time
+  validTo : Option Time
+deriving DecidableEq, Repr
+
+/-- Interpret a validity window using the store's half-open boundary convention. -/
+def ValidityInterval.asSet [Preorder Time] (interval : ValidityInterval Time) : Set Time :=
+  match interval.validTo with
+  | some validTo => Set.Ico interval.validFrom validTo
+  | none => Set.Ici interval.validFrom
+
+/-- Project an event history to bounded historical windows followed by its live tail. -/
+def validityIntervals : History Value Time → List (ValidityInterval Time)
+  | [] => []
+  | [last] => [{ validFrom := last.writtenAt, validTo := none }]
+  | first :: second :: rest =>
+      { validFrom := first.writtenAt, validTo := some second.writtenAt } ::
+        validityIntervals (second :: rest)
 
 @[reducible] private def adjacentTimestamps [LT Time] (previous : Event Value Time) :
     List (Event Value Time) → Prop

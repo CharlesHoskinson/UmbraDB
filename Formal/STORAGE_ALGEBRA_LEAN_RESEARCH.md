@@ -538,15 +538,20 @@ Additional issues to resolve before claiming refinement:
   or before the query.
 - An all-applied `runAttempts` trace replays writes in order, and an in-bounds
   version lookup agrees with lookup at that entry's timestamp.
+- A nonempty history projects to bounded half-open validity intervals followed
+  by the live half-infinite tail. Consecutive intervals reuse their boundary,
+  and a well-formed history yields pairwise-disjoint projected intervals.
 
 The API smoke module also compiles selected standalone mathlib contracts. Those
-smoke declarations are not completed retention, interval/T5, checkpoint,
-watermark, GC, lease, liveness, keyed-transaction, or SQL-refinement models.
+smoke declarations are not completed retention, checkpoint, watermark, GC,
+lease, liveness, keyed-transaction, or SQL-refinement models. The T5 theorems
+are supplied by the TemporalKV model and law modules, not by the smoke test.
 
 ### Deferred M2–M5 proof work
 
-- M2: retention/unavailable-history semantics, full temporal replay, and
-  interval/T5 disjointness and gap-freedom.
+- M2: interval/T5 disjointness and gap-freedom are complete for the abstract
+  per-key projection; retention/unavailable-history semantics and full
+  store-level temporal replay remain deferred.
 - M3: modeled watermark and checkpoint laws, compatible chunk-map laws, and
   one-step GC safety.
 - M4: lease-holder trace safety and any liveness theorem under explicit
@@ -658,11 +663,12 @@ relevant content markers checked with Scrapling.
 - Add default contract-test compilation, an elaborated-environment axiom audit,
   source scanning, warning-as-error builds, and an independent no-`sorry` check to CI.
 
-### M2 — complete temporal laws (deferred)
+### M2 — complete temporal laws (in progress)
 
+- Derive bounded historical intervals plus the live tail and prove T5
+  disjointness/gap-freedom. **Completed.**
 - Strengthen M1's per-key ordered-prefix lookup characterization into the full
-  store-level T3 temporal-selection law.
-- Derive T5 intervals and prove disjointness/gap-freedom.
+  store-level T3 temporal-selection law. **Deferred.**
 - Generate test vectors or an executable oracle for TypeScript property tests.
 
 ### M3 — simple stores (deferred)
