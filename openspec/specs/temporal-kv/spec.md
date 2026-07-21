@@ -284,4 +284,3 @@ not solely by application logic.
 - **THEN** Postgres SHALL reject the write with a constraint violation
 - **AND** the violation SHALL be traceable to the `kv_history_no_overlap`
   exclusion constraint specifically
-
