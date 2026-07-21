@@ -739,8 +739,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "storage-errors.ts"
     },
     {
@@ -750,8 +750,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_storageerror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "storageerror"
     },
     {
@@ -761,8 +761,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_storageerror_constructor",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -772,8 +772,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_sharedstorageerrorcode",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "sharedstorageerrorcode"
     },
     {
@@ -783,8 +783,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "validationerror"
     },
     {
@@ -794,8 +794,8 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror_constructor",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -816,8 +816,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "serializationfailederror"
     },
     {
@@ -827,8 +827,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror_constructor",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -838,8 +838,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "connectionerror"
     },
     {
@@ -849,8 +849,8 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror_constructor",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -1234,7 +1234,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_lease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "lease"
     },
@@ -1432,7 +1432,7 @@
       "source_location": "L157",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionoptionsschema",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "transactionoptionsschema"
     },
@@ -1443,7 +1443,7 @@
       "source_location": "L162",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionoptions",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "transactionoptions"
     },
@@ -1454,7 +1454,7 @@
       "source_location": "L172",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_leaseacquireoptionsschema",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "leaseacquireoptionsschema"
     },
@@ -1465,7 +1465,7 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_leaseacquireoptions",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "leaseacquireoptions"
     },
@@ -1476,8 +1476,8 @@
       "source_location": "L189",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "transactionleaselayer"
     },
     {
@@ -1498,8 +1498,8 @@
       "source_location": "L233",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer_acquirelease",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".acquirelease()"
     },
     {
@@ -1509,8 +1509,8 @@
       "source_location": "L246",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer_tryacquirelease",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".tryacquirelease()"
     },
     {
@@ -1520,8 +1520,8 @@
       "source_location": "L254",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer_releaselease",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".releaselease()"
     },
     {
@@ -1531,8 +1531,8 @@
       "source_location": "L267",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer_withlease",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".withlease()"
     },
     {
@@ -1630,8 +1630,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_abort",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "abort.ts"
     },
     {
@@ -1641,7 +1641,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_postgres_abort_aborterror",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "aborterror()"
     },
@@ -1795,8 +1795,8 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_constructor",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -1916,8 +1916,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_postgres_client_assertvalidschemaname",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "assertvalidschemaname()"
     },
     {
@@ -1960,8 +1960,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_errors",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "errors.ts"
     },
     {
@@ -1971,8 +1971,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_postgres_errors_exclusionviolationerror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "exclusionviolationerror"
     },
     {
@@ -1982,8 +1982,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_postgres_errors_exclusionviolationerror_constructor",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -1993,8 +1993,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_postgres_errors_clockregressionerror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "clockregressionerror"
     },
     {
@@ -2004,8 +2004,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_postgres_errors_clockregressionerror_constructor",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2015,8 +2015,8 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "src_postgres_errors_unrecognizedpostgreserror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "unrecognizedpostgreserror"
     },
     {
@@ -2026,8 +2026,8 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "src_postgres_errors_unrecognizedpostgreserror_constructor",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2037,8 +2037,8 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "src_postgres_errors_pgdrivererror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "pgdrivererror"
     },
     {
@@ -2048,8 +2048,8 @@
       "source_location": "L83",
       "_origin": "ast",
       "id": "src_postgres_errors_ispgdrivererror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "ispgdrivererror()"
     },
     {
@@ -2059,8 +2059,8 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "src_postgres_errors_isconnectionfailure",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "isconnectionfailure()"
     },
     {
@@ -2070,7 +2070,7 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "src_postgres_errors_isstatementtimeout",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "isstatementtimeout()"
     },
@@ -2081,8 +2081,8 @@
       "source_location": "L121",
       "_origin": "ast",
       "id": "src_postgres_errors_connection_failure_codes",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 1,
+      "community_name": "transaction-lease.ts",
       "norm_label": "connection_failure_codes"
     },
     {
@@ -2092,8 +2092,8 @@
       "source_location": "L156",
       "_origin": "ast",
       "id": "src_postgres_errors_translatepostgreserror",
-      "community": 60,
-      "community_name": "errors.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "translatepostgreserror()"
     },
     {
@@ -2103,8 +2103,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrate",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "migrate.ts"
     },
     {
@@ -2114,8 +2114,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_postgres_migrate_migration",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "migration"
     },
     {
@@ -2125,8 +2125,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_postgres_migrate_migration_up",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": ".up()"
     },
     {
@@ -2136,8 +2136,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_postgres_migrate_withreservedtransaction",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "withreservedtransaction()"
     },
     {
@@ -2147,8 +2147,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_postgres_migrate_migrations",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "migrations"
     },
     {
@@ -2158,8 +2158,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsoptions",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "runmigrationsoptions"
     },
     {
@@ -2169,8 +2169,8 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrations",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "runmigrations()"
     },
     {
@@ -2180,8 +2180,8 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsimpl",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "runmigrationsimpl()"
     },
     {
@@ -2191,8 +2191,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "000_schema.ts"
     },
     {
@@ -2202,8 +2202,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema_up",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "up()"
     },
     {
@@ -2213,8 +2213,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "001_temporal_kv.ts"
     },
     {
@@ -2224,8 +2224,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv_up",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "up()"
     },
     {
@@ -2235,8 +2235,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "002_checkpoint_store.ts"
     },
     {
@@ -2246,8 +2246,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store_up",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "up()"
     },
     {
@@ -2257,8 +2257,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "003_watermarks.ts"
     },
     {
@@ -2268,8 +2268,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks_up",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "up()"
     },
     {
@@ -2334,8 +2334,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_postgres_temporal_kv_pgtemporalkv_constructor",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2444,7 +2444,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "transaction-lease.ts"
     },
@@ -2455,7 +2455,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_activetransactions",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "activetransactions"
     },
@@ -2466,7 +2466,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_registertransaction",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "registertransaction()"
     },
@@ -2477,7 +2477,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_unregistertransaction",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "unregistertransaction()"
     },
@@ -2499,7 +2499,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_validatetransactionoptions",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "validatetransactionoptions()"
     },
@@ -2510,7 +2510,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_validateleaseacquireoptions",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "validateleaseacquireoptions()"
     },
@@ -2521,7 +2521,7 @@
       "source_location": "L91",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_raceagainstabort",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "raceagainstabort()"
     },
@@ -2532,7 +2532,7 @@
       "source_location": "L130",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_reserve_timed_out",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "reserve_timed_out"
     },
@@ -2543,7 +2543,7 @@
       "source_location": "L132",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_reservebounded",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "reservebounded()"
     },
@@ -2554,7 +2554,7 @@
       "source_location": "L181",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_resetstatementtimeout",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "resetstatementtimeout()"
     },
@@ -2565,7 +2565,7 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_heldlease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "heldlease"
     },
@@ -2576,7 +2576,7 @@
       "source_location": "L202",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": "pgtransactionleaselayer"
     },
@@ -2598,7 +2598,7 @@
       "source_location": "L207",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_withtransaction",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": ".withtransaction()"
     },
@@ -2609,7 +2609,7 @@
       "source_location": "L270",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_acquirelease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": ".acquirelease()"
     },
@@ -2620,7 +2620,7 @@
       "source_location": "L315",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_tryacquirelease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": ".tryacquirelease()"
     },
@@ -2631,7 +2631,7 @@
       "source_location": "L375",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_releaselease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": ".releaselease()"
     },
@@ -2642,7 +2642,7 @@
       "source_location": "L403",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_withlease",
-      "community": 58,
+      "community": 1,
       "community_name": "transaction-lease.ts",
       "norm_label": ".withlease()"
     },
@@ -2785,8 +2785,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "checkpoint-store.test.ts"
     },
     {
@@ -2796,8 +2796,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_sql_getsql_connectionuri",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "{ sql: getsql, connectionuri }"
     },
     {
@@ -2807,8 +2807,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_store",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "store()"
     },
     {
@@ -2818,8 +2818,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_truncateall",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "truncateall()"
     },
     {
@@ -2829,8 +2829,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_sha256",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "sha256()"
     },
     {
@@ -2840,8 +2840,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_rawconnection",
-      "community": 57,
-      "community_name": "temporal-kv.test.ts",
+      "community": 0,
+      "community_name": "checkpoint-store.ts",
       "norm_label": "rawconnection()"
     },
     {
@@ -2862,8 +2862,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_migrate_test",
-      "community": 4,
-      "community_name": "migrate.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "migrate.test.ts"
     },
     {
@@ -3148,8 +3148,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "watermarks.property.test.ts"
     },
     {
@@ -3159,8 +3159,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_sql_getsql",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "{ sql: getsql }"
     },
     {
@@ -3170,8 +3170,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_store",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "store()"
     },
     {
@@ -3181,8 +3181,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_freshkey",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "freshkey()"
     },
     {
@@ -3192,8 +3192,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_arbitrarywatermarkvalue",
-      "community": 2,
-      "community_name": "temporal-kv.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "arbitrarywatermarkvalue"
     },
     {
@@ -3203,8 +3203,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "watermarks.test.ts"
     },
     {
@@ -3214,8 +3214,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_sql_getsql_connectionuri",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "{ sql: getsql, connectionuri }"
     },
     {
@@ -3225,8 +3225,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_store",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "store()"
     },
     {
@@ -3236,8 +3236,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_txlayer",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "txlayer()"
     },
     {
@@ -3247,8 +3247,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_truncateall",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "truncateall()"
     },
     {
@@ -3258,8 +3258,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_rawconnection",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "rawconnection()"
     },
     {
@@ -3269,8 +3269,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_watermarkswriteactivity",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "watermarkswriteactivity()"
     },
     {
@@ -3280,8 +3280,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "test_postgres_watermarks_test_fake_tx",
-      "community": 59,
-      "community_name": "watermarks.test.ts",
+      "community": 57,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "fake_tx"
     },
     {
@@ -4787,8 +4787,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "readme",
-      "community": 15,
-      "community_name": "design.md",
+      "community": 29,
+      "community_name": "LEAN_FORMALIZATION_PLAN.md",
       "norm_label": "readme.md"
     },
     {
@@ -5007,8 +5007,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "design_design_algebra",
-      "community": 15,
-      "community_name": "design.md",
+      "community": 30,
+      "community_name": "design-algebra.md",
       "norm_label": "design-algebra.md"
     },
     {
@@ -5018,8 +5018,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "design_design_algebra_superseded_see_formal_storage_algebra_md",
-      "community": 15,
-      "community_name": "design.md",
+      "community": 30,
+      "community_name": "design-algebra.md",
       "norm_label": "superseded \u2014 see `formal/storage_algebra.md`"
     },
     {
@@ -5029,7 +5029,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "design_design_interfaces",
-      "community": 61,
+      "community": 9,
       "community_name": "design-interfaces.md",
       "norm_label": "design-interfaces.md"
     },
@@ -5041,7 +5041,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_storage_layer_interface_specification",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "storage layer interface specification"
     },
     {
@@ -5052,7 +5052,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_shared_conventions",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1. shared conventions"
     },
     {
@@ -5063,7 +5063,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_1_error_handling_one_idiom_thrown_code_discriminated_typed_errors",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1.1 error handling \u2014 one idiom: thrown, `code`-discriminated typed errors"
     },
     {
@@ -5074,7 +5074,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_2_async_pattern",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1.2 async pattern"
     },
     {
@@ -5085,7 +5085,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_3_transaction_participation",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1.3 transaction participation"
     },
     {
@@ -5096,7 +5096,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_4_runtime_validation",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1.4 runtime validation"
     },
     {
@@ -5107,7 +5107,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_1_5_naming",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "1.5 naming"
     },
     {
@@ -5118,7 +5118,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_2_storage_errors_ts_shared_base_new_file",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "2. `storage-errors.ts` \u2014 shared base (new file)"
     },
     {
@@ -5129,7 +5129,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_3_module_interfaces",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "3. module interfaces"
     },
     {
@@ -5140,7 +5140,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_3_1_transaction_lease_layer",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "3.1 transaction/lease layer"
     },
     {
@@ -5151,7 +5151,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_3_2_temporalkv",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "3.2 temporalkv"
     },
     {
@@ -5162,7 +5162,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_3_3_checkpointstore",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "3.3 checkpointstore"
     },
     {
@@ -5173,7 +5173,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_3_4_watermarks",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "3.4 watermarks"
     },
     {
@@ -5184,7 +5184,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_4_composition_with_walletstatestore_privatestateprovider",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "4. composition with `walletstatestore` / `privatestateprovider`"
     },
     {
@@ -5195,7 +5195,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_5_documentation_generation_tooling",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "5. documentation-generation tooling"
     },
     {
@@ -5206,7 +5206,7 @@
       "_origin": "ast",
       "id": "design_design_interfaces_review_notes",
       "community": 9,
-      "community_name": "Storage Layer Interface Specification",
+      "community_name": "design-interfaces.md",
       "norm_label": "review notes"
     },
     {
@@ -5415,7 +5415,7 @@
       "_origin": "ast",
       "id": "design_tasks",
       "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "norm_label": "tasks.md"
     },
     {
@@ -5426,7 +5426,7 @@
       "_origin": "ast",
       "id": "design_tasks_tasks_superseded_by_per_sprint_openspec_changes",
       "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "norm_label": "tasks \u2014 superseded by per-sprint openspec changes"
     },
     {
@@ -5437,7 +5437,7 @@
       "_origin": "ast",
       "id": "design_tasks_phase_current_status_map",
       "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "norm_label": "phase \u2192 current status map"
     },
     {
@@ -5448,7 +5448,7 @@
       "_origin": "ast",
       "id": "design_tasks_for_historical_reference_only",
       "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "norm_label": "for historical reference only"
     },
     {
@@ -5683,6 +5683,94 @@
       "norm_label": "verification matrix"
     },
     {
+      "label": "2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "2026-07-21-storage-algebra-lean-m3a-watermarks.md"
+    },
+    {
+      "label": "Storage Algebra Lean M3a Watermarks Sprint",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "storage algebra lean m3a watermarks sprint"
+    },
+    {
+      "label": "Audited semantic decisions",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L14",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_audited_semantic_decisions",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "audited semantic decisions"
+    },
+    {
+      "label": "Source layout",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L25",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_source_layout",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "source layout"
+    },
+    {
+      "label": "Theorem gate",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L33",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_theorem_gate",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "theorem gate"
+    },
+    {
+      "label": "Adversarial examples",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L48",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_adversarial_examples",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "adversarial examples"
+    },
+    {
+      "label": "Explicit non-goals",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L62",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_explicit_non_goals",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "explicit non-goals"
+    },
+    {
+      "label": "Verification matrix",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_verification_matrix",
+      "community": 58,
+      "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "verification matrix"
+    },
+    {
       "label": "design.md",
       "file_type": "document",
       "source_file": "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md",
@@ -5788,8 +5876,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "proposal.md"
     },
     {
@@ -5799,8 +5887,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal_proposal_sprint_1_project_setup_temporalkv",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "proposal \u2014 sprint 1: project setup + temporalkv"
     },
     {
@@ -5810,8 +5898,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal_why",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "why"
     },
     {
@@ -5821,8 +5909,8 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal_what_changes",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "what changes"
     },
     {
@@ -5832,8 +5920,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal_non_goals_explicitly_out_of_scope_for_this_sprint",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "non-goals (explicitly out of scope for this sprint)"
     },
     {
@@ -5843,8 +5931,8 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_proposal_impact",
-      "community": 63,
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community": 9,
+      "community_name": "design-interfaces.md",
       "norm_label": "impact"
     },
     {
@@ -5854,7 +5942,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_specs_temporal_kv_spec",
-      "community": 20,
+      "community": 21,
       "community_name": "spec.md",
       "norm_label": "spec.md"
     },
@@ -6228,8 +6316,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_tasks",
-      "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community": 39,
+      "community_name": "design.md",
       "norm_label": "tasks.md"
     },
     {
@@ -6239,8 +6327,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_tasks_tasks_sprint_1_project_setup_temporalkv",
-      "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community": 62,
+      "community_name": "Tasks \u2014 Sprint 1: project setup + TemporalKV",
       "norm_label": "tasks \u2014 sprint 1: project setup + temporalkv"
     },
     {
@@ -6250,8 +6338,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_tasks_0_project_setup",
-      "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community": 62,
+      "community_name": "Tasks \u2014 Sprint 1: project setup + TemporalKV",
       "norm_label": "0. project setup"
     },
     {
@@ -6261,8 +6349,8 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_tasks_1_temporalkv",
-      "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community": 62,
+      "community_name": "Tasks \u2014 Sprint 1: project setup + TemporalKV",
       "norm_label": "1. temporalkv"
     },
     {
@@ -6272,8 +6360,8 @@
       "source_location": "L167",
       "_origin": "ast",
       "id": "openspec_changes_archive_2026_07_21_sprint_1_setup_and_temporal_kv_tasks_2_sprint_close_out",
-      "community": 19,
-      "community_name": "Phase \u2192 sprint status map",
+      "community": 62,
+      "community_name": "Tasks \u2014 Sprint 1: project setup + TemporalKV",
       "norm_label": "2. sprint close-out"
     },
     {
@@ -6283,7 +6371,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_design",
-      "community": 21,
+      "community": 39,
       "community_name": "design.md",
       "norm_label": "design.md"
     },
@@ -6405,7 +6493,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "proposal.md"
     },
     {
@@ -6416,7 +6504,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal_proposal_sprint_2_transaction_lease",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "proposal \u2014 sprint 2: transaction/lease"
     },
     {
@@ -6427,7 +6515,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal_why",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "why"
     },
     {
@@ -6438,7 +6526,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal_what_changes",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "what changes"
     },
     {
@@ -6449,7 +6537,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal_non_goals_explicitly_out_of_scope_for_this_sprint",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "non-goals (explicitly out of scope for this sprint)"
     },
     {
@@ -6460,7 +6548,7 @@
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_proposal_impact",
       "community": 39,
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "norm_label": "impact"
     },
     {
@@ -6470,8 +6558,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_2_transaction_lease_specs_temporal_kv_spec",
-      "community": 18,
-      "community_name": "Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored",
+      "community": 11,
+      "community_name": "design.md",
       "norm_label": "spec.md"
     },
     {
@@ -7900,8 +7988,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_3_checkpoint_store_tasks",
-      "community": 69,
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "tasks.md"
     },
     {
@@ -7988,8 +8076,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_design",
-      "community": 66,
-      "community_name": "design.md",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "design.md"
     },
     {
@@ -8131,8 +8219,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "proposal.md"
     },
     {
@@ -8142,8 +8230,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal_proposal_sprint_4_watermarks",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "proposal \u2014 sprint 4: watermarks"
     },
     {
@@ -8153,8 +8241,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal_why",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "why"
     },
     {
@@ -8164,8 +8252,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal_what_changes",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "what changes"
     },
     {
@@ -8175,8 +8263,8 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal_non_goals_explicitly_out_of_scope_for_this_sprint",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "non-goals (explicitly out of scope for this sprint)"
     },
     {
@@ -8186,8 +8274,8 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_proposal_impact",
-      "community": 62,
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "impact"
     },
     {
@@ -8197,8 +8285,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_specs_watermarks_spec",
-      "community": 64,
-      "community_name": "spec.md",
+      "community": 12,
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "norm_label": "spec.md"
     },
     {
@@ -8549,8 +8637,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks",
-      "community": 69,
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "tasks.md"
     },
     {
@@ -8560,8 +8648,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_tasks_sprint_4_watermarks",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "tasks \u2014 sprint 4: watermarks"
     },
     {
@@ -8571,8 +8659,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_0_schema",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "0. schema"
     },
     {
@@ -8582,8 +8670,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_1_set",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "1. `set`"
     },
     {
@@ -8593,8 +8681,8 @@
       "source_location": "L135",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_2_get",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "2. `get`"
     },
     {
@@ -8604,8 +8692,8 @@
       "source_location": "L149",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_3_cancellation_and_errors",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "3. cancellation and errors"
     },
     {
@@ -8615,8 +8703,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_4_property_test_formal_storage_algebra_md_5",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "4. property test (`formal/storage_algebra.md` \u00a75)"
     },
     {
@@ -8626,9 +8714,427 @@
       "source_location": "L183",
       "_origin": "ast",
       "id": "openspec_changes_sprint_4_watermarks_tasks_5_sprint_close_out",
-      "community": 67,
-      "community_name": "Tasks \u2014 Sprint 4: Watermarks",
+      "community": 24,
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "norm_label": "5. sprint close-out"
+    },
+    {
+      "label": "design.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "design.md"
+    },
+    {
+      "label": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "design \u2014 sprint 5: lean m3a watermarks w1"
+    },
+    {
+      "label": "1. Executable carrier",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_1_executable_carrier",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "1. executable carrier"
+    },
+    {
+      "label": "2. Commands and interpretation",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_2_commands_and_interpretation",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "2. commands and interpretation"
+    },
+    {
+      "label": "3. Laws",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L54",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_3_laws",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "3. laws"
+    },
+    {
+      "label": "4. Trust and reachability",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_4_trust_and_reachability",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "4. trust and reachability"
+    },
+    {
+      "label": "5. Refinement boundary",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L74",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_design_5_refinement_boundary",
+      "community": 59,
+      "community_name": "Design \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "5. refinement boundary"
+    },
+    {
+      "label": "proposal.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "proposal.md"
+    },
+    {
+      "label": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "proposal \u2014 sprint 5: lean m3a watermarks w1"
+    },
+    {
+      "label": "Why",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal_why",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "why"
+    },
+    {
+      "label": "What changes",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L13",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal_what_changes",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "what changes"
+    },
+    {
+      "label": "Non-goals",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal_non_goals",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "non-goals"
+    },
+    {
+      "label": "Impact",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L30",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_proposal_impact",
+      "community": 60,
+      "community_name": "Proposal \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "impact"
+    },
+    {
+      "label": "spec.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "spec.md"
+    },
+    {
+      "label": "formal-watermarks",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_formal_watermarks",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "formal-watermarks"
+    },
+    {
+      "label": "ADDED Requirements",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "added requirements"
+    },
+    {
+      "label": "Requirement: The abstract Watermarks store has one absence representation",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_abstract_watermarks_store_has_one_absence_representation",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: the abstract watermarks store has one absence representation"
+    },
+    {
+      "label": "Scenario: Empty lookup is absent",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_empty_lookup_is_absent",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: empty lookup is absent"
+    },
+    {
+      "label": "Requirement: Set is an unconditional overwrite at the exact address",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L14",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_is_an_unconditional_overwrite_at_the_exact_address",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: set is an unconditional overwrite at the exact address"
+    },
+    {
+      "label": "Scenario: A later value wins at the same address",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_a_later_value_wins_at_the_same_address",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: a later value wins at the same address"
+    },
+    {
+      "label": "Scenario: Repeating an identical set is idempotent",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_repeating_an_identical_set_is_idempotent",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: repeating an identical set is idempotent"
+    },
+    {
+      "label": "Scenario: Abstract absence remains distinct from a stored null-like value",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L27",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_abstract_absence_remains_distinct_from_a_stored_null_like_value",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: abstract absence remains distinct from a stored null-like value"
+    },
+    {
+      "label": "Requirement: Set preserves distinct addresses",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L34",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_preserves_distinct_addresses",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: set preserves distinct addresses"
+    },
+    {
+      "label": "Scenario: Equal keys under different kinds remain isolated",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L39",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_equal_keys_under_different_kinds_remain_isolated",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: equal keys under different kinds remain isolated"
+    },
+    {
+      "label": "Scenario: Different keys under one kind remain isolated",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L43",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_different_keys_under_one_kind_remain_isolated",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: different keys under one kind remain isolated"
+    },
+    {
+      "label": "Requirement: Command traces compose in list order",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L47",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_command_traces_compose_in_list_order",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: command traces compose in list order"
+    },
+    {
+      "label": "Scenario: Appended traces equal sequential execution",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L52",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_appended_traces_equal_sequential_execution",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: appended traces equal sequential execution"
+    },
+    {
+      "label": "Requirement: Lookup after a trace returns the last matching value",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L56",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_lookup_after_a_trace_returns_the_last_matching_value",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: lookup after a trace returns the last matching value"
+    },
+    {
+      "label": "Scenario: The last matching command need not be the final command",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_the_last_matching_command_need_not_be_the_final_command",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: the last matching command need not be the final command"
+    },
+    {
+      "label": "Scenario: An untouched address retains its initial value",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_an_untouched_address_retains_its_initial_value",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: an untouched address retains its initial value"
+    },
+    {
+      "label": "Requirement: The W1 proof claim remains abstract",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L74",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_w1_proof_claim_remains_abstract",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: the w1 proof claim remains abstract"
+    },
+    {
+      "label": "Scenario: Runtime obligations remain outside the theorem boundary",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L80",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_runtime_obligations_remain_outside_the_theorem_boundary",
+      "community": 4,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: runtime obligations remain outside the theorem boundary"
+    },
+    {
+      "label": "tasks.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "tasks.md"
+    },
+    {
+      "label": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "tasks \u2014 sprint 5: lean m3a watermarks w1"
+    },
+    {
+      "label": "0. Specification freeze",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks_0_specification_freeze",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "0. specification freeze"
+    },
+    {
+      "label": "1. Executable Watermarks model",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks_1_executable_watermarks_model",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "1. executable watermarks model"
+    },
+    {
+      "label": "2. W1 theorem tranche",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L44",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks_2_w1_theorem_tranche",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "2. w1 theorem tranche"
+    },
+    {
+      "label": "3. Close-out",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_5_formal_watermarks_tasks_3_close_out",
+      "community": 61,
+      "community_name": "Tasks \u2014 Sprint 5: Lean M3a Watermarks W1",
+      "norm_label": "3. close-out"
     },
     {
       "label": "spec.md",
@@ -8637,7 +9143,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec",
-      "community": 20,
+      "community": 21,
       "community_name": "spec.md",
       "norm_label": "spec.md"
     },
@@ -8648,7 +9154,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_temporal_kv_specification",
-      "community": 20,
+      "community": 21,
       "community_name": "spec.md",
       "norm_label": "temporal-kv specification"
     },
@@ -8659,7 +9165,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_purpose",
-      "community": 20,
+      "community": 21,
       "community_name": "spec.md",
       "norm_label": "purpose"
     },
@@ -8671,7 +9177,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirements",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirements"
     },
     {
@@ -8682,7 +9188,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_migrations_are_idempotent_and_ordered",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: migrations are idempotent and ordered"
     },
     {
@@ -8693,7 +9199,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_running_migrations_twice_is_a_no_op_the_second_time",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: running migrations twice is a no-op the second time"
     },
     {
@@ -8704,7 +9210,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_a_migration_failure_does_not_partially_apply",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: a migration failure does not partially apply"
     },
     {
@@ -8715,7 +9221,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_schema_isolation_is_the_default_not_opt_in",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: schema isolation is the default, not opt-in"
     },
     {
@@ -8726,7 +9232,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_default_schema_is_used_when_none_is_specified",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: default schema is used when none is specified"
     },
     {
@@ -8737,7 +9243,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_a_custom_schema_is_honored_end_to_end",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: a custom schema is honored end to end"
     },
     {
@@ -8748,7 +9254,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_postgres_errors_surface_as_the_shared_storageerror_hierarchy",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: postgres errors surface as the shared storageerror hierarchy"
     },
     {
@@ -8759,7 +9265,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_a_connection_failure_surfaces_as_connectionerror",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: a connection failure surfaces as connectionerror"
     },
     {
@@ -8770,7 +9276,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_an_exclusion_constraint_violation_is_identified_by_its_correct_sqlstate",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: an exclusion-constraint violation is identified by its correct sqlstate"
     },
     {
@@ -8781,7 +9287,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_a_transaction_key_reuse_violation_surfaces_as_transactionkeyreuseerror",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: a transaction-key-reuse violation surfaces as transactionkeyreuseerror"
     },
     {
@@ -8792,7 +9298,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_unconditional_writes_are_gapless_and_monotonic_law_t1",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: unconditional writes are gapless and monotonic (law t1)"
     },
     {
@@ -8803,7 +9309,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_sequential_unconditional_writes_produce_consecutive_versions",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: sequential unconditional writes produce consecutive versions"
     },
     {
@@ -8814,7 +9320,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_the_cas_guarded_and_unconditional_paths_agree_on_version_assignment",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: the cas-guarded and unconditional paths agree on version assignment"
     },
     {
@@ -8825,7 +9331,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_a_caller_supplied_transaction_handle_is_honored_or_rejected_never_silently_ignored",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: a caller-supplied transaction handle is honored or rejected, never silently ignored"
     },
     {
@@ -8836,7 +9342,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_passing_a_transaction_handle_throws_before_any_query_runs",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: passing a transaction handle throws before any query runs"
     },
     {
@@ -8847,7 +9353,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_put_s_cas_guard_distinguishes_conflict_from_absence",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: put's cas guard distinguishes conflict from absence"
     },
     {
@@ -8858,7 +9364,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_cas_conflict_against_an_existing_key_reports_the_actual_version",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: cas conflict against an existing key reports the actual version"
     },
     {
@@ -8869,7 +9375,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_cas_against_a_never_written_key_reports_actual_as_undefined",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: cas against a never-written key reports actual as undefined"
     },
     {
@@ -8880,7 +9386,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_a_second_write_to_the_same_key_within_one_transaction_is_rejected_at_the_trigger_level_not_silently_absorbed",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: a second write to the same key within one transaction is rejected at the trigger level, not silently absorbed"
     },
     {
@@ -8891,7 +9397,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_a_second_update_to_the_same_key_s_row_in_one_transaction_is_rejected_at_the_trigger_level",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: a second update to the same key's row in one transaction is rejected at the trigger level"
     },
     {
@@ -8902,7 +9408,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_sequential_puts_to_the_same_key_in_separate_transactions_succeed_outside_the_millisecond_collision_caveat",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: sequential puts to the same key in separate transactions succeed, outside the millisecond-collision caveat"
     },
     {
@@ -8913,7 +9419,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_listkeys_streams_without_materializing_the_full_result_set_first_and_orders_results_correctly",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: listkeys streams without materializing the full result set first, and orders results correctly"
     },
     {
@@ -8924,7 +9430,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_the_first_key_is_yielded_before_the_full_scan_completes",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: the first key is yielded before the full scan completes"
     },
     {
@@ -8935,7 +9441,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_only_the_newest_version_of_each_key_is_yielded",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: only the newest version of each key is yielded"
     },
     {
@@ -8946,7 +9452,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_aborting_mid_iteration_rejects_with_aborterror_and_releases_the_cursor",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: aborting mid-iteration rejects with aborterror and releases the cursor"
     },
     {
@@ -8957,7 +9463,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_getat_satisfies_temporal_projection_equivalence_law_t3_within_the_store_s_retention_window",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: getat satisfies temporal-projection equivalence (law t3), within the store's retention window"
     },
     {
@@ -8968,7 +9474,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_getat_matches_an_independent_replay_for_an_arbitrary_put_sequence",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: getat matches an independent replay for an arbitrary put sequence"
     },
     {
@@ -8979,7 +9485,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_dual_addressing_agrees_at_recorded_write_timestamps_law_t4",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: dual addressing agrees at recorded write timestamps (law t4)"
     },
     {
@@ -8990,7 +9496,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_version_and_timestamp_addressing_agree",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: version and timestamp addressing agree"
     },
     {
@@ -9001,7 +9507,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_requirement_history_intervals_never_overlap_for_a_single_key_law_t5",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "requirement: history intervals never overlap for a single key (law t5)"
     },
     {
@@ -9012,7 +9518,7 @@
       "_origin": "ast",
       "id": "openspec_specs_temporal_kv_spec_scenario_an_attempt_to_create_overlapping_history_intervals_is_rejected",
       "community": 20,
-      "community_name": "spec.md",
+      "community_name": "Requirements",
       "norm_label": "scenario: an attempt to create overlapping history intervals is rejected"
     },
     {
@@ -9065,7 +9571,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "crdt-lean dependency refutation",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_lean_formalization_plan_crdt_lean_refutation"
     },
     {
@@ -9093,7 +9599,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "checkpointstore algebra",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_algebra_checkpointstore"
     },
     {
@@ -9205,7 +9711,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "law c1 \u2014 join-semilattice chunk writes",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_algebra_law_c1"
     },
     {
@@ -9219,7 +9725,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "law c2 \u2014 gc reachability closure",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_algebra_law_c2"
     },
     {
@@ -9273,9 +9779,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 15,
+      "community": 30,
       "norm_label": "ckpt_manifest_chunks junction table",
-      "community_name": "design.md",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_algebra_ckpt_manifest_chunks"
     },
     {
@@ -9289,7 +9795,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "decision against a merkle/authenticated data structure",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_algebra_merkle_decision"
     },
     {
@@ -9317,7 +9823,7 @@
       "contributor": null,
       "community": 30,
       "norm_label": "checkpointstore type signatures",
-      "community_name": "CheckpointStore Algebra",
+      "community_name": "design-algebra.md",
       "id": "formal_storage_types_checkpointstore_types"
     },
     {
@@ -9357,9 +9863,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 15,
+      "community": 30,
       "norm_label": "gc architecture decision (junction table over gin array)",
-      "community_name": "design.md",
+      "community_name": "design-algebra.md",
       "id": "performance_design_gc_architecture"
     },
     {
@@ -9441,9 +9947,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 15,
+      "community": 29,
       "norm_label": "openspec change",
-      "community_name": "design.md",
+      "community_name": "LEAN_FORMALIZATION_PLAN.md",
       "id": "openspec_change_concept"
     },
     {
@@ -9525,7 +10031,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "storageerror shared base class",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_storageerror"
@@ -9539,7 +10045,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "throw-typed-error idiom unification across modules",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_error_idiom_unification"
@@ -9553,7 +10059,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "transaction/lease layer interface (stale, superseded)",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_transactionleaselayer_stale"
@@ -9567,7 +10073,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "tryacquirelease non-throwing hot path",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_tryacquirelease"
@@ -9581,9 +10087,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 63,
+      "community": 9,
       "norm_label": "temporalkv interface",
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_temporalkv"
     },
     {
@@ -9595,9 +10101,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 63,
+      "community": 9,
       "norm_label": "versionconflicterror",
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_versionconflicterror"
     },
     {
@@ -9609,7 +10115,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "checkpointstore interface",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_checkpointstore"
@@ -9623,7 +10129,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "checkpointnotfounderror",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_checkpointnotfounderror"
@@ -9637,9 +10143,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 14,
+      "community": 9,
       "norm_label": "global cross-wallet chunk gc reclamation fix",
-      "community_name": "spec.md",
+      "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_chunk_gc_global_reclamation"
     },
     {
@@ -9651,9 +10157,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 9,
       "norm_label": "watermarks interface",
-      "community_name": "spec.md",
+      "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_watermarks"
     },
     {
@@ -9665,7 +10171,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "privatestateprovider (sdk-mandated interface)",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_privatestateprovider"
@@ -9679,7 +10185,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "walletstatestore (project abstraction)",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_walletstatestore"
@@ -9693,7 +10199,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "checkpointwalletstatestore (production adapter)",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_checkpointwalletstatestore"
@@ -9707,7 +10213,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "typedoc documentation tooling decision",
       "community_name": "design-interfaces.md",
       "id": "design_design_interfaces_typedoc_tooling"
@@ -9724,7 +10230,7 @@
       "community": 11,
       "norm_label": "tier 1 / tier 2 postgres schema split",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_tier_split"
+      "id": "design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "label": "FerretDB Mongo-compatibility shim evaluated and rejected",
@@ -9738,7 +10244,7 @@
       "community": 15,
       "norm_label": "ferretdb mongo-compatibility shim evaluated and rejected",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_ferretdb_rejection"
+      "id": "design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "label": "kv_current/kv_history temporal-table design",
@@ -9752,7 +10258,7 @@
       "community": 11,
       "norm_label": "kv_current/kv_history temporal-table design",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "id": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "label": "TransactionKeyReuseError / txid_current() fix",
@@ -9766,7 +10272,7 @@
       "community": 11,
       "norm_label": "transactionkeyreuseerror / txid_current() fix",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_transactionkeyreuseerror"
+      "id": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "label": "kv_history retention policy (pg_cron)",
@@ -9780,7 +10286,7 @@
       "community": 11,
       "norm_label": "kv_history retention policy (pg_cron)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_kv_history_retention"
+      "id": "design_design_design_design_design_design_design_design_kv_history_retention"
     },
     {
       "label": "Content-addressed checkpoint chunker",
@@ -9794,7 +10300,7 @@
       "community": 15,
       "norm_label": "content-addressed checkpoint chunker",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_checkpoint_chunker"
+      "id": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "label": "ckpt_manifest_chunks junction table (original, later corrected)",
@@ -9808,7 +10314,7 @@
       "community": 15,
       "norm_label": "ckpt_manifest_chunks junction table (original, later corrected)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "id": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "label": "watermarks table schema sketch",
@@ -9819,10 +10325,10 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 12,
       "norm_label": "watermarks table schema sketch",
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
-      "id": "design_design_design_design_design_design_watermarks_schema"
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
+      "id": "design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "label": "Postgres advisory-lock writer lease (corrected design)",
@@ -9835,8 +10341,8 @@
       "contributor": null,
       "community": 39,
       "norm_label": "postgres advisory-lock writer lease (corrected design)",
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
-      "id": "design_design_design_design_design_design_writer_lease_corrected"
+      "community_name": "design.md",
+      "id": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "label": "Advisory-lock class registry (classes 1/2/3)",
@@ -9847,10 +10353,10 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 21,
+      "community": 39,
       "norm_label": "advisory-lock class registry (classes 1/2/3)",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_advisory_lock_registry"
+      "id": "design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "label": "private_state_salts table / per-scope salt derivation",
@@ -9861,10 +10367,10 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "private_state_salts table / per-scope salt derivation",
       "community_name": "design-interfaces.md",
-      "id": "design_design_design_design_design_design_private_state_salts"
+      "id": "design_design_design_design_design_design_design_design_private_state_salts"
     },
     {
       "label": "postgres.js driver choice",
@@ -9878,7 +10384,7 @@
       "community": 11,
       "norm_label": "postgres.js driver choice",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_postgresjs_driver_choice"
+      "id": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "label": "Testcontainers vs pg-mem test-infrastructure decision",
@@ -9892,7 +10398,7 @@
       "community": 15,
       "norm_label": "testcontainers vs pg-mem test-infrastructure decision",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_test_infra_decision"
+      "id": "design_design_design_design_design_design_design_design_test_infra_decision"
     },
     {
       "label": "Module \u2192 Postgres module mapping table",
@@ -9903,10 +10409,10 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 61,
+      "community": 9,
       "norm_label": "module \u2192 postgres module mapping table",
       "community_name": "design-interfaces.md",
-      "id": "design_design_design_design_design_design_module_mapping_table"
+      "id": "design_design_design_design_design_design_design_design_module_mapping_table"
     },
     {
       "label": "State-equivalence merge-blocker gate",
@@ -9920,7 +10426,7 @@
       "community": 15,
       "norm_label": "state-equivalence merge-blocker gate",
       "community_name": "design.md",
-      "id": "design_design_design_design_design_design_state_equivalence_gate"
+      "id": "design_design_design_design_design_design_design_design_state_equivalence_gate"
     },
     {
       "label": "Remove MongoDB dependency rationale",
@@ -9973,9 +10479,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 19,
+      "community": 39,
       "norm_label": "phase \u2192 sprint status map",
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "design.md",
       "id": "design_tasks_phase_map"
     },
     {
@@ -10029,7 +10535,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 21,
+      "community": 39,
       "norm_label": "migration runner advisory lock (class 1)",
       "community_name": "design.md",
       "id": "sprint1_design_migration_concurrency_lock"
@@ -10085,9 +10591,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 65,
       "norm_label": "listkeys cursor streaming + prefix escaping",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "Tasks \u2014 Sprint 2: Transaction/Lease",
       "id": "sprint1_design_listkeys_cursor"
     },
     {
@@ -10113,9 +10619,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 63,
+      "community": 9,
       "norm_label": "sprint 1 scope: project setup + temporalkv",
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community_name": "design-interfaces.md",
       "id": "sprint1_proposal_scope"
     },
     {
@@ -10127,7 +10633,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "migrations idempotent and ordered requirement",
       "community_name": "spec.md",
       "id": "sprint1_spec_migrations_idempotent"
@@ -10141,7 +10647,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "schema isolation default requirement",
       "community_name": "spec.md",
       "id": "sprint1_spec_schema_isolation"
@@ -10155,7 +10661,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "postgres errors surface as storageerror hierarchy requirement",
       "community_name": "spec.md",
       "id": "sprint1_spec_error_hierarchy"
@@ -10169,7 +10675,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "law t1: gapless monotonic versions requirement",
       "community_name": "spec.md",
       "id": "sprint1_spec_law_t1"
@@ -10197,9 +10703,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 63,
+      "community": 9,
       "norm_label": "cas guard distinguishes conflict from absence",
-      "community_name": "Proposal \u2014 Sprint 1: project setup + TemporalKV",
+      "community_name": "design-interfaces.md",
       "id": "sprint1_spec_cas_guard"
     },
     {
@@ -10225,7 +10731,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "listkeys streaming/order requirement",
       "community_name": "spec.md",
       "id": "sprint1_spec_listkeys_streaming"
@@ -10239,7 +10745,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "law t3: temporal-projection equivalence (getat)",
       "community_name": "spec.md",
       "id": "sprint1_spec_law_t3"
@@ -10253,7 +10759,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "law t4: dual addressing agreement",
       "community_name": "spec.md",
       "id": "sprint1_spec_law_t4"
@@ -10267,7 +10773,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 20,
+      "community": 21,
       "norm_label": "law t5: history intervals never overlap",
       "community_name": "spec.md",
       "id": "sprint1_spec_law_t5"
@@ -10281,9 +10787,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 19,
+      "community": 39,
       "norm_label": "sprint 1 close-out / differential review",
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "design.md",
       "id": "sprint1_tasks_closeout"
     },
     {
@@ -10295,9 +10801,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 14,
+      "community": 68,
       "norm_label": "withtransaction (sql.begin) implementation",
-      "community_name": "spec.md",
+      "community_name": "design.md",
       "id": "sprint2_design_withtransaction"
     },
     {
@@ -10323,7 +10829,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 21,
+      "community": 39,
       "norm_label": "acquirelease/tryacquirelease timeout mechanism",
       "community_name": "design.md",
       "id": "sprint2_design_lease_acquisition"
@@ -10337,9 +10843,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 65,
       "norm_label": "raceagainstabort mid-wait cancellation",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "Tasks \u2014 Sprint 2: Transaction/Lease",
       "id": "sprint2_design_raceagainstabort"
     },
     {
@@ -10351,7 +10857,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 21,
+      "community": 39,
       "norm_label": "reservebounded connection-reservation cancellation",
       "community_name": "design.md",
       "id": "sprint2_design_reservebounded"
@@ -10379,7 +10885,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 21,
+      "community": 39,
       "norm_label": "nested withtransaction unsupported (disclosed limitation)",
       "community_name": "design.md",
       "id": "sprint2_design_nested_tx_limitation"
@@ -10395,7 +10901,7 @@
       "contributor": null,
       "community": 39,
       "norm_label": "sprint 2 scope: transaction/lease implementation",
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "id": "sprint2_proposal_scope"
     },
     {
@@ -10421,9 +10927,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 18,
+      "community": 11,
       "norm_label": "transactionkeyreuseerror reachable via public put() api",
-      "community_name": "Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored",
+      "community_name": "design.md",
       "id": "sprint2_spec_transactionkeyreuse_public"
     },
     {
@@ -10463,9 +10969,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 68,
       "norm_label": "aborting opts.signal pre-check-only contract (withtransaction)",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "design.md",
       "id": "sprint2_spec_abort_signal"
     },
     {
@@ -10477,9 +10983,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 71,
+      "community": 17,
       "norm_label": "resolved transaction handle always refers to its own live transaction",
-      "community_name": "Transaction-handle registry (resolveTransaction)",
+      "community_name": "spec.md",
       "id": "sprint2_spec_handle_resolution"
     },
     {
@@ -10493,7 +10999,7 @@
       "contributor": null,
       "community": 39,
       "norm_label": "law l1: at most one holder per lease key",
-      "community_name": "Postgres advisory-lock writer lease (corrected design)",
+      "community_name": "design.md",
       "id": "sprint2_spec_law_l1"
     },
     {
@@ -10589,9 +11095,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 69,
+      "community": 13,
       "norm_label": "ckpt_manifest_chunks position + on delete cascade fix",
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community_name": "Proposal \u2014 Sprint 3: CheckpointStore",
       "id": "sprint3_design_manifest_position_fix"
     },
     {
@@ -10603,9 +11109,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 13,
+      "community": 71,
       "norm_label": "ckpt_sequence_counters atomic upsert-increment allocator",
-      "community_name": "Proposal \u2014 Sprint 3: CheckpointStore",
+      "community_name": "Transaction-handle registry (resolveTransaction)",
       "id": "sprint3_design_seq_allocator"
     },
     {
@@ -10687,9 +11193,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 14,
+      "community": 68,
       "norm_label": "repeatable read torn-read fix (load/history)",
-      "community_name": "spec.md",
+      "community_name": "design.md",
       "id": "sprint3_design_torn_read_fix"
     },
     {
@@ -10701,9 +11207,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 68,
       "norm_label": "checkpointstore cancellation scope decision (pre-check only)",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "design.md",
       "id": "sprint3_design_cancellation_scope_decision"
     },
     {
@@ -10771,9 +11277,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 69,
+      "community": 13,
       "norm_label": "manifest preserves order/multiplicity of chunks requirement",
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community_name": "Proposal \u2014 Sprint 3: CheckpointStore",
       "id": "sprint3_spec_manifest_order"
     },
     {
@@ -10785,9 +11291,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 13,
+      "community": 71,
       "norm_label": "gapless monotonic sequence numbers requirement",
-      "community_name": "Proposal \u2014 Sprint 3: CheckpointStore",
+      "community_name": "Transaction-handle registry (resolveTransaction)",
       "id": "sprint3_spec_sequence_gapless"
     },
     {
@@ -10841,9 +11347,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 14,
+      "community": 68,
       "norm_label": "load/history consistent-snapshot requirement",
-      "community_name": "spec.md",
+      "community_name": "design.md",
       "id": "sprint3_spec_torn_read"
     },
     {
@@ -10883,9 +11389,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "prune retaincount validation requirement",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint3_spec_retaincount_validation"
     },
     {
@@ -10911,9 +11417,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 14,
+      "community": 9,
       "norm_label": "law c2a: referenced chunk never reclaimed",
-      "community_name": "spec.md",
+      "community_name": "design-interfaces.md",
       "id": "sprint3_spec_law_c2a"
     },
     {
@@ -10967,9 +11473,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 68,
       "norm_label": "checkpointstore abortsignal pre-check-only requirement",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "design.md",
       "id": "sprint3_spec_abort_signal"
     },
     {
@@ -10981,9 +11487,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 69,
+      "community": 24,
       "norm_label": "sprint 3 close-out / graphify update task",
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "id": "sprint3_tasks_closeout"
     },
     {
@@ -10995,9 +11501,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 12,
       "norm_label": "watermarks table fillfactor=90 hot-update tuning",
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_fillfactor"
     },
     {
@@ -11023,9 +11529,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "top-level null value application-level guard",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_null_guard"
     },
     {
@@ -11037,9 +11543,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "pgwatermarks.get implementation",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_get_method"
     },
     {
@@ -11051,9 +11557,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "large-integer decimal-string cursor convention",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_large_integer_convention"
     },
     {
@@ -11065,9 +11571,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 12,
       "norm_label": "watermarks accepted tradeoffs (opaque jsonb, no history)",
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_accepted_tradeoffs"
     },
     {
@@ -11079,9 +11585,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "watermarks composing transaction/lease via opts.tx",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_design_composing_txlease"
     },
     {
@@ -11093,9 +11599,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 70,
+      "community": 68,
       "norm_label": "watermarks pre-check-only cancellation",
-      "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
+      "community_name": "design.md",
       "id": "sprint4_design_cancellation"
     },
     {
@@ -11107,9 +11613,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 12,
       "norm_label": "headline finding: watermarks fillfactor physical-storage gap",
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_proposal_headline_finding"
     },
     {
@@ -11121,9 +11627,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "set validationerror before statement requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_set_validation"
     },
     {
@@ -11135,9 +11641,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "set rejects top-level null requirement",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_null_rejection"
     },
     {
@@ -11149,9 +11655,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 12,
       "norm_label": "law w1: set is idempotent unconditional overwrite",
-      "community_name": "Proposal \u2014 Sprint 4: Watermarks",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_law_w1"
     },
     {
@@ -11163,9 +11669,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "get never throws for an unset cursor requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_get_no_throw"
     },
     {
@@ -11177,9 +11683,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "get returns last value scoped per (kind,key) requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_get_scoped"
     },
     {
@@ -11191,9 +11697,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 66,
+      "community": 12,
       "norm_label": "watermarks transaction handle honored requirement",
-      "community_name": "design.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_tx_handle"
     },
     {
@@ -11205,9 +11711,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "watermarks abortsignal pre-check-only requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_abort_signal"
     },
     {
@@ -11219,9 +11725,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "watermarks postgres errors surface as storageerror requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_error_hierarchy"
     },
     {
@@ -11233,9 +11739,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 12,
       "norm_label": "non-object json value round-trip requirement",
-      "community_name": "spec.md",
+      "community_name": "Design \u2014 Sprint 4: Watermarks",
       "id": "sprint4_spec_scalar_roundtrip"
     },
     {
@@ -11247,9 +11753,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 64,
+      "community": 9,
       "norm_label": "t is a caller assertion, no runtime validation requirement",
-      "community_name": "spec.md",
+      "community_name": "design-interfaces.md",
       "id": "sprint4_spec_type_lie"
     },
     {
@@ -11261,9 +11767,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 69,
+      "community": 24,
       "norm_label": "sprint 4 close-out / milestone 2 completion",
-      "community_name": "ckpt_manifest_chunks position + ON DELETE CASCADE fix",
+      "community_name": "Tasks \u2014 Sprint 3: CheckpointStore",
       "id": "sprint4_tasks_closeout"
     },
     {
@@ -11277,7 +11783,7 @@
       "contributor": null,
       "community": 19,
       "norm_label": "openspec project config (spec-driven schema)",
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "id": "openspec_config"
     },
     {
@@ -11291,7 +11797,7 @@
       "contributor": null,
       "community": 19,
       "norm_label": "correctness rule: verify external claims against real source",
-      "community_name": "Phase \u2192 sprint status map",
+      "community_name": "tasks.md",
       "id": "openspec_config_correctness_rule"
     }
   ],
@@ -22704,7 +23210,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -22714,7 +23220,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -22724,7 +23230,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "references",
@@ -22734,7 +23240,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_ferretdb_rejection"
+      "target": "design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "relation": "references",
@@ -22744,7 +23250,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_kv_history_retention"
+      "target": "design_design_design_design_design_design_design_design_kv_history_retention"
     },
     {
       "relation": "references",
@@ -22754,7 +23260,7 @@
       "source_location": "\u00a79",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_module_mapping_table"
+      "target": "design_design_design_design_design_design_design_design_module_mapping_table"
     },
     {
       "relation": "references",
@@ -22764,7 +23270,7 @@
       "source_location": "\u00a77",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_postgresjs_driver_choice"
+      "target": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "relation": "references",
@@ -22774,7 +23280,7 @@
       "source_location": "\u00a76",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_private_state_salts"
+      "target": "design_design_design_design_design_design_design_design_private_state_salts"
     },
     {
       "relation": "references",
@@ -22784,7 +23290,7 @@
       "source_location": "\u00a710",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_state_equivalence_gate"
+      "target": "design_design_design_design_design_design_design_design_state_equivalence_gate"
     },
     {
       "relation": "references",
@@ -22794,7 +23300,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -22804,7 +23310,7 @@
       "source_location": "\u00a78",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_test_infra_decision"
+      "target": "design_design_design_design_design_design_design_design_test_infra_decision"
     },
     {
       "relation": "references",
@@ -22814,7 +23320,7 @@
       "source_location": "\u00a70",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_tier_split"
+      "target": "design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "relation": "references",
@@ -22824,7 +23330,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "references",
@@ -22834,7 +23340,7 @@
       "source_location": "\u00a74",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -22844,7 +23350,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "design_design",
-      "target": "design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "contains",
@@ -23342,6 +23848,83 @@
       "_origin": "ast",
       "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m2_theorem_gate",
       "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m2_retention_transparent_t3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L48",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_adversarial_examples",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_audited_semantic_decisions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L62",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_explicit_non_goals",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L25",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_source_layout",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L33",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_theorem_gate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md",
+      "source_location": "L73",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_verification_matrix",
       "confidence_score": 1.0
     },
     {
@@ -27118,6 +27701,380 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_1_executable_carrier",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_2_commands_and_interpretation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_3_laws",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L64",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_4_trust_and_reachability",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/design.md",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_design_design_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_design_5_refinement_boundary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_proposal",
+      "target": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_proposal_impact",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_proposal_non_goals",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_proposal_what_changes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/proposal.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_proposal_proposal_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_proposal_why",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_formal_watermarks",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_formal_watermarks",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_command_traces_compose_in_list_order",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L56",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_lookup_after_a_trace_returns_the_last_matching_value",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_is_an_unconditional_overwrite_at_the_exact_address",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L34",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_preserves_distinct_addresses",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_abstract_watermarks_store_has_one_absence_representation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_added_requirements",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_w1_proof_claim_remains_abstract",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_abstract_watermarks_store_has_one_absence_representation",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_empty_lookup_is_absent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_is_an_unconditional_overwrite_at_the_exact_address",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_a_later_value_wins_at_the_same_address",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_is_an_unconditional_overwrite_at_the_exact_address",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_abstract_absence_remains_distinct_from_a_stored_null_like_value",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_is_an_unconditional_overwrite_at_the_exact_address",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_repeating_an_identical_set_is_idempotent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_preserves_distinct_addresses",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_different_keys_under_one_kind_remain_isolated",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_set_preserves_distinct_addresses",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_equal_keys_under_different_kinds_remain_isolated",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L52",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_command_traces_compose_in_list_order",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_appended_traces_equal_sequential_execution",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L70",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_lookup_after_a_trace_returns_the_last_matching_value",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_an_untouched_address_retains_its_initial_value",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L64",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_lookup_after_a_trace_returns_the_last_matching_value",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_the_last_matching_command_need_not_be_the_final_command",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md",
+      "source_location": "L80",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_requirement_the_w1_proof_claim_remains_abstract",
+      "target": "openspec_changes_sprint_5_formal_watermarks_specs_formal_watermarks_spec_scenario_runtime_obligations_remain_outside_the_theorem_boundary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_tasks",
+      "target": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_tasks_0_specification_freeze",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_tasks_1_executable_watermarks_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_tasks_2_w1_theorem_tranche",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-5-formal-watermarks/tasks.md",
+      "source_location": "L64",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_5_formal_watermarks_tasks_tasks_sprint_5_lean_m3a_watermarks_w1",
+      "target": "openspec_changes_sprint_5_formal_watermarks_tasks_3_close_out",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "openspec/specs/temporal-kv/spec.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -27886,7 +28843,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a76",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_private_state_salts",
+      "source": "design_design_design_design_design_design_design_design_private_state_salts",
       "target": "design_design_interfaces_privatestateprovider"
     },
     {
@@ -27906,7 +28863,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a79",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_module_mapping_table",
+      "source": "design_design_design_design_design_design_design_design_module_mapping_table",
       "target": "design_design_interfaces_checkpointwalletstatestore"
     },
     {
@@ -27917,7 +28874,7 @@
       "source_location": "\u00a70",
       "weight": 1.0,
       "source": "sprint1_design_schema_naming",
-      "target": "design_design_design_design_design_design_tier_split"
+      "target": "design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "relation": "rationale_for",
@@ -27926,8 +28883,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a71",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_ferretdb_rejection",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_ferretdb_rejection",
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27937,7 +28894,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "design_proposal_mongo_removal",
-      "target": "design_design_design_design_design_design_ferretdb_rejection"
+      "target": "design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "relation": "semantically_similar_to",
@@ -27946,8 +28903,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72-\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_checkpoint_chunker",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_checkpoint_chunker",
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27956,8 +28913,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_kv_history_retention",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_kv_history_retention",
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27966,8 +28923,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_transactionkeyreuseerror",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_transactionkeyreuseerror",
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27977,7 +28934,7 @@
       "source_location": "context",
       "weight": 1.0,
       "source": "openspec_config_correctness_rule",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27987,7 +28944,7 @@
       "source_location": "\u00a74",
       "weight": 1.0,
       "source": "sprint1_design_getat_single_statement",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27997,7 +28954,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_ts_functions",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28007,7 +28964,7 @@
       "source_location": "\u00a72.2",
       "weight": 1.0,
       "source": "sprint3_design_seq_allocator",
-      "target": "design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -28017,7 +28974,7 @@
       "source_location": "\u00a74a",
       "weight": 1.0,
       "source": "sprint1_design_error_translation",
-      "target": "design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "references",
@@ -28027,7 +28984,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint1_spec_transaction_key_reuse",
-      "target": "design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "conceptually_related_to",
@@ -28036,8 +28993,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_ckpt_manifest_chunks_original",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original",
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -28047,7 +29004,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint3_design_chunking",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -28057,7 +29014,7 @@
       "source_location": "What changes",
       "weight": 1.0,
       "source": "sprint3_proposal_schema_changes",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -28067,7 +29024,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint3_spec_grace_window",
-      "target": "design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -28077,7 +29034,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "design_tasks_retired_plan",
-      "target": "design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "references",
@@ -28087,7 +29044,7 @@
       "source_location": "\u00a72.1",
       "weight": 1.0,
       "source": "sprint3_design_manifest_position_fix",
-      "target": "design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "rationale_for",
@@ -28097,7 +29054,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "sprint4_design_accepted_tradeoffs",
-      "target": "design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -28107,7 +29064,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint4_design_fillfactor",
-      "target": "design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -28117,7 +29074,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint4_proposal_headline_finding",
-      "target": "design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -28126,8 +29083,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a75",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_advisory_lock_registry",
-      "target": "design_design_design_design_design_design_writer_lease_corrected"
+      "source": "design_design_design_design_design_design_design_design_advisory_lock_registry",
+      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -28137,7 +29094,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint2_design_withtransaction",
-      "target": "design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -28147,7 +29104,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint2_proposal_scope",
-      "target": "design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -28157,7 +29114,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint2_spec_law_l1",
-      "target": "design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -28167,7 +29124,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_concurrency_lock",
-      "target": "design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -28177,7 +29134,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint2_design_lease_acquisition",
-      "target": "design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -28187,7 +29144,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint1_design_connection_factory",
-      "target": "design_design_design_design_design_design_postgresjs_driver_choice"
+      "target": "design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "relation": "rationale_for",
@@ -28196,7 +29153,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a710",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_state_equivalence_gate",
+      "source": "design_design_design_design_design_design_design_design_state_equivalence_gate",
       "target": "design_proposal_mongo_removal"
     },
     {
@@ -28711,5 +29668,5 @@
       "source_file": "openspec/changes/sprint-3-checkpoint-store/design.md"
     }
   ],
-  "built_at_commit": "0b395b487dc7a287a98dcd58e99b8dfe71898dd8"
+  "built_at_commit": "1f1675b3596e115281c2f61843a792ee455db5fc"
 }

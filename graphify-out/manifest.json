@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "src/interfaces/temporal-kv.ts": {
-    "mtime": 1784666781.317552,
+    "mtime": 1784674879.272354,
     "ast_hash": "57157fd278cc92005f9b0d27be8d0274",
     "semantic_hash": ""
   },
@@ -70,12 +70,12 @@
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.property.test.ts": {
-    "mtime": 1784666794.5495474,
+    "mtime": 1784674879.272354,
     "ast_hash": "f12f8f6eddae018fbe655cea0994d367",
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.test.ts": {
-    "mtime": 1784666781.321552,
+    "mtime": 1784674879.272354,
     "ast_hash": "d1c791de05cd55d7c551d600c8f7e7ef",
     "semantic_hash": ""
   },
@@ -155,17 +155,17 @@
     "semantic_hash": ""
   },
   "Formal/LEAN_FORMALIZATION_PLAN.md": {
-    "mtime": 1784655285.0964599,
+    "mtime": 1784674879.254451,
     "ast_hash": "dd821357dde9cca5b06d1491d1bafa81",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA.md": {
-    "mtime": 1784666781.337552,
+    "mtime": 1784674879.2603214,
     "ast_hash": "9810e285a068a6e35ef5e139b0db9935",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
-    "mtime": 1784666457.7616642,
+    "mtime": 1784674879.2603555,
     "ast_hash": "ac3129c656d102ab4ef6558634d829ce",
     "semantic_hash": ""
   },
@@ -190,12 +190,12 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784666457.7616642,
+    "mtime": 1784674879.2603555,
     "ast_hash": "9ca5df6bac583c6a354085666c61ac3a",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784665335.106056,
+    "mtime": 1784674879.2603555,
     "ast_hash": "c2971ecfea5f86cdfa213165856cf664",
     "semantic_hash": ""
   },
@@ -205,7 +205,7 @@
     "semantic_hash": ""
   },
   "design/design-interfaces.md": {
-    "mtime": 1784664986.437908,
+    "mtime": 1784674879.2603555,
     "ast_hash": "962271a7c0f398e0dc831a19bdc0391e",
     "semantic_hash": ""
   },
@@ -230,12 +230,12 @@
     "semantic_hash": ""
   },
   "Formal/Lean/lake-manifest.json": {
-    "mtime": 1784655285.0993547,
+    "mtime": 1784674879.2603214,
     "ast_hash": "7ec44b551bd50697a0e30da79299a734",
     "semantic_hash": ""
   },
   "Formal/Lean/scripts/check-trust.ps1": {
-    "mtime": 1784655285.0993547,
+    "mtime": 1784674879.2603214,
     "ast_hash": "bb42e3e2caa3d2d64127d66f358cd7e4",
     "semantic_hash": ""
   },
@@ -285,17 +285,17 @@
     "semantic_hash": ""
   },
   ".github/workflows/lean.yml": {
-    "mtime": 1784667386.8253388,
+    "mtime": 1784674879.254451,
     "ast_hash": "29e131e383f633171b6957f4997beab4",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m1.md": {
-    "mtime": 1784657706.9207327,
+    "mtime": 1784674879.26373,
     "ast_hash": "3f195098a915055b6d26a35c43e70cac",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m2.md": {
-    "mtime": 1784663965.6025345,
+    "mtime": 1784674879.2646513,
     "ast_hash": "f251e70f8618d2bb6daf8876acb32df8",
     "semantic_hash": ""
   },
@@ -310,7 +310,7 @@
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/specs/temporal-kv/spec.md": {
-    "mtime": 1784666781.337552,
+    "mtime": 1784674879.272354,
     "ast_hash": "99bdb3f90fb716ea5c12925d1e066e9c",
     "semantic_hash": ""
   },
@@ -325,7 +325,7 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/proposal.md": {
-    "mtime": 1784665094.0301447,
+    "mtime": 1784674879.272354,
     "ast_hash": "1aa900429e5993e6318b1621450aa13b",
     "semantic_hash": ""
   },
@@ -350,7 +350,7 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-3-checkpoint-store/proposal.md": {
-    "mtime": 1784665094.0301447,
+    "mtime": 1784674879.272354,
     "ast_hash": "e9b8c294058f863869855f1d591c321e",
     "semantic_hash": ""
   },
@@ -365,7 +365,7 @@
     "semantic_hash": ""
   },
   "openspec/specs/temporal-kv/spec.md": {
-    "mtime": 1784666781.325552,
+    "mtime": 1784674879.272354,
     "ast_hash": "fbd7da5e01d30f7d9f552102ba9cd636",
     "semantic_hash": ""
   },
@@ -395,7 +395,7 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-4-watermarks/proposal.md": {
-    "mtime": 1784665335.106056,
+    "mtime": 1784674879.272354,
     "ast_hash": "41ca1ecbfc972c56cc5a551460f37bb1",
     "semantic_hash": ""
   },
@@ -410,13 +410,38 @@
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
-    "mtime": 1784666457.765664,
+    "mtime": 1784674879.2523565,
     "ast_hash": "2539ea3ef7981e60da44d569786b17d6",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1784666457.765664,
+    "mtime": 1784674879.254451,
     "ast_hash": "23b53c4882b1c17b172da67d7be9f08d",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md": {
+    "mtime": 1784675539.7717812,
+    "ast_hash": "72dbfa276274c76f33dd82f9f81e25a5",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-5-formal-watermarks/design.md": {
+    "mtime": 1784675339.7021832,
+    "ast_hash": "278229f96f74ecc64d96c3973e22e628",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-5-formal-watermarks/proposal.md": {
+    "mtime": 1784674987.5265625,
+    "ast_hash": "3e2b8f82b4c641b44f856c4d707ecd9c",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md": {
+    "mtime": 1784675162.1825035,
+    "ast_hash": "60649aad8bd9d9dcf6e3e16fad97af0d",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-5-formal-watermarks/tasks.md": {
+    "mtime": 1784675636.474881,
+    "ast_hash": "44a48aa51e307710faacd7bf5e091871",
     "semantic_hash": ""
   }
 }

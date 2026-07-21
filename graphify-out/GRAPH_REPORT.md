@@ -1,16 +1,16 @@
 # Graph Report - UmbraDB-storage-algebra-lean  (2026-07-21)
 
 ## Corpus Check
-- 82 files · ~122,879 words
+- 87 files · ~125,816 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 973 nodes · 1558 edges · 75 communities (73 shown, 2 thin omitted)
+- 1019 nodes · 1599 edges · 69 communities (67 shown, 2 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0b395b48`
+- Built from commit: `1f1675b3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,12 +19,12 @@
 - transaction-lease.ts
 - temporal-kv.ts
 - TemporalKV Algebra
-- migrate.ts
+- ADDED Requirements
 - Storage Algebra Lean Formalization — Approved Design and Status
 - package.json
 - ADDED Requirements
 - OpenSpec CLI
-- Storage Layer Interface Specification
+- design-interfaces.md
 - compilerOptions
 - design.md
 - Design — Sprint 4: Watermarks
@@ -34,9 +34,9 @@
 - ADDED Requirements
 - spec.md
 - Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored
-- Phase → sprint status map
+- tasks.md
+- Requirements
 - spec.md
-- design.md
 - ADDED Requirements
 - Performance — design
 - Tasks — Sprint 3: CheckpointStore
@@ -45,7 +45,7 @@
 - Storage Algebra Lean M2 Retention Sprint
 - Design — Postgres+JSONB storage rebuild
 - LEAN_FORMALIZATION_PLAN.md
-- CheckpointStore Algebra
+- design-algebra.md
 - Design — Sprint 2: Transaction/Lease
 - ADDED Requirements
 - UmbraDB
@@ -54,7 +54,7 @@
 - Design — Sprint 1: project setup + TemporalKV
 - Lean 4 Formalization Plan
 - Algebraic Specification of the midnight-pg-store Storage Layer
-- Postgres advisory-lock writer lease (corrected design)
+- design.md
 - Transaction/Lease Algebra
 - Storage Types — reference for formalization
 - Requirement: Checkpoint sequence numbers are gapless, monotonic, and scoped per wallet+network
@@ -72,19 +72,13 @@
 - Requirement: manifestHash is computed once at write time from the ordered chunk-hash sequence
 - Requirement: prune retains exactly the N newest complete manifests per wallet+network
 - temporal-kv.test.ts
-- transaction-lease.ts
-- watermarks.test.ts
-- errors.ts
-- design-interfaces.md
-- Proposal — Sprint 4: Watermarks
-- Proposal — Sprint 1: project setup + TemporalKV
-- spec.md
+- Storage Algebra Lean M3a Watermarks Sprint
+- Design — Sprint 5: Lean M3a Watermarks W1
+- Proposal — Sprint 5: Lean M3a Watermarks W1
+- Tasks — Sprint 5: Lean M3a Watermarks W1
+- Tasks — Sprint 1: project setup + TemporalKV
 - Tasks — Sprint 2: Transaction/Lease
 - design.md
-- Tasks — Sprint 4: Watermarks
-- design.md
-- ckpt_manifest_chunks position + ON DELETE CASCADE fix
-- CheckpointStore cancellation scope decision (pre-check only)
 - Transaction-handle registry (resolveTransaction)
 - Proposal — Postgres+JSONB storage rebuild (remove the MongoDB dependency)
 - pull_request_template.md
@@ -105,14 +99,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `Correctness rule: verify external claims against real source` --rationale_for--> `kv_current/kv_history temporal-table design`  [INFERRED]
   openspec/config.yaml → design/design.md
-- `startTestDatabase()` --calls--> `runMigrations()`  [EXTRACTED]
-  test/postgres/setup.ts → src/postgres/migrate.ts
 - `PgTemporalKV.put three-statement-shape design` --implements--> `TemporalKV interface`  [EXTRACTED]
   openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design-interfaces.md
 - `PgTemporalKV.put three-statement-shape design` --references--> `VersionConflictError`  [EXTRACTED]
   openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design-interfaces.md
-- `getAt single-statement UNION ALL race fix` --references--> `kv_current/kv_history temporal-table design`  [EXTRACTED]
-  openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design.md
+- `REPEATABLE READ torn-read fix (load/history)` --conceptually_related_to--> `Global cross-wallet chunk GC reclamation fix`  [EXTRACTED]
+  openspec/changes/sprint-3-checkpoint-store/design.md → design/design-interfaces.md
+- `Large-integer decimal-string cursor convention` --references--> `Watermarks interface`  [EXTRACTED]
+  openspec/changes/sprint-4-watermarks/design.md → design/design-interfaces.md
 
 ## Import Cycles
 - None detected.
@@ -125,27 +119,27 @@
 - **Modules composing the Sprint 2 transaction-handle registry** — sprint2_design_transaction_handle_registry, sprint1_design_pgtemporalkv_put, sprint3_design_torn_read_fix, sprint4_design_composing_txlease [EXTRACTED 1.00]
 - **Pre-check-only withAbort cancellation pattern across sprints** — sprint1_design_listkeys_cursor, sprint2_design_withtransaction, sprint3_design_cancellation_scope_decision, sprint4_design_cancellation [INFERRED 0.85]
 
-## Communities (75 total, 2 thin omitted)
+## Communities (69 total, 2 thin omitted)
 
 ### Community 0 - "checkpoint-store.ts"
-Cohesion: 0.08
-Nodes (29): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+21 more)
+Cohesion: 0.07
+Nodes (35): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+27 more)
 
 ### Community 1 - "transaction-lease.ts"
-Cohesion: 0.11
-Nodes (13): LeaseFaultError, LeaseNotHeldError, LeaseTimeoutError, Rollback, TransactionFaultError, TransactionHandleInvalidError, TransactionLeaseError, TransactionLeaseErrorCode (+5 more)
+Cohesion: 0.07
+Nodes (37): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, LeaseFaultError, LeaseNotHeldError, LeaseTimeoutError, Rollback, TransactionFaultError (+29 more)
 
 ### Community 2 - "temporal-kv.ts"
-Cohesion: 0.07
-Nodes (41): RFC-8259, AsOf, AssertExact, ExpectedVersionSchema, hasPostgresUnsafeText(), HistoryUnavailableError, JsonValue, jsonValueHasUnsafeText() (+33 more)
+Cohesion: 0.08
+Nodes (40): RFC-8259, AsOf, AssertExact, ExpectedVersionSchema, hasPostgresUnsafeText(), HistoryUnavailableError, JsonValue, jsonValueHasUnsafeText() (+32 more)
 
 ### Community 3 - "TemporalKV Algebra"
 Cohesion: 0.32
 Nodes (8): Law T1 — Gapless Monotonicity, Law T2 — CAS Guarded Partial Action, Law T3 — Temporal Projection, Law T4 — Dual-Addressing Agreement, Law T5 — Temporal Coherence, One-Write-Per-Key-Per-Transaction Rule, TemporalKV Algebra, TemporalKV Type Signatures
 
-### Community 4 - "migrate.ts"
-Cohesion: 0.15
-Nodes (7): assertValidSchemaName(), Migration, migrations, runMigrations(), runMigrationsImpl(), RunMigrationsOptions, withReservedTransaction()
+### Community 4 - "ADDED Requirements"
+Cohesion: 0.11
+Nodes (18): ADDED Requirements, formal-watermarks, Requirement: Command traces compose in list order, Requirement: Lookup after a trace returns the last matching value, Requirement: Set is an unconditional overwrite at the exact address, Requirement: Set preserves distinct addresses, Requirement: The abstract Watermarks store has one absence representation, Requirement: The W1 proof claim remains abstract (+10 more)
 
 ### Community 5 - "Storage Algebra Lean Formalization — Approved Design and Status"
 Cohesion: 0.05
@@ -163,57 +157,57 @@ Nodes (33): ADDED Requirements, Requirement: A caller-supplied transaction handl
 Cohesion: 0.09
 Nodes (25): Check for context, Ending Discovery, Guardrails, OpenSpec Awareness, The Stance, What You Don't Have To Do, What You Might Do, When a change exists (+17 more)
 
-### Community 9 - "Storage Layer Interface Specification"
-Cohesion: 0.12
-Nodes (16): 1.1 Error handling — one idiom: thrown, `code`-discriminated typed errors, 1.2 Async pattern, 1.3 Transaction participation, 1.4 Runtime validation, 1.5 Naming, 1. Shared Conventions, 2. `storage-errors.ts` — shared base (new file), 3.1 Transaction/Lease layer (+8 more)
+### Community 9 - "design-interfaces.md"
+Cohesion: 0.06
+Nodes (41): Module → Postgres module mapping table, private_state_salts table / per-scope salt derivation, 1.1 Error handling — one idiom: thrown, `code`-discriminated typed errors, 1.2 Async pattern, 1.3 Transaction participation, 1.4 Runtime validation, 1.5 Naming, 1. Shared Conventions (+33 more)
 
 ### Community 10 - "compilerOptions"
 Cohesion: 0.14
 Nodes (13): src/**/*.ts, test/**/*.ts, compilerOptions, declaration, esModuleInterop, module, moduleResolution, noEmit (+5 more)
 
 ### Community 11 - "design.md"
-Cohesion: 0.16
-Nodes (13): kv_history retention policy (pg_cron), postgres.js driver choice, kv_current/kv_history temporal-table design, Tier 1 / Tier 2 Postgres schema split, TransactionKeyReuseError / txid_current() fix, createClient connection factory (bigint/max fixes), Postgres error → StorageError translation table, getAt single-statement UNION ALL race fix (+5 more)
+Cohesion: 0.14
+Nodes (14): kv_history retention policy (pg_cron), postgres.js driver choice, kv_current/kv_history temporal-table design, Tier 1 / Tier 2 Postgres schema split, TransactionKeyReuseError / txid_current() fix, createClient connection factory (bigint/max fixes), Postgres error → StorageError translation table, getAt single-statement UNION ALL race fix (+6 more)
 
 ### Community 12 - "Design — Sprint 4: Watermarks"
-Cohesion: 0.17
-Nodes (12): 0. Package layout, 10. Test infrastructure, 1. Schema — one physical-parameter correction to `design/design.md` §4, 2. `set`, 3. `get`, 4. Large-integer cursor values — a documented convention, not a schema change, 5. Accepted tradeoffs (explicit, not silently possible), 6. Composing Transaction/Lease (+4 more)
+Cohesion: 0.06
+Nodes (35): watermarks table schema sketch, 0. Package layout, 10. Test infrastructure, 1. Schema — one physical-parameter correction to `design/design.md` §4, 2. `set`, 3. `get`, 4. Large-integer cursor values — a documented convention, not a schema change, 5. Accepted tradeoffs (explicit, not silently possible) (+27 more)
 
 ### Community 13 - "Proposal — Sprint 3: CheckpointStore"
 Cohesion: 0.22
-Nodes (8): Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 3: CheckpointStore, What changes, Why, ckpt_sequence_counters atomic upsert-increment allocator, Sprint 3 schema changes (position/cascade, seq, metadata cols), Gapless monotonic sequence numbers requirement
+Nodes (8): Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 3: CheckpointStore, What changes, Why, ckpt_manifest_chunks position + ON DELETE CASCADE fix, Sprint 3 schema changes (position/cascade, seq, metadata cols), Manifest preserves order/multiplicity of chunks requirement
 
 ### Community 14 - "spec.md"
-Cohesion: 0.12
-Nodes (16): Global cross-wallet chunk GC reclamation fix, withTransaction (sql.begin) implementation, REPEATABLE READ torn-read fix (load/history), Fixed-size chunk splitting requirement, Content-addressed global chunk dedup requirement, history cursor paging no-gap/no-duplicate requirement, Law C2a: referenced chunk never reclaimed, load always fully verifies chunk integrity (+8 more)
+Cohesion: 0.17
+Nodes (11): Fixed-size chunk splitting requirement, Content-addressed global chunk dedup requirement, history cursor paging no-gap/no-duplicate requirement, load always fully verifies chunk integrity, ManifestCorruptError position-gap requirement, manifestHash computed once at write time, ManifestCorruptError chunk-hash-sequence tamper requirement, CheckpointNotFoundError vs empty-history distinction (+3 more)
 
 ### Community 15 - "design.md"
-Cohesion: 0.16
-Nodes (14): Superseded — see `Formal/STORAGE_ALGEBRA.md`, Content-addressed checkpoint chunker, ckpt_manifest_chunks junction table (original, later corrected), FerretDB Mongo-compatibility shim evaluated and rejected, State-equivalence merge-blocker gate, Testcontainers vs pg-mem test-infrastructure decision, midnight-pg-store new package, Remove MongoDB dependency rationale (+6 more)
+Cohesion: 0.23
+Nodes (10): Content-addressed checkpoint chunker, ckpt_manifest_chunks junction table (original, later corrected), FerretDB Mongo-compatibility shim evaluated and rejected, State-equivalence merge-blocker gate, Testcontainers vs pg-mem test-infrastructure decision, midnight-pg-store new package, Remove MongoDB dependency rationale, Retired 11-phase task plan (+2 more)
 
 ### Community 16 - "ADDED Requirements"
 Cohesion: 0.06
 Nodes (33): ADDED Requirements, Requirement: A lease timeout surfaces distinctly for acquireLease vs. tryAcquireLease, Requirement: A resolved transaction handle always refers to its own live transaction, Requirement: A transaction timeout surfaces as TransactionFaultError, Requirement: Aborting opts.signal before withTransaction starts rejects with AbortError, Requirement: Aborting opts.signal during lease acquisition rejects with AbortError, Requirement: acquireLease waits indefinitely absent a timeout; tryAcquireLease never blocks unboundedly, Requirement: At most one holder per lease key at any instant (Law L1) (+25 more)
 
 ### Community 17 - "spec.md"
-Cohesion: 0.33
-Nodes (6): Transactions commit or roll back atomically, Connection loss surfaces as LeaseFaultError, Lease timeout distinct for acquireLease vs tryAcquireLease, releaseLease rejects a lease that is not currently held, Transaction timeout surfaces as TransactionFaultError, withLease always releases its lease, even when fn throws
+Cohesion: 0.29
+Nodes (7): Transactions commit or roll back atomically, Connection loss surfaces as LeaseFaultError, Resolved transaction handle always refers to its own live transaction, Lease timeout distinct for acquireLease vs tryAcquireLease, releaseLease rejects a lease that is not currently held, Transaction timeout surfaces as TransactionFaultError, withLease always releases its lease, even when fn throws
 
 ### Community 18 - "Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored"
-Cohesion: 0.18
-Nodes (10): ADDED Requirements, MODIFIED Requirements, Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored, Requirement: TransactionKeyReuseError is now reachable through the public put() API, Scenario: A stale transaction handle is rejected before any query runs, Scenario: Two puts inside one withTransaction both commit together, Scenario: Two puts inside one withTransaction either both commit or neither does, Scenario: Two puts to the same key inside one transaction reject and roll back together, through the public API (+2 more)
+Cohesion: 0.22
+Nodes (9): ADDED Requirements, MODIFIED Requirements, Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored, Requirement: TransactionKeyReuseError is now reachable through the public put() API, Scenario: A stale transaction handle is rejected before any query runs, Scenario: Two puts inside one withTransaction both commit together, Scenario: Two puts inside one withTransaction either both commit or neither does, Scenario: Two puts to the same key inside one transaction reject and roll back together, through the public API (+1 more)
 
-### Community 19 - "Phase → sprint status map"
-Cohesion: 0.15
-Nodes (11): For historical reference only, Phase → current status map, Phase → sprint status map, Tasks — superseded by per-sprint openspec changes, 0. Project setup, 1. TemporalKV, 2. Sprint close-out, Tasks — Sprint 1: project setup + TemporalKV (+3 more)
+### Community 19 - "tasks.md"
+Cohesion: 0.33
+Nodes (5): For historical reference only, Phase → current status map, Tasks — superseded by per-sprint openspec changes, OpenSpec project config (spec-driven schema), Correctness rule: verify external claims against real source
 
-### Community 20 - "spec.md"
-Cohesion: 0.05
-Nodes (42): Purpose, Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored, Requirement: A second write to the same key within one transaction is rejected at the trigger level, not silently absorbed, Requirement: Dual addressing agrees at recorded write timestamps (Law T4), Requirement: getAt satisfies temporal-projection equivalence (Law T3), within the store's retention window, Requirement: History intervals never overlap for a single key (Law T5), Requirement: listKeys streams without materializing the full result set first, and orders results correctly, Requirement: Migrations are idempotent and ordered (+34 more)
+### Community 20 - "Requirements"
+Cohesion: 0.06
+Nodes (32): Requirement: A caller-supplied transaction handle is honored or rejected, never silently ignored, Requirement: A second write to the same key within one transaction is rejected at the trigger level, not silently absorbed, Requirement: Dual addressing agrees at recorded write timestamps (Law T4), Requirement: getAt satisfies temporal-projection equivalence (Law T3), within the store's retention window, Requirement: History intervals never overlap for a single key (Law T5), Requirement: listKeys streams without materializing the full result set first, and orders results correctly, Requirement: Migrations are idempotent and ordered, Requirement: Postgres errors surface as the shared StorageError hierarchy (+24 more)
 
-### Community 21 - "design.md"
-Cohesion: 0.47
-Nodes (5): Advisory-lock class registry (classes 1/2/3), Migration runner advisory lock (class 1), acquireLease/tryAcquireLease timeout mechanism, Nested withTransaction unsupported (disclosed limitation), reserveBounded connection-reservation cancellation
+### Community 21 - "spec.md"
+Cohesion: 0.17
+Nodes (10): Purpose, temporal-kv Specification, Postgres errors surface as StorageError hierarchy requirement, Law T1: gapless monotonic versions requirement, Law T3: temporal-projection equivalence (getAt), Law T4: dual addressing agreement, Law T5: history intervals never overlap, listKeys streaming/order requirement (+2 more)
 
 ### Community 22 - "ADDED Requirements"
 Cohesion: 0.06
@@ -224,8 +218,8 @@ Cohesion: 0.12
 Nodes (13): 1. Postgres-side profiling, 2. Node-side query correlation, 3. GC architecture (the load-bearing decision), 4. Benchmark harness, 5. Activity logging, Performance — design, diagnostics_channel/tracingChannel Instrumentation Design, Decision: GC architecture (+5 more)
 
 ### Community 24 - "Tasks — Sprint 3: CheckpointStore"
-Cohesion: 0.29
-Nodes (7): 0. Preconditions and schema, 1. Chunking and write path, 2. Read path, 3. GC (`prune`), 4. Property tests (`Formal/STORAGE_ALGEBRA.md` §5), 5. Sprint close-out, Tasks — Sprint 3: CheckpointStore
+Cohesion: 0.11
+Nodes (16): 0. Preconditions and schema, 1. Chunking and write path, 2. Read path, 3. GC (`prune`), 4. Property tests (`Formal/STORAGE_ALGEBRA.md` §5), 5. Sprint close-out, Tasks — Sprint 3: CheckpointStore, 0. Schema (+8 more)
 
 ### Community 26 - "Design — Sprint 3: CheckpointStore"
 Cohesion: 0.14
@@ -240,12 +234,12 @@ Cohesion: 0.17
 Nodes (12): 0. How this reconciles with the Tier-2 (indexer) Postgres decision, 10. State-equivalence gate (merge blocker, mirrors the mongo-store Plan A/B gate), 1. Mongo-compatibility-shim tooling: evaluated and rejected, 2. TemporalKV → Postgres, 3. Checkpoint chunker (content-addressed, deduplicated), 4. Watermarks, 5. Commit/transaction layer, 6. Encrypted blob storage (`MongoPrivateStateProvider`/`MongoWalletStateStore`) (+4 more)
 
 ### Community 29 - "LEAN_FORMALIZATION_PLAN.md"
-Cohesion: 0.27
-Nodes (5): Keep-Knowledge-Graph-Current Policy, Keep the knowledge graph current, sprint by sprint, UmbraDB — project instructions, Abstract-Model-First Scope Decision, Custom Node/TypeScript Benchmark Harness
+Cohesion: 0.23
+Nodes (6): Keep-Knowledge-Graph-Current Policy, Keep the knowledge graph current, sprint by sprint, UmbraDB — project instructions, Abstract-Model-First Scope Decision, OpenSpec Change, Custom Node/TypeScript Benchmark Harness
 
-### Community 30 - "CheckpointStore Algebra"
-Cohesion: 0.40
-Nodes (6): crdt-lean Dependency Refutation, CheckpointStore Algebra, Law C1 — Join-Semilattice Chunk Writes, Law C2 — GC Reachability Closure, Decision Against a Merkle/Authenticated Data Structure, CheckpointStore Type Signatures
+### Community 30 - "design-algebra.md"
+Cohesion: 0.24
+Nodes (9): Superseded — see `Formal/STORAGE_ALGEBRA.md`, crdt-lean Dependency Refutation, CheckpointStore Algebra, ckpt_manifest_chunks Junction Table, Law C1 — Join-Semilattice Chunk Writes, Law C2 — GC Reachability Closure, Decision Against a Merkle/Authenticated Data Structure, CheckpointStore Type Signatures (+1 more)
 
 ### Community 31 - "Design — Sprint 2: Transaction/Lease"
 Cohesion: 0.20
@@ -279,9 +273,9 @@ Nodes (7): Harder / genuinely novel — no existing precedent to lean on, Lean 4
 Cohesion: 0.29
 Nodes (7): 1. TemporalKV — event-sourced right action with a CAS guard, 2. CheckpointStore — idempotent join-semilattice with a reachability closure, 3. Watermarks — trivial last-write-wins (deliberately *not* event-sourced), 4. Transaction / Lease — the control algebra the other three run inside, 5. Testable-law deliverable (fast-check + Vitest), 6. On not adding a Merkle/authenticated data structure, Algebraic Specification of the midnight-pg-store Storage Layer
 
-### Community 39 - "Postgres advisory-lock writer lease (corrected design)"
-Cohesion: 0.22
-Nodes (8): Postgres advisory-lock writer lease (corrected design), Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 2: Transaction/Lease, What changes, Why, Sprint 2 scope: Transaction/Lease implementation, Law L1: at most one holder per lease key
+### Community 39 - "design.md"
+Cohesion: 0.13
+Nodes (15): Advisory-lock class registry (classes 1/2/3), Postgres advisory-lock writer lease (corrected design), Phase → sprint status map, Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 2: Transaction/Lease, What changes, Why (+7 more)
 
 ### Community 40 - "Transaction/Lease Algebra"
 Cohesion: 0.33
@@ -348,64 +342,40 @@ Cohesion: 0.67
 Nodes (3): Requirement: prune retains exactly the N newest complete manifests per wallet+network, Scenario: Pruning to retain k newest keeps exactly those k, Scenario: Pruning to retain the single newest manifest keeps only it
 
 ### Community 57 - "temporal-kv.test.ts"
-Cohesion: 0.11
-Nodes (12): assertNoConflictingSearchPath(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, { sql: getSql }, { sql: getSql, connectionUri }, registerSuiteLifecycle(), startTestDatabase() (+4 more)
+Cohesion: 0.06
+Nodes (23): assertNoConflictingSearchPath(), assertValidSchemaName(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, ExclusionViolationError, Migration, migrations (+15 more)
 
-### Community 58 - "transaction-lease.ts"
-Cohesion: 0.20
-Nodes (18): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, TransactionOptions, TransactionOptionsSchema, abortError(), isStatementTimeout(), activeTransactions (+10 more)
+### Community 58 - "Storage Algebra Lean M3a Watermarks Sprint"
+Cohesion: 0.25
+Nodes (7): Adversarial examples, Audited semantic decisions, Explicit non-goals, Source layout, Storage Algebra Lean M3a Watermarks Sprint, Theorem gate, Verification matrix
 
-### Community 59 - "watermarks.test.ts"
-Cohesion: 0.14
-Nodes (6): ConnectionError, SerializationFailedError, SharedStorageErrorCode, ValidationError, FAKE_TX, { sql: getSql, connectionUri }
+### Community 59 - "Design — Sprint 5: Lean M3a Watermarks W1"
+Cohesion: 0.29
+Nodes (6): 1. Executable carrier, 2. Commands and interpretation, 3. Laws, 4. Trust and reachability, 5. Refinement boundary, Design — Sprint 5: Lean M3a Watermarks W1
 
-### Community 60 - "errors.ts"
-Cohesion: 0.23
-Nodes (9): StorageError, ClockRegressionError, CONNECTION_FAILURE_CODES, ExclusionViolationError, isConnectionFailure(), isPgDriverError(), PgDriverError, translatePostgresError() (+1 more)
+### Community 60 - "Proposal — Sprint 5: Lean M3a Watermarks W1"
+Cohesion: 0.33
+Nodes (5): Impact, Non-goals, Proposal — Sprint 5: Lean M3a Watermarks W1, What changes, Why
 
-### Community 61 - "design-interfaces.md"
-Cohesion: 0.22
-Nodes (12): Module → Postgres module mapping table, private_state_salts table / per-scope salt derivation, CheckpointNotFoundError, CheckpointStore interface, CheckpointWalletStateStore (production adapter), Throw-typed-error idiom unification across modules, PrivateStateProvider (SDK-mandated interface), StorageError shared base class (+4 more)
+### Community 61 - "Tasks — Sprint 5: Lean M3a Watermarks W1"
+Cohesion: 0.33
+Nodes (5): 0. Specification freeze, 1. Executable Watermarks model, 2. W1 theorem tranche, 3. Close-out, Tasks — Sprint 5: Lean M3a Watermarks W1
 
-### Community 62 - "Proposal — Sprint 4: Watermarks"
-Cohesion: 0.20
-Nodes (10): watermarks table schema sketch, Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 4: Watermarks, What changes, Why, Watermarks accepted tradeoffs (opaque jsonb, no history), watermarks table fillfactor=90 HOT-update tuning (+2 more)
-
-### Community 63 - "Proposal — Sprint 1: project setup + TemporalKV"
-Cohesion: 0.20
-Nodes (9): TemporalKV interface, VersionConflictError, Impact, Non-goals (explicitly out of scope for this sprint), Proposal — Sprint 1: project setup + TemporalKV, What changes, Why, Sprint 1 scope: project setup + TemporalKV (+1 more)
-
-### Community 64 - "spec.md"
-Cohesion: 0.22
-Nodes (9): Watermarks interface, Large-integer decimal-string cursor convention, Watermarks AbortSignal pre-check-only requirement, Watermarks Postgres errors surface as StorageError requirement, get never throws for an unset cursor requirement, get returns last value scoped per (kind,key) requirement, Non-object JSON value round-trip requirement, set ValidationError before statement requirement (+1 more)
+### Community 62 - "Tasks — Sprint 1: project setup + TemporalKV"
+Cohesion: 0.50
+Nodes (4): 0. Project setup, 1. TemporalKV, 2. Sprint close-out, Tasks — Sprint 1: project setup + TemporalKV
 
 ### Community 65 - "Tasks — Sprint 2: Transaction/Lease"
-Cohesion: 0.29
-Nodes (6): 0. `PgTransactionLeaseLayer` — transactions, 1. `PgTransactionLeaseLayer` — leases, 2. Wire `PgTemporalKV`'s `opts.tx`, 3. Sprint close-out, Tasks — Sprint 2: Transaction/Lease, Sprint 2 close-out / two-round audit findings
-
-### Community 66 - "design.md"
-Cohesion: 0.29
-Nodes (6): prune retainCount validation requirement, Watermarks composing Transaction/Lease via opts.tx, PgWatermarks.get implementation, Top-level null value application-level guard, set rejects top-level null requirement, Watermarks transaction handle honored requirement
-
-### Community 67 - "Tasks — Sprint 4: Watermarks"
-Cohesion: 0.29
-Nodes (7): 0. Schema, 1. `set`, 2. `get`, 3. Cancellation and errors, 4. Property test (`Formal/STORAGE_ALGEBRA.md` §5), 5. Sprint close-out, Tasks — Sprint 4: Watermarks
+Cohesion: 0.22
+Nodes (8): 0. `PgTransactionLeaseLayer` — transactions, 1. `PgTransactionLeaseLayer` — leases, 2. Wire `PgTemporalKV`'s `opts.tx`, 3. Sprint close-out, Tasks — Sprint 2: Transaction/Lease, listKeys cursor streaming + prefix escaping, raceAgainstAbort mid-wait cancellation, Sprint 2 close-out / two-round audit findings
 
 ### Community 68 - "design.md"
-Cohesion: 0.33
-Nodes (5): complete flag explicit-write requirement, history pagination query, load full chunk-integrity + manifest verification, manifest_hash tamper-detection verification, prune two-step manifest-then-chunk GC pass
-
-### Community 69 - "ckpt_manifest_chunks position + ON DELETE CASCADE fix"
-Cohesion: 0.33
-Nodes (4): ckpt_manifest_chunks position + ON DELETE CASCADE fix, Manifest preserves order/multiplicity of chunks requirement, Sprint 3 close-out / graphify update task, Sprint 4 close-out / Milestone 2 completion
-
-### Community 70 - "CheckpointStore cancellation scope decision (pre-check only)"
-Cohesion: 0.33
-Nodes (6): listKeys cursor streaming + prefix escaping, raceAgainstAbort mid-wait cancellation, Aborting opts.signal pre-check-only contract (withTransaction), CheckpointStore cancellation scope decision (pre-check only), CheckpointStore AbortSignal pre-check-only requirement, Watermarks pre-check-only cancellation
+Cohesion: 0.17
+Nodes (12): withTransaction (sql.begin) implementation, Aborting opts.signal pre-check-only contract (withTransaction), CheckpointStore cancellation scope decision (pre-check only), complete flag explicit-write requirement, history pagination query, load full chunk-integrity + manifest verification, manifest_hash tamper-detection verification, prune two-step manifest-then-chunk GC pass (+4 more)
 
 ### Community 71 - "Transaction-handle registry (resolveTransaction)"
-Cohesion: 0.47
-Nodes (6): PgTemporalKV.put three-statement-shape design, Transaction handle rejected (Sprint 1, later superseded), Transaction-handle registry (resolveTransaction), Resolved transaction handle always refers to its own live transaction, Transaction handle honored (MODIFIED, supersedes Sprint 1), PgWatermarks.set upsert implementation
+Cohesion: 0.38
+Nodes (7): PgTemporalKV.put three-statement-shape design, Transaction handle rejected (Sprint 1, later superseded), Transaction-handle registry (resolveTransaction), Transaction handle honored (MODIFIED, supersedes Sprint 1), ckpt_sequence_counters atomic upsert-increment allocator, Gapless monotonic sequence numbers requirement, PgWatermarks.set upsert implementation
 
 ### Community 72 - "Proposal — Postgres+JSONB storage rebuild (remove the MongoDB dependency)"
 Cohesion: 0.50
@@ -416,24 +386,24 @@ Cohesion: 0.50
 Nodes (3): Change summary, Mandatory Codex audit, Validation
 
 ## Knowledge Gaps
-- **440 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+435 more)
+- **469 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+464 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
+- **Why does `Storage Algebra Lean Formalization — Approved Design and Status` connect `Storage Algebra Lean Formalization — Approved Design and Status` to `LEAN_FORMALIZATION_PLAN.md`?**
+  _High betweenness centrality (0.094) - this node is a cross-community bridge._
 - **Why does `ADDED Requirements` connect `ADDED Requirements` to `Requirement: Checkpoint sequence numbers are gapless, monotonic, and scoped per wallet+network`, `Requirement: load and history distinguish "no checkpoint" from "checkpoint exists elsewhere"`, `Requirement: load always fully verifies chunk integrity before returning`, `Requirement: prune rejects a retainCount that is not a positive safe integer, before any deletion runs`, `Requirement: A chunk still referenced by any surviving manifest is never reclaimed (Law C2a)`, `Requirement: A manifest preserves the exact order and multiplicity of its chunks, including repeats`, `Requirement: An already-aborted opts.signal rejects before any database work; a signal aborting after the call has begun has no effect`, `Requirement: Checkpoint payloads are split into fixed-size chunks with a correctly-sized remainder`, `Requirement: CheckpointSummary metadata is populated and label round-trips`, `Requirement: Chunk reclamation respects the grace window, protecting against re-reference races`, `Requirement: Chunk storage is content-addressed and globally deduplicated`, `Requirement: history is newest-first, scoped per wallet+network, and supports cursor paging with no gap or duplicate`, `Requirement: manifestHash is computed once at write time from the ordered chunk-hash sequence`, `Requirement: prune retains exactly the N newest complete manifests per wallet+network`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
+  _High betweenness centrality (0.082) - this node is a cross-community bridge._
 - **Why does `checkpoint-store (implementation)` connect `ADDED Requirements` to `spec.md`?**
-  _High betweenness centrality (0.097) - this node is a cross-community bridge._
-- **Why does `Content-addressed checkpoint chunker` connect `design.md` to `design.md`, `Proposal — Sprint 3: CheckpointStore`?**
-  _High betweenness centrality (0.079) - this node is a cross-community bridge._
+  _High betweenness centrality (0.080) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `private` to the rest of the system?**
-  _440 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _469 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `checkpoint-store.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07966457023060797 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06634615384615385 - nodes in this community are weakly interconnected._
 - **Should `transaction-lease.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.11384615384615385 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06547619047619048 - nodes in this community are weakly interconnected._
 - **Should `temporal-kv.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.0712280701754386 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08209255533199195 - nodes in this community are weakly interconnected._
