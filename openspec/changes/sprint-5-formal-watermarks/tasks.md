@@ -31,34 +31,34 @@ specified persona review passes or all findings are fixed and re-reviewed.
 
 ## 1. Executable Watermarks model
 
-- [ ] 1.1 Add `Address` with derived decidable equality, functional `Store`, `empty`, `get`, `set`,
+- [x] 1.1 Add `Address` with derived decidable equality, functional `Store`, `empty`, `get`, `set`,
   `SetCommand`, `runSets`, and the independent per-address `lastMatching` observer.
   - **Acceptance:** `lake env lean UmbraDBFormal/Watermarks/Model.lean` exits 0, and
     `rg 'APISmoke' UmbraDBFormal/Watermarks` returns no matches.
-- [ ] 1.2 Add model contract examples for empty, overwrite, repeated values, distinct kinds/keys,
+- [x] 1.2 Add model contract examples for empty, overwrite, repeated values, distinct kinds/keys,
   ordered interleavings, and outer absence versus a stored null-like abstract value.
   - **Acceptance:** `lake env lean UmbraDBFormalTest/Watermarks/Model.lean` exits 0 and includes
     an elaborated `Value := Option Nat` witness distinguishing `none` from `some none`.
-- [ ] 1.3 Compile each new model/test module incrementally with the pinned Lean toolchain.
+- [x] 1.3 Compile each new model/test module incrementally with the pinned Lean toolchain.
   - **Acceptance:** `lean --version` reports 4.32.0 and each new model source/test command exits 0.
 
 ## 2. W1 theorem tranche
 
-- [ ] 2.1 Prove empty, same-address, and distinct-address lookup laws.
+- [x] 2.1 Prove empty, same-address, and distinct-address lookup laws.
   - **Acceptance:** the named declarations elaborate in `UmbraDBFormal/Watermarks/Laws.lean`, and
     `lake env lean UmbraDBFormal/Watermarks/Laws.lean` exits 0.
-- [ ] 2.2 Prove same-address last-write-wins/idempotence and distinct-address commutation.
+- [x] 2.2 Prove same-address last-write-wins/idempotence and distinct-address commutation.
   - **Acceptance:** adversarial same-address and distinct-complete-address examples elaborate in
     `UmbraDBFormalTest/Watermarks/Laws.lean` with no `sorry`, `admit`, or custom axioms.
-- [ ] 2.3 Prove trace append, expose the filtered-`getLast?` characterization of `lastMatching`,
+- [x] 2.3 Prove trace append, expose the filtered-`getLast?` characterization of `lastMatching`,
   prove lookup with initial fallback, and prove trace framing.
   - **Acceptance:** `lake env lean UmbraDBFormal/Watermarks/Laws.lean` exits 0 and exports all four
     theorem families against the independent observer.
-- [ ] 2.4 Add adversarial law examples and route source/tests through the production, test, and
+- [x] 2.4 Add adversarial law examples and route source/tests through the production, test, and
   elaborated trust-audit roots.
   - **Acceptance:** `lake env lean UmbraDBFormalTest/Watermarks/Laws.lean` and `lake build --wfail`
     exit 0; umbrella imports reach every new production and test module.
-- [ ] 2.5 Commit the executable model, laws, tests, and umbrella imports as a proof tranche.
+- [x] 2.5 Commit the executable model, laws, tests, and umbrella imports as a proof tranche.
   - **Acceptance:** `git status --short` is clean and the branch contains a commit whose diff
     includes every Watermarks Lean source/test file and required umbrella import.
 
