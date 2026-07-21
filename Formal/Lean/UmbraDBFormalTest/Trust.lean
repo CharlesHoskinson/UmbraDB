@@ -4,6 +4,8 @@ import UmbraDBFormalTest.TemporalKV.Model
 import UmbraDBFormalTest.TemporalKV.Laws
 import UmbraDBFormalTest.TemporalKV.Retention.Model
 import UmbraDBFormalTest.TemporalKV.Retention.Laws
+import UmbraDBFormalTest.Watermarks.Model
+import UmbraDBFormalTest.Watermarks.Laws
 
 /-!
 # UmbraDB proof-trust audit

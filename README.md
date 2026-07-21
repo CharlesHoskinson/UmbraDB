@@ -135,10 +135,18 @@ version lookup distinguish absence from unavailable history, preserve original
 versions and the live event, and agree with the complete M1 history throughout
 the certified retained horizon.
 
+Lean M3a now adds an executable abstract Watermarks store over the complete
+`(kind, key)` address and proves W1: unconditional overwrite, same-address
+last-write-wins and state idempotence, distinct-address framing and commutation,
+trace composition, and lookup by the final matching command with initial-store
+fallback. The generic value layer also distinguishes an untouched address from
+a stored null-like abstract value (`none` versus `some none`).
+
 Keyed-store lifting, SQL retention/refinement and retention-floor error wiring,
-leases, garbage collection, and liveness remain deferred to later work. The
-T3/T5 results concern the abstract per-key history; SQL constraints, pruning
-atomicity, and trigger discipline remain external refinement obligations.
+CheckpointStore, leases, garbage collection, and liveness remain deferred to
+later work. The T3/T5 and W1 results concern abstract stores; SQL constraints,
+pruning atomicity, triggers, JSON validation, timestamps, and transaction
+participation remain external refinement obligations.
 The small API smoke module checks imports and selected library theorem
 contracts; it does not prove those later store models.
 The default Lake build compiles those contracts and an elaborated-environment
@@ -218,7 +226,8 @@ await sql.end();
   properties are currently guaranteed by a schema constraint versus merely intended), with a
   derived list of property-based tests.
 - [`Formal/`](Formal/): formal specifications plus the Lean 4 TemporalKV kernel, including
-  retention-aware T3 and validity-chain T5 proofs; the remaining modules are future milestones.
+  retention-aware T3 and validity-chain T5 proofs, and the abstract Watermarks W1 model/laws;
+  CheckpointStore, leases, keyed transactions, and SQL refinement remain future milestones.
 - [`openspec/`](openspec/): the actual, current source of truth for anything implemented.
   `openspec/specs/` holds requirements for sprints that have been archived after merge (currently
   just TemporalKV); `openspec/changes/` holds work still in progress or completed changes awaiting

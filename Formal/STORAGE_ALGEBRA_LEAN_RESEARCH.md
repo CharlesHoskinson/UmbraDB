@@ -1,8 +1,9 @@
 # Storage Algebra Lean Formalization — Approved Design and Status
 
-- **Status:** M1 and the abstract per-key M2 TemporalKV tranche are complete;
-  later milestones remain subject to their stated proof and refinement gates
-- **Branch:** `formal/storage-algebra-lean`
+- **Status:** M1, the abstract per-key M2 TemporalKV tranche, and abstract
+  Watermarks W1 are complete; later milestones remain subject to their stated
+  proof and refinement gates
+- **Branch:** `formal/storage-algebra-lean-m3a-watermarks`
 - **Repository baseline:** `148d17fd9b957136798e98ed5986e865b281fd4f`
 - **Lean stack:** Lean 4 / mathlib `v4.32.0`
 - **Primary recommendation:** formalize an executable, history-first abstract
@@ -376,9 +377,10 @@ merely that some GC pass is scheduled.
 
 ### 5.5 Watermarks
 
-Model the observable store as `Key → Value` (or `Key → Option Value`). `set` is
-`Function.update`. Prove overwrite, last-write-wins, and same-value
-idempotence. Database metadata belongs to the refinement projection.
+Model the observable store as `(Kind × Key) → Option Value`. `set` is
+`Function.update` with `some value`. Prove overwrite, last-write-wins,
+same-value idempotence, distinct-address commutation, and final-matching-command
+trace lookup. Database metadata belongs to the refinement projection.
 
 ### 5.6 Lease state
 
@@ -528,7 +530,7 @@ Additional issues to resolve before claiming refinement:
 
 ## 9. Trust and refinement boundary
 
-### Completed M1 claims
+### Completed M1/M2/W1 claims
 
 - The executable Layer A history model assigns the next one-based version and
   appends the accepted event.
@@ -551,6 +553,12 @@ Additional issues to resolve before claiming refinement:
 - Retention-aware time and exact-version lookup characterize unavailable
   queries, preserve original versions and the live event, and agree with M1
   lookup at and above the retained floor.
+- The executable Watermarks model addresses the complete `(kind, key)` pair,
+  represents untouched lookup as `none`, and performs unconditional overwrite
+  with `some value`.
+- W1 proves same-address last-write-wins/idempotence, distinct-address framing
+  and commutation, trace append composition, and lookup from the final matching
+  command with initial-store fallback.
 
 The API smoke module also compiles selected standalone mathlib contracts. Those
 smoke declarations are not checkpoint, watermark, GC, lease, liveness,
@@ -563,8 +571,8 @@ supplied by the TemporalKV source and law modules, not by the smoke test.
   retention, unavailable-history classification, and retention-transparent
   per-key T3 are complete. Keyed-store lifting, oracle serialization, and SQL
   retention/refinement remain deferred.
-- M3: modeled watermark and checkpoint laws, compatible chunk-map laws, and
-  one-step GC safety.
+- M3: abstract Watermarks W1 is complete. Checkpoint C1, compatible chunk-map
+  laws, and one-step C2a GC safety remain deferred.
 - M4: lease-holder trace safety and any liveness theorem under explicit
   fairness, cancellation, and failure assumptions.
 - M5: keyed transaction and PostgreSQL adapter refinement evidence.
@@ -686,11 +694,11 @@ relevant content markers checked with Scrapling.
 - Lift the per-key laws to a keyed transactional state and generate a checked
   executable oracle for TypeScript property tests. **Deferred.**
 
-### M3 — simple stores (deferred)
+### M3 — simple stores (in progress)
 
-- Prove W1.
-- Prove C1 for hash sets and compatible maps.
-- Prove C2a for one-hop manifest reachability.
+- Prove W1. **Completed.**
+- Prove C1 for hash sets and compatible maps. **Deferred.**
+- Prove C2a for one-hop manifest reachability. **Deferred.**
 
 ### M4 — leases and liveness (deferred)
 
