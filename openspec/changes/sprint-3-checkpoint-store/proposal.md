@@ -1,5 +1,8 @@
 # Proposal — Sprint 3: CheckpointStore
 
+> **Status:** Implemented and merged to `main`; this completed change remains under
+> `openspec/changes/` pending archival.
+
 ## Why
 
 TemporalKV (Sprint 1) is implemented and merged. Transaction/Lease (Sprint 2) **has since merged

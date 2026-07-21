@@ -1,5 +1,8 @@
 # Proposal — Sprint 2: Transaction/Lease
 
+> **Status:** Implemented and merged to `main`; this completed change remains under
+> `openspec/changes/` pending archival.
+
 ## Why
 
 Sprint 1 (`openspec/changes/sprint-1-setup-and-temporal-kv`) shipped `PgTemporalKV` with a

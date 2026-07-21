@@ -97,6 +97,10 @@ future work, not this pass's scope.
 
 ### Harder / genuinely novel — no existing precedent to lean on
 
+**M1 status update:** `getAtTime_eq_last_prefix` now proves the per-key ordered-prefix core of T3
+directly over the executable history model. The discussion below remains relevant to the deferred
+store-level/refinement generalization, not to the completed M1 theorem.
+
 - **T3 (temporal-projection / fold-equivalence).** Mathlib's Bird-Wadler
   duality lemma (`Std.Associative`-based `foldl`/`foldr` equivalence) is a
   real building block, but **the exact lemma name cited by the original

@@ -2,15 +2,17 @@
 
 Tracked in detail per-module as `openspec/changes/sprint-N-<module>/` changes (proposal/design/
 tasks/spec, EARS-format requirements, each reviewed by an Opus panel + Fable 5 consolidation and
-a Codex GPT-5.6 Sol audit before implementation) — see `openspec/changes/sprint-1-setup-and-temporal-kv/`
-for the completed, implemented example and `openspec/changes/sprint-2-transaction-lease/` for the
-next one, in review as of this writing. [`design/tasks.md`](design/tasks.md) is the ORIGINAL
-task breakdown from before this project split into its own repo and is now retired/superseded —
+a Codex GPT-5.6 Sol audit before implementation) — Sprint 1 is archived under
+`openspec/changes/archive/`, while the completed and merged Sprint 2 Transaction/Lease, Sprint 3
+CheckpointStore, and Sprint 4 Watermarks records remain under `openspec/changes/` pending
+archival. The next work is the cross-cutting formal, testing, equivalence, and performance program.
+[`design/tasks.md`](design/tasks.md) is the
+ORIGINAL task breakdown from before this project split into its own repo and is now retired/superseded —
 see that file's own supersession note; it is kept only as a historical phase-number map, not a
 source of task detail. This page is the public-facing summary, and the target for everything
 below is **1.0.0**.
 
-## Milestone 0 — Design (current)
+## Milestone 0 — Design (completed baseline)
 
 - [x] Proposal, schema design, and interface contract written and reviewed.
 - [x] Interfaces implemented as real, typechecked TypeScript
@@ -23,7 +25,7 @@ below is **1.0.0**.
   (schema isolation, temporal-coherence enforcement, private-state key
   structure, composition notes).
 
-## Milestone 1 — Formal (`Formal/`)
+## Milestone 1 — Formal (`Formal/`, in progress)
 
 - [x] Algebraic specification written: TemporalKV as an event-sourced
   monoid action, CheckpointStore as an idempotent join-semilattice with a
@@ -31,13 +33,15 @@ below is **1.0.0**.
   last-write-wins, Transaction/Lease as a trace-based mutual-exclusion
   property — each law marked GUARANTEED (enforced today) or ASPIRATIONAL
   (intended, not yet enforced).
-- [ ] Research into mechanizing this in Lean 4 + mathlib, reviewed before
-  any Lean code is written.
-- [ ] Lean formal specification of the algebra, with the properties judged
-  tractable actually proved (not just stated) — see `Formal/` once this
-  lands.
+- [x] Lean 4 + mathlib mechanization research reviewed, toolchain pinned, and
+  trust/no-placeholder gates integrated into the default build and CI.
+- [x] Abstract per-key TemporalKV kernel mechanized: transition preservation,
+  replay and addressing laws, extensional T5 validity coverage, executable
+  prefix retention, unavailable-history classification, and retention-aware T3.
+- [ ] Extend the mechanized model to CheckpointStore, Watermarks, keyed
+  transactions, lease traces, and concrete PostgreSQL refinement obligations.
 
-## Milestone 2 — Core implementation
+## Milestone 2 — Core implementation (module implementations complete)
 
 Per `design/tasks.md` §§0–8: environment setup, then each module
 (TemporalKV, CheckpointStore, Watermarks, Transaction/Lease) implemented
@@ -82,7 +86,7 @@ separate, still-outstanding cross-cutting item — see Milestone 3 and the
 1.0.0 checklist below, where it's tracked jointly with Milestone 3, not
 resolved by this or any single sprint.
 
-## Milestone 3 — Testing
+## Milestone 3 — Testing (current)
 
 - [ ] The property-based test suite (P1–P10) derived directly from
   `Formal/STORAGE_ALGEBRA.md` §5 — implemented in TypeScript against real

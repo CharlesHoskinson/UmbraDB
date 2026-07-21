@@ -14,9 +14,8 @@ UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
   single-writer coordination. The other modules compose on top of it.
 - **CheckpointStore**: content-addressed, deduplicated, chunked storage for large periodic
   snapshots (e.g. wallet sync state), with integrity verification and reachability-based garbage
-  collection. *(Designed, not yet implemented; see [Status](#status).)*
-- **Watermarks**: simple, unversioned sync-progress cursors. *(Designed, not yet
-  implemented.)*
+  collection.
+- **Watermarks**: simple, unversioned sync-progress cursors with transactional composition.
 
 ## Why
 
@@ -51,7 +50,7 @@ of, Postgres's own transactions, constraints, and locking).
     | getAt (point-in-time)  |    |  deduplicated chunks   |    |                        |
     |        listKeys        |    |   + reachability GC    |    |                        |
     |                        |    |                        |    |                        |
-    |     (implemented)      |    |    (designed only)     |    |    (designed only)     |
+    |     (implemented)      |    |     (implemented)      |    |     (implemented)      |
     +------------------------+    +------------------------+    +------------------------+
                  |                             |                             |
                  | opts.tx / internal composition (Transaction/Lease)        |
@@ -101,7 +100,7 @@ example below does, without going through a data module at all.
 
 ## Status
 
-Two of four modules are implemented and merged:
+All four modules are implemented and merged:
 
 - **TemporalKV** (Sprint 1): `put`/`get`/`getAt`/`listKeys` against a `kv_current`/`kv_history`
   schema, with a `BEFORE UPDATE` trigger populating history and a same-transaction key-reuse
@@ -109,16 +108,51 @@ Two of four modules are implemented and merged:
 - **Transaction/Lease** (Sprint 2): `withTransaction` (real Postgres transactions, isolation
   levels, statement timeouts) and `acquireLease`/`tryAcquireLease`/`releaseLease`/`withLease`
   (connection-pinned advisory locks), wired into `TemporalKV`'s `opts.tx` parameter.
-
-**CheckpointStore** and **Watermarks** are designed (see [`design/`](design/)) but not yet built.
+- **CheckpointStore** (Sprint 3): `save`/`load`/`history`/`prune`, content-addressed chunking and
+  global deduplication, integrity verification, snapshot-consistent reads, and two-step
+  manifest/chunk garbage collection.
+- **Watermarks** (Sprint 4): transactional `set`/`get` sync cursors, with HOT-update-oriented
+  storage settings and runtime guards for the opaque JSON progress value.
 
 Every implemented module went through the same cycle before merge: draft an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) change in EARS format, put it through several
-independent review passes, fix what they find, and re-review until nothing new turns up. Both
-sprints went through multiple review rounds each and turned up genuine bugs every round: a race
+independent review passes, fix what they find, and re-review until nothing new turns up. All four
+sprints went through multiple review rounds and turned up genuine bugs: a race
 in `CREATE EXTENSION` DDL serialization, a cursor-cancellation gap in `postgres.js`, a
 connection-reservation wait with no timeout or abort handling, among others. That's the whole
 point of running it this way instead of shipping on the first green test run.
+
+## Formal verification
+
+Lean M1 is complete for the abstract per-key TemporalKV history model. The
+kernel-checked slice covers successful version assignment and append behavior,
+failed-write preservation, strict timestamp-invariant preservation, basic
+version/time lookup characterizations, accepted-write replay, and agreement
+between version and timestamp addressing. M2 derives bounded half-open validity
+intervals plus the live tail, proves pairwise disjointness and exact horizon
+coverage, and adds executable prefix retention. Retention-aware time and exact
+version lookup distinguish absence from unavailable history, preserve original
+versions and the live event, and agree with the complete M1 history throughout
+the certified retained horizon.
+
+Keyed-store lifting, SQL retention/refinement and retention-floor error wiring,
+leases, garbage collection, and liveness remain deferred to later work. The
+T3/T5 results concern the abstract per-key history; SQL constraints, pruning
+atomicity, and trigger discipline remain external refinement obligations.
+The small API smoke module checks imports and selected library theorem
+contracts; it does not prove those later store models.
+The default Lake build compiles those contracts and an elaborated-environment
+audit that rejects new axiom declarations or project declarations outside the
+approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
+
+```sh
+cd Formal/Lean
+lake build
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-trust.ps1
+```
+
+The committed manifest supplies the pinned dependency revisions. Run
+`lake update` only when intentionally refreshing that manifest.
 
 See [`ROADMAP.md`](ROADMAP.md) for the full milestone breakdown (formal verification, the
 property-test suite, performance benchmarking, and the eventual cutover) and
@@ -183,13 +217,13 @@ await sql.end();
   meant to satisfy (event-sourced monoid actions, idempotent join-semilattices, and which
   properties are currently guaranteed by a schema constraint versus merely intended), with a
   derived list of property-based tests.
-- [`Formal/`](Formal/): formal specification work in progress, precise type signatures and
-  algebraic laws intended for eventual mechanized proof in Lean 4.
+- [`Formal/`](Formal/): formal specifications plus the Lean 4 TemporalKV kernel, including
+  retention-aware T3 and validity-chain T5 proofs; the remaining modules are future milestones.
 - [`openspec/`](openspec/): the actual, current source of truth for anything implemented.
   `openspec/specs/` holds requirements for sprints that have been archived after merge (currently
-  just TemporalKV); `openspec/changes/` holds everything still in progress or not yet archived,
-  including Transaction/Lease's own spec, and historical change proposals (proposal → design →
-  tasks → EARS-format spec) for completed sprints.
+  just TemporalKV); `openspec/changes/` holds work still in progress or completed changes awaiting
+  archival, currently including Transaction/Lease, CheckpointStore, and Watermarks with their historical
+  proposal → design → tasks → EARS-format spec records.
 
 ## Layout
 
@@ -199,8 +233,8 @@ src/
     storage-errors.ts      shared error hierarchy every module builds on
     transaction-lease.ts   transactions + writer leases (implemented)
     temporal-kv.ts         versioned key-value store (implemented)
-    checkpoint-store.ts    content-addressed checkpoint persistence (designed)
-    watermarks.ts          sync-progress cursors (designed)
+    checkpoint-store.ts    content-addressed checkpoint persistence (implemented)
+    watermarks.ts          sync-progress cursors (implemented)
   postgres/
     client.ts              connection factory (schema isolation, bigint typing)
     migrate.ts             schema-versioned migration runner
@@ -209,6 +243,8 @@ src/
     abort.ts               shared AbortSignal helpers
     temporal-kv.ts         PgTemporalKV
     transaction-lease.ts   PgTransactionLeaseLayer + the cross-module handle registry
+    checkpoint-store.ts    PgCheckpointStore + chunk integrity and garbage collection
+    watermarks.ts          PgWatermarks transactional cursor storage
 test/
   postgres/                unit + property-based tests, run against real Postgres
                            (Testcontainers), not mocked

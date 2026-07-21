@@ -77,7 +77,7 @@ describe("TemporalKV properties (Formal/STORAGE_ALGEBRA.md §5)", () => {
     );
   }, 120_000);
 
-  it("P4 (Law T4): for every committed version, {version} and {at: commitInstant} addressing return the same full entry", async () => {
+  it("P4 (Law T4): for every committed version, {version} and {at: writtenAt} addressing return the same full entry", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (n) => {
         const key = freshKey();
@@ -85,9 +85,9 @@ describe("TemporalKV properties (Formal/STORAGE_ALGEBRA.md §5)", () => {
         for (let i = 0; i < n; i++) {
           const entry = await kv().put("p4", "sc", key, { i });
           committed.push({ version: entry.version, writtenAt: entry.writtenAt, value: entry.value });
-          // Force each write into a separate millisecond tick so consecutive commits never
-          // collide on the truncated timestamp (migrations/001_temporal_kv.ts's own documented
-          // residual caveat) — a real property-test concern, not test flakiness to paper over.
+          // Force each write into a separate millisecond tick so consecutive recorded write
+          // timestamps never collide after truncation (migrations/001_temporal_kv.ts's own
+          // documented residual caveat) — a real property-test concern, not test flakiness.
           await new Promise((r) => setTimeout(r, 5));
         }
         for (const c of committed) {

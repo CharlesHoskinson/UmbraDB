@@ -148,7 +148,7 @@ used as the sole signal.
 
 Added 2026-07-20 after a cross-vendor audit found the original design lost history rows under
 same-transaction double-writes (Postgres's `now()` is fixed at transaction start, so two writes
-to one key in one transaction shared an indistinguishable commit instant). Per
+to one key in one transaction shared an indistinguishable recorded timestamp). Per
 `Formal/STORAGE_ALGEBRA.md` §1 (Law T4) and `design/design.md` §2's trigger:
 `kv_current_history_trigger` SHALL reject a second `UPDATE` to the same `(ns, scope, key)` row
 within a single transaction with SQLSTATE `UB001` (translated by the adapter to
@@ -262,17 +262,20 @@ old history can be pruned.
   (in a plain, from-scratch reference implementation, not the code under
   test) only the puts at or before `T`
 
-### Requirement: Dual addressing agrees at commit instants (Law T4)
+### Requirement: Dual addressing agrees at recorded write timestamps (Law T4)
 
 For any committed version `v` of a key, `getAt(k, { version: v })` and
-`getAt(k, { at: T })`, where `T` is that version's actual commit instant,
-SHALL return equal values.
+`getAt(k, { at: T })`, where `T` is that version's successfully persisted,
+strictly increasing `writtenAt` timestamp, SHALL return equal values. The
+recorded timestamp is a statement/trigger-execution coordinate; this
+requirement does not identify it with the transaction's commit or visibility
+instant.
 
 #### Scenario: Version and timestamp addressing agree
 - **WHEN** a key is written across several versions, and for each version
-  `v` its exact commit timestamp is recorded
+  `v` its exact persisted `writtenAt` timestamp is recorded
 - **THEN** `getAt(k, { version: v })` and `getAt(k, { at: <that version's
-  commit timestamp> })` SHALL return the same value for every `v`
+  writtenAt timestamp> })` SHALL return the same value for every `v`
 
 ### Requirement: History intervals never overlap for a single key (Law T5)
 

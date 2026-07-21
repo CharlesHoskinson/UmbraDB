@@ -1,0 +1,147 @@
+name: Lean trust gate
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: lean-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Scan Lean project sources for forbidden declarations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          root = Path("Formal/Lean")
+          forbidden = {"sorry", "admit", "axiom", "unsafe"}
+          findings = []
+
+          def identifier_character(character: str) -> bool:
+              return character.isalnum() or character in "_'?!"
+
+          for path in sorted(root.rglob("*.lean")):
+              relative = path.relative_to(root)
+              if ".lake" in relative.parts:
+                  continue
+
+              source = path.read_text(encoding="utf-8")
+              index = 0
+              line = 1
+              state = "code"
+              block_depth = 0
+
+              while index < len(source):
+                  character = source[index]
+                  next_character = source[index + 1] if index + 1 < len(source) else ""
+
+                  if state == "line-comment":
+                      if character == "\n":
+                          line += 1
+                          state = "code"
+                      index += 1
+                      continue
+
+                  if state == "block-comment":
+                      if character == "/" and next_character == "-":
+                          block_depth += 1
+                          index += 2
+                          continue
+                      if character == "-" and next_character == "/":
+                          block_depth -= 1
+                          index += 2
+                          if block_depth == 0:
+                              state = "code"
+                          continue
+                      if character == "\n":
+                          line += 1
+                      index += 1
+                      continue
+
+                  if state in {"string", "character"}:
+                      if character == "\\" and next_character:
+                          if next_character == "\n":
+                              line += 1
+                          index += 2
+                          continue
+                      closing = '"' if state == "string" else "'"
+                      if character == closing:
+                          state = "code"
+                      elif character == "\n":
+                          line += 1
+                          if state == "character":
+                              state = "code"
+                      index += 1
+                      continue
+
+                  if state == "quoted-identifier":
+                      if character == "»":
+                          state = "code"
+                      elif character == "\n":
+                          line += 1
+                      index += 1
+                      continue
+
+                  if character == "-" and next_character == "-":
+                      state = "line-comment"
+                      index += 2
+                      continue
+                  if character == "/" and next_character == "-":
+                      state = "block-comment"
+                      block_depth = 1
+                      index += 2
+                      continue
+                  if character == '"':
+                      state = "string"
+                      index += 1
+                      continue
+                  if character == "«":
+                      state = "quoted-identifier"
+                      index += 1
+                      continue
+                  if character == "'" and (
+                      index == 0 or not identifier_character(source[index - 1])
+                  ):
+                      state = "character"
+                      index += 1
+                      continue
+                  if identifier_character(character):
+                      token_line = line
+                      token_start = index
+                      while index < len(source) and identifier_character(source[index]):
+                          index += 1
+                      token = source[token_start:index]
+                      if token in forbidden:
+                          findings.append((relative.as_posix(), token_line, token))
+                      continue
+                  if character == "\n":
+                      line += 1
+                  index += 1
+
+          for path, line, token in findings:
+              print(f"{path}:{line}: forbidden Lean declaration token '{token}'")
+          sys.exit(1 if findings else 0)
+          PY
+
+      - name: Build and independently check Lean declarations
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+        with:
+          lake-package-directory: Formal/Lean
+          build: true
+          build-args: "--wfail"
+          leanchecker: true

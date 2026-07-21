@@ -12,7 +12,7 @@ run independently of the Opus review that approved the previous version,
 found this document mathematically self-contradictory: Law T4 as
 originally stated is impossible to satisfy given P1 permitted multiple
 same-key writes inside one transaction (Postgres's `now()` is fixed at
-transaction start, so two such writes share one commit instant — no
+transaction start, so two such writes share one recorded timestamp — no
 timestamp-based lookup can then distinguish them). It also found T3's
 retention interaction makes `null` ambiguous between "never existed" and
 "pruned away," that T5 only ever had a non-overlap guarantee not the
@@ -127,11 +127,26 @@ distinguishes "conflict" from "never written" by a follow-up read, not by
 row-count alone.
 
 **Law T3 — temporal-projection / observational equivalence, scoped to
-retention.** Let `events(k)` be the committed put-sequence still present in
-`kv_history` (i.e. not yet pruned by retention). Then, for any `T` at or
-after the oldest timestamp `kv_history` currently retains for `k`:
+retention.** Let `completeEvents(k)` be the complete chronological sequence of
+accepted puts to `k`. In the PostgreSQL representation, that sequence is the
+bounded rows in `kv_history` followed by the live row in `kv_current`; the live
+row is an event and MUST NOT be omitted from the projection. Retention may
+remove only an oldest prefix, producing a nonempty `availableEvents(k)` suffix
+that still contains the live event. Then, for any `T` at or after the derived
+`oldestAvailableAt` floor:
 
-    getAt(k, at=T)  =  fold(events(k) filtered to writtenAt ≤ T)
+    getAt(k, at=T)
+      = shiftVersion(prunedCount(k),
+          fold(availableEvents(k) filtered to writtenAt ≤ T))
+      = fold(completeEvents(k) filtered to writtenAt ≤ T)
+
+Here `shiftVersion(n, entry)` adds the removed-prefix length `n` to the local
+suffix-fold version; the suffix fold MUST NOT restart externally visible
+versions at one. Exact-version lookup has the corresponding derived
+`oldestAvailableVersion` floor, preserves the original one-based version
+numbers after pruning, and agrees with the complete sequence at and above that
+floor. A version above the live version is absent; a time after the live event
+returns the live event.
 
 For `T` older than that retention floor, `getAt` MUST NOT return `null` or
 stale data as if the key had never existed at `T` — that conflates "never
@@ -140,45 +155,31 @@ own documented contract for `get`/`getAt` (absence ⇒ `null`) does not
 permit conflating. Instead, `getAt` for a `T` older than the retention
 floor MUST throw a distinct error carrying the actual floor
 (`HistoryUnavailableError { oldestAvailableAt, oldestAvailableVersion }` —
-add this to the TemporalKV error hierarchy), so a caller can distinguish
+already part of the TemporalKV error hierarchy), so a caller can distinguish
 "this key never existed at T" from "this key's history at T was pruned and
 is no longer knowable." **Status: MECHANISM SPECIFIED within retention**
 (the `[valid_from, valid_to)` interval read is the fold, precomputed);
-**OPEN beyond retention until `HistoryUnavailableError` is implemented** —
-Sprint 1 performs no retention at all (§0 of the Sprint 1 change), so this
-gap does not yet manifest, but the error type and the retention-floor
-tracking it needs must exist before any retention mechanism (`pg_cron` or
-partitioning) is turned on.
+**OPEN beyond retention until PostgreSQL floor metadata, coherent floor/result
+classification, and adapter error wiring are implemented** — the error type
+exists, but no retention mechanism (`pg_cron` or partitioning) may be enabled
+until those refinement obligations land.
 
-**Law T4 — dual-addressing agreement, now well-defined.** `AsOf` is
+**Law T4 — dual-addressing agreement at recorded write timestamps.** `AsOf` is
 `{version: v} | {at: T}` — two projections `π_v` and `π_T` of the same
-history. Given the structural rule above (at most one `put` per key per
-transaction), every committed version of a key has a distinct, well-defined
-`clock_timestamp()`-derived instant — call it `commitInstant(v)` — because
-no two versions can share a transaction, and Postgres's own row-level
-locking on `UPDATE` totally orders writes to the same key regardless of
-transaction boundaries. The law:
+history. Every successfully persisted version carries a distinct, strictly
+increasing `clock_timestamp()`-derived coordinate named `writtenAt(v)`. The
+one-write-per-key-per-transaction rule and same-key row-lock serialization are
+the operational assumptions that make those coordinates distinct. The law is:
 
-    getAt(k, {at = commitInstant(v)})  =  getAt(k, {version = v})
+    getAt(k, {at = writtenAt(v)})  =  getAt(k, {version = v})
 
-**Accepted residual caveat, stated explicitly rather than glossed over:**
-`commitInstant(v)` is populated using `clock_timestamp()` (real wall-clock
-time at trigger-execution time), not a true post-commit visibility
-timestamp — Postgres has no built-in mechanism to stamp a row with "the
-instant this transaction's commit became visible to other transactions" at
-write time (only `pg_xact_commit_timestamp(xid)`, a post-hoc lookup
-requiring `track_commit_timestamp = on`, usable for verification/auditing
-but not as the stored `valid_from`/`valid_to` value itself). Because writes
-to the *same key* are already serialized by Postgres's row lock (a second
-writer blocks until the first commits or rolls back), there is no race
-window in which this distinction matters for T4's own statement — the
-`clock_timestamp()` recorded for version `v` is always earlier than
-whatever a subsequent writer to the same key observes. **Status: MECHANISM
-SPECIFIED**, conditional on: (a) the one-write-per-key-per-transaction rule
-being enforced (it is, at the trigger level, per the structural rule
-above), and (b) `clock_timestamp()`, not `now()`, being used for
-`valid_from`/`valid_to`/`updated_at` (the original `now()`-based design
-was the actual T4-breaking bug; corrected here and in `design.md` §2).
+`writtenAt(v)` is a recorded statement/trigger-execution timestamp, not the
+actual transaction commit or visibility instant. T4 deliberately makes no
+claim about lookup at a true commit instant. A refinement theorem relating
+recorded write time to commit/visibility time remains deferred. **Status:
+MECHANISM SPECIFIED**, conditional on successful persistence, enforcement of
+the one-write-per-key-per-transaction rule, strict same-key timestamp increase,
+and use of `clock_timestamp()` rather than transaction-stable `now()`.
 
 **Second residual caveat, found only by actually running the implementation
 (no prior review — Opus or cross-vendor — caught this one, since it only
@@ -322,8 +323,8 @@ the boundary within which the data algebras' laws hold:
 |---|---|---|
 | T1 gapless monotonicity | yes, per-key (row lock) | cross-key/writer-role coordination is OPEN |
 | T2 CAS guard | yes (atomic `WHERE version = e`) | — |
-| T3 temporal projection | yes, within retention | beyond retention: OPEN until `HistoryUnavailableError` lands |
-| T4 dual-addressing | yes, given the one-write-per-tx rule | — |
+| T3 temporal projection | yes, within retention | PostgreSQL pruning, floor metadata/classification, and error wiring are OPEN |
+| T4 dual-addressing at `writtenAt` | yes, for successfully persisted writes | strict same-key timestamp increase and one-write-per-key-per-tx enforcement |
 | T5(1) non-overlap | yes (EXCLUDE constraint) | — |
 | T5(2) gap-freedom | — | yes, trigger remains sole writer of the boundary columns |
 | C2a safety | yes (same-tx scan) | — |
@@ -357,7 +358,7 @@ surface).
   sub-sequence with `writtenAt ≤ T`. Separately, test that a `T` older than
   the retention floor throws `HistoryUnavailableError`, not `null`.
 - **P4 (T4):** for every committed version `v`, `getAt({version:v})` and
-  `getAt({at: commitInstant(v)})` return **the same full `VersionedEntry`**
+  `getAt({at: writtenAt(v)})` return **the same full `VersionedEntry`**
   (version, value, and `writtenAt` — not just `.value`, which the original
   property under-specified and could pass even when adjacent versions
   happen to share a value).

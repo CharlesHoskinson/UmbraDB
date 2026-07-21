@@ -1,5 +1,8 @@
 # Proposal — Sprint 4: Watermarks
 
+> **Status:** Implemented and merged to `main`; this completed change remains under
+> `openspec/changes/` pending archival.
+
 ## Why
 
 TemporalKV (Sprint 1), Transaction/Lease (Sprint 2), and CheckpointStore (Sprint 3) are all
