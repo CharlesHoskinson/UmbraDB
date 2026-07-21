@@ -43,7 +43,7 @@ function toHex(buf: Buffer): ContentHash {
  *  of this function handles `bigint`. */
 function coerceToSafeNumber(value: bigint, context: string): number {
   if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
-    throw new Error(`${context}: ${value} is outside Number.MAX_SAFE_INTEGER range`);
+    throw new Error(`${context}: ${value} is outside the safe integer range`);
   }
   return Number(value);
 }

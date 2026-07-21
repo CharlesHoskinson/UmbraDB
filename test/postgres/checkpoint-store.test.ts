@@ -212,6 +212,30 @@ describe("PgCheckpointStore", () => {
       expect((await s.save("wB", "nB", randomBytes(5))).sequence).toBe(1);
       expect((await s.save("wA", "nA", randomBytes(5))).sequence).toBe(2);
     });
+
+    it("a rolled-back save's sequence claim is not consumed", async () => {
+      const sql = getSql();
+      // There is no way to inject a deliberate mid-transaction failure into the public save()
+      // API itself (it wraps everything in its own internal withTransaction call), so this
+      // constructs the exact same claim-then-rollback shape save()'s own transaction would take
+      // if a later statement in that same transaction failed: the sequence-counter upsert is a
+      // single statement inside the ambient transaction, so a ROLLBACK undoes it along with
+      // everything else, exactly like any other statement in that transaction.
+      await sql.begin(async (tx) => {
+        await tx`
+          INSERT INTO ${tx(TEST_SCHEMA)}.ckpt_sequence_counters (w, net) VALUES ('w1', 'n1')
+          ON CONFLICT (w, net) DO UPDATE
+          SET next_seq = ${tx(TEST_SCHEMA)}.ckpt_sequence_counters.next_seq + 1
+          RETURNING next_seq - 1 AS claimed_seq
+        `;
+        throw new Error("deliberate rollback simulating a mid-transaction save failure");
+      }).catch(() => {}); // expected -- the rollback itself is the point being tested, not the error
+
+      // The claim above rolled back with its transaction -- the next real save must still
+      // receive sequence 1, not 2.
+      const summary = await store().save("w1", "n1", randomBytes(5));
+      expect(summary.sequence).toBe(1);
+    });
   });
 
   describe("save — manifest_hash (task 1.4)", () => {
@@ -302,6 +326,10 @@ describe("PgCheckpointStore", () => {
       await expect(store().load("w1", "n1")).rejects.toSatisfy((err: unknown) => {
         expect(err).toBeInstanceOf(ChunkIntegrityError);
         expect((err as ChunkIntegrityError).expectedHash).toBe(chunkHash.toString("hex"));
+        // The actual rehash must differ from the recorded/expected hash -- both fields are part
+        // of the interface's documented contract for this error, not just expectedHash.
+        expect((err as ChunkIntegrityError).chunkHash).not.toBe(chunkHash.toString("hex"));
+        expect((err as ChunkIntegrityError).chunkHash).toMatch(/^[0-9a-f]{64}$/);
         return true;
       });
     });
@@ -336,7 +364,12 @@ describe("PgCheckpointStore", () => {
         USING ${sql(TEST_SCHEMA)}.ckpt_manifests m
         WHERE mc.manifest_id = m.id AND m.w = 'w1' AND m.net = 'n1' AND mc.position = 1
       `;
-      await expect(store().load("w1", "n1")).rejects.toBeInstanceOf(ManifestCorruptError);
+      await expect(store().load("w1", "n1")).rejects.toSatisfy((err: unknown) => {
+        expect(err).toBeInstanceOf(ManifestCorruptError);
+        // Task 2.4: the reason must name the structural failure, not just be instanceof-checked.
+        expect((err as ManifestCorruptError).reason).toMatch(/position/i);
+        return true;
+      });
     });
 
     it("manifest_hash tamper: substituting one junction row's chunk_hash for another valid one raises ManifestCorruptError (task 3.5)", async () => {
@@ -357,6 +390,54 @@ describe("PgCheckpointStore", () => {
       // Every per-chunk check now passes (chunkBHash is a real, individually-valid chunk), and
       // the position range is still dense -- only the manifest_hash recomputation catches this.
       await expect(store().load("w1", "n1", 1)).rejects.toBeInstanceOf(ManifestCorruptError);
+    });
+
+    it("REPEATABLE READ makes a manifest-resolve-then-chunk-fetch sequence immune to a prune committing in between", async () => {
+      // load()'s own internal transaction boundary isn't reachable from outside the adapter (no
+      // hook exists to pause between its two internal statements), so this replicates the same
+      // two-statement shape manually on a raw connection under an explicit REPEATABLE READ
+      // transaction -- the same isolation level design.md §4/§8 specifies -- to verify the actual
+      // Postgres mechanism load() relies on, rather than only trusting that the option was passed.
+      const s = store();
+      const data = randomBytes(30);
+      await s.save("w1", "n1", data, { chunkSize: 1000 });
+      const sql = getSql();
+
+      const rawA = await rawConnection();
+      try {
+        await rawA`BEGIN ISOLATION LEVEL REPEATABLE READ`;
+        // Statement 1 (load()'s manifest-resolve): takes the REPEATABLE READ snapshot here.
+        // `rawA` is a raw, unconfigured connection (no `types.bigint` override, unlike
+        // createClient's), so a bigint column comes back as a string by postgres.js's own
+        // default -- kept as a string end to end (cast back to bigint in SQL below) rather than
+        // asserting a `bigint` TS type this connection's parameter binding doesn't accept.
+        const manifestRows = await rawA<{ id: string }[]>`
+          SELECT id FROM ${rawA(TEST_SCHEMA)}.ckpt_manifests
+          WHERE w = 'w1' AND net = 'n1' AND complete ORDER BY seq DESC LIMIT 1
+        `;
+        const manifestId = manifestRows[0]!.id;
+
+        // A real prune(), on the shared pool (a completely separate connection/transaction),
+        // deletes this exact manifest and cascades its junction rows -- committing entirely
+        // independently of connection A's still-open snapshot.
+        await s.save("w1", "n1", randomBytes(5)); // second checkpoint so retaining 1 prunes the first
+        await s.prune("w1", "n1", 1);
+
+        // Statement 2 (load()'s chunk-fetch), in the SAME still-open transaction as statement 1:
+        // must still see the pre-prune junction rows, since a REPEATABLE READ snapshot is fixed
+        // at the first statement and does not observe a later-committing transaction.
+        const chunkRows = await rawA<{ position: number }[]>`
+          SELECT position FROM ${rawA(TEST_SCHEMA)}.ckpt_manifest_chunks WHERE manifest_id = ${manifestId}::bigint
+        `;
+        expect(chunkRows.length).toBeGreaterThan(0);
+        await rawA`COMMIT`;
+      } finally {
+        await rawA.end();
+      }
+
+      // Meanwhile, outside that snapshot, the prune already took effect for real.
+      const afterPrune = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_manifests WHERE w = 'w1' AND net = 'n1' AND seq = 1`;
+      expect(afterPrune).toHaveLength(0);
     });
   });
 
@@ -406,11 +487,13 @@ describe("PgCheckpointStore", () => {
 
     it("history for one wallet+network never includes another's checkpoints", async () => {
       const s = store();
-      await s.save("w1", "n1", randomBytes(5));
+      const w1Summary = await s.save("w1", "n1", randomBytes(5));
       await s.save("w2", "n1", randomBytes(5));
       const history = await s.history("w1", "n1");
-      expect(history.every((h) => h.sequence >= 1)).toBe(true);
       expect(history).toHaveLength(1);
+      // Not just a count check: confirm the one entry is actually w1's own checkpoint (by its
+      // distinguishing manifestHash), not w2's, which a length-only assertion couldn't catch.
+      expect(history[0]!.manifestHash).toBe(w1Summary.manifestHash);
     });
   });
 
@@ -499,36 +582,63 @@ describe("PgCheckpointStore", () => {
       expect(rows).toHaveLength(1); // still present -- grace window hasn't elapsed
     });
 
+    it("an unreferenced chunk past the grace window IS reclaimed, and counted in reclaimedChunks/reclaimedBytes", async () => {
+      const s = store();
+      const data = randomBytes(20);
+      await s.save("w1", "n1", data, { chunkSize: 1000 });
+      const sql = getSql();
+      const chunkHash = sha256(data);
+      await sql`UPDATE ${sql(TEST_SCHEMA)}.ckpt_chunks SET created_at = now() - interval '1 hour' WHERE hash = ${chunkHash}`;
+      await s.save("w1", "n1", randomBytes(5)); // second checkpoint so retaining 1 orphans the first
+      const result = await s.prune("w1", "n1", 1);
+
+      expect(result.reclaimedChunks).toBe(1);
+      expect(result.reclaimedBytes).toBe(data.byteLength);
+      const rows = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${chunkHash}`;
+      expect(rows).toHaveLength(0);
+    });
+
     it("deterministic: a chunk re-referenced by an uncommitted save is not reclaimed by a concurrent prune (READ COMMITTED re-evaluation)", async () => {
       const s = store();
       const chunkData = randomBytes(20);
       const chunkHash = sha256(chunkData);
-
-      // Backdate the chunk's created_at past the grace window while still referenced.
-      await s.save("w1", "n1", chunkData, { chunkSize: 1000 });
       const sql = getSql();
+
+      // Set up: the chunk exists, backdated past the grace window, and orphaned -- but orphaned
+      // via a DIRECT manifest delete (relying on ON DELETE CASCADE for the junction row), NOT via
+      // s.prune(). Calling prune() here (as an earlier, buggy version of this test did) would
+      // immediately reclaim the chunk right then -- it is already orphaned and past-window at
+      // that point -- so the race below would never actually happen: connection A's upsert would
+      // take the plain-INSERT path (no existing row to conflict with), never contending for any
+      // lock with connection B's reclaim DELETE. The test passed for a reason unrelated to the
+      // mechanism it claims to prove. This version keeps the row present and referenced-free
+      // WITHOUT reclaiming it, so connection A's ON CONFLICT DO UPDATE genuinely fires against an
+      // existing row and takes its lock.
+      await s.save("w1", "n1", chunkData, { chunkSize: 1000 });
       await sql`UPDATE ${sql(TEST_SCHEMA)}.ckpt_chunks SET created_at = now() - interval '1 hour' WHERE hash = ${chunkHash}`;
-      // Orphan it from w1's side.
-      await s.save("w1", "n1", randomBytes(5));
-      await s.prune("w1", "n1", 1);
+      await sql`DELETE FROM ${sql(TEST_SCHEMA)}.ckpt_manifests WHERE w = 'w1' AND net = 'n1'`; // cascades the junction row only
+
+      const preRace = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${chunkHash}`;
+      expect(preRace).toHaveLength(1); // confirms the chunk row itself is untouched by the setup above
 
       const rawA = await rawConnection();
       const rawB = await rawConnection();
+      let txA: Awaited<ReturnType<typeof rawA.reserve>> | undefined;
       try {
-        // Connection A: begin a transaction that re-references the chunk (refreshing created_at
-        // via the dedup upsert) but does not commit yet. reserve() pins one physical connection
-        // for the whole manual BEGIN/.../COMMIT sequence (a ReservedSql has no .begin(), matching
-        // migrate.ts's own established manual-transaction pattern).
-        const txA = await rawA.reserve();
+        // Connection A: begin a transaction that re-references the chunk via the exact dedup
+        // upsert save() itself uses -- this hits the ON CONFLICT branch (the row already exists),
+        // acquiring its row lock and refreshing created_at, but does not commit yet.
+        txA = await rawA.reserve();
         await txA`BEGIN`;
         await txA`
           INSERT INTO ${txA(TEST_SCHEMA)}.ckpt_chunks (hash, data) VALUES (${chunkHash}, ${chunkData})
           ON CONFLICT (hash) DO UPDATE SET created_at = now()
         `;
 
-        // Connection B: run the reclaim DELETE concurrently. Under READ COMMITTED it initially
-        // sees the still-stale (pre-refresh) created_at and attempts to lock the row, blocking
-        // behind connection A's held lock.
+        // Connection B: the real reclaim DELETE (mirroring prune()'s own step 2 exactly). Under
+        // READ COMMITTED it initially sees the still-stale (pre-refresh) created_at -- past the
+        // grace window -- and attempts to lock the row for deletion, blocking behind A's held
+        // lock.
         const reclaimPromise = rawB<{ hash: Buffer }[]>`
           DELETE FROM ${rawB(TEST_SCHEMA)}.ckpt_chunks c
           WHERE c.created_at < now() - interval '15 minutes'
@@ -536,14 +646,14 @@ describe("PgCheckpointStore", () => {
           RETURNING hash
         `;
 
-        // Give B a moment to reach and block on the row lock, then commit A.
+        // Give B a moment to actually reach and block on the row lock, then commit A.
         await new Promise((r) => setTimeout(r, 200));
         await txA`COMMIT`;
-        txA.release();
 
         const reclaimed = await reclaimPromise;
         expect(reclaimed.find((r) => r.hash.equals(chunkHash))).toBeUndefined();
       } finally {
+        txA?.release();
         await rawA.end();
         await rawB.end();
       }
@@ -579,6 +689,28 @@ describe("PgCheckpointStore", () => {
       expect(summary.sequence).toBe(1);
       const history = await s.history("w1", "n1");
       expect(history).toHaveLength(1);
+    });
+
+    it("a signal aborting after the call has begun does not interrupt load/history/prune either -- the same withAbort mechanism covers all four methods identically", async () => {
+      const s = store();
+      await s.save("w1", "n1", randomBytes(10));
+      await s.save("w1", "n1", randomBytes(10));
+
+      const loadController = new AbortController();
+      const loadPromise = s.load("w1", "n1", undefined, { signal: loadController.signal });
+      loadController.abort();
+      await expect(loadPromise).resolves.toBeDefined();
+
+      const historyController = new AbortController();
+      const historyPromise = s.history("w1", "n1", { limit: 50, signal: historyController.signal });
+      historyController.abort();
+      await expect(historyPromise).resolves.toHaveLength(2);
+
+      const pruneController = new AbortController();
+      const prunePromise = s.prune("w1", "n1", 1, { signal: pruneController.signal });
+      pruneController.abort();
+      const result = await prunePromise;
+      expect(result.prunedSequences).toEqual([1]);
     });
   });
 });
