@@ -7,14 +7,21 @@ Sprint 1/2's own review cadence.
 
 ## 0. Preconditions and schema
 
-- [ ] 0.0 **Reconciliation gate.** Confirm `sprint-2-transaction-lease` has merged to `main` (or,
-  if implementation of this sprint starts before that merge, confirm the exact commit of that
-  branch this sprint is built against). Diff `design.md` §8's assumed
-  `TransactionLeaseLayer`/`TransactionHandle`/`resolveTransaction` shapes against whatever
-  actually landed; if Sprint 2's own Codex-clearing pass changed any of those signatures, update
-  this change's `design.md` §8 before proceeding. **Acceptance:** a one-line note recorded in
-  this file (or a follow-up commit) stating either "no reconciliation needed, shapes match
-  `design.md` §8 exactly" or listing what changed and where §8 was updated.
+- [x] 0.0 **Reconciliation gate — RESOLVED.** Sprint 2 merged to `main` at `3db3c8d`
+  ("Merge sprint-2-transaction-lease: Transaction/Lease implementation, 2-round audit cycle").
+  Diffed `design.md` §8's assumed `TransactionLeaseLayer`/`TransactionHandle`/`resolveTransaction`
+  shapes against the real, merged `src/postgres/transaction-lease.ts` and
+  `src/interfaces/transaction-lease.ts`: method signatures, `TransactionHandle`'s opaque shape,
+  and `resolveTransaction`'s `TransactionHandleInvalidError` behavior all match exactly as
+  assumed. **One real discrepancy found, not a signature mismatch but a behavioral one**: the
+  merged `withTransaction` forwards `opts.signal` through `src/postgres/abort.ts`'s `withAbort`,
+  which is pre-check-only by its own documented contract ("an abort that fires AFTER `fn()` has
+  been dispatched has no effect on that in-flight call") — `design.md` §8's earlier draft
+  (written before this reconciliation) incorrectly assumed `withTransaction` provided genuine
+  mid-flight cancellation the way `acquireLease`/`withLease`'s dedicated `raceAgainstAbort`
+  mechanism does. `design.md` §8 has been corrected to state the real, narrower contract; task
+  2.5 below was rewritten accordingly (the lock-contention determinism machinery it previously
+  described was chasing a capability that does not exist in the merged code).
 - [ ] 0.1 Write `src/postgres/migrations/002_checkpoint_store.ts` (`design.md` §6): `ckpt_chunks`,
   `ckpt_manifests` (with `manifest_hash bytea NOT NULL` and `label text`, `design.md` §5), the
   corrected `ckpt_manifest_chunks` (`(manifest_id, position)` PK and the `manifest_id ... ON
@@ -155,26 +162,23 @@ Sprint 1/2's own review cadence.
   `reason` names the structural failure — not a silently short-concatenated payload, not a
   generic error, and not `ChunkMissingError` (the chunks all exist; the *manifest's shape* is
   what is wrong).
-- [ ] 2.5 **Cancellation (`opts.signal`) coverage** (`design.md` §8's cancellation paragraph, the
-  spec's `AbortError` requirement, now unified across all four methods per the H1 fix): for each
-  of `save`/`load`/`history`/`prune`, calling with an already-aborted signal rejects with
-  `AbortError` and issues no statement. **Mid-transaction abort, made deterministic per Codex's
-  audit (twice: first for finding no task covered `prune`'s claim at all, second for finding
-  the "abort while in flight" language gave no actual synchronization mechanism for landing the
-  abort mid-transaction rather than before or after it) — for each of `save`/`prune`:** from a
-  second raw connection, hold a lock the target call's transaction will need (e.g. a row lock on
-  a `ckpt_manifests`/`ckpt_chunks` row the call must touch, or the writer-lease advisory lock if
-  the call composes one), so the real call — invoked normally through the public
-  `save`/`prune` method, not a hand-rolled replica — starts its transaction, executes its
-  statements up to the point of contention, and blocks; poll `pg_stat_activity`/`pg_locks` until
-  the call's backend is confirmed waiting on that lock (not merely "probably blocked by now" —
-  actually observed); fire the abort at that confirmed instant; release the second connection's
-  lock; confirm the call rejects with `AbortError` and, via direct SQL, that no manifest, junction,
-  or chunk row from that call is visible and (`save` only) no sequence number was consumed (the
-  next successful `save` receives the aborted call's number — overlaps deliberately with 1.2's
-  rollback-gaplessness check, from the abort path specifically). This is the first task to
-  actually pin the abort to a confirmed mid-transaction instant, for either method, rather than
-  describing the timing in prose alone.
+- [ ] 2.5 **Cancellation (`opts.signal`) coverage — corrected to the real, merged `withTransaction`
+  contract, not the false one an earlier draft assumed** (`design.md` §8's cancellation section,
+  the spec's `AbortError` requirement): for each of `save`/`load`/`history`/`prune`, calling with
+  an already-aborted signal rejects with `AbortError`, issuing no statement. **Removed per the
+  0.0 reconciliation finding: the previously-specified lock-contention/`pg_stat_activity`-polling
+  machinery for landing an abort at a confirmed mid-transaction instant.** That machinery was
+  built to test a mid-flight-cancellation behavior the real, merged `withTransaction` (via
+  `src/postgres/abort.ts`'s `withAbort`) does not provide — it is pre-check-only by design, shared
+  with `PgTemporalKV`'s own already-audited use of the same helper. Replaced with the test that
+  actually matches the real contract: for each of the four methods, abort the signal *after*
+  issuing the call but before it would naturally resolve (ordinary `Promise` sequencing is
+  sufficient here — no lock-contention synchronization needed, since there is no race to pin) and
+  confirm the call still **completes normally** — resolves (for `load`/`history`) or persists its
+  effect (for `save`/`prune`) exactly as if the signal had never aborted — rather than incorrectly
+  rejecting with `AbortError` or leaving a partial effect. This is the behavior this design
+  actually promises; asserting anything stronger would be testing for a capability that doesn't
+  exist.
 
 ## 3. GC (`prune`)
 

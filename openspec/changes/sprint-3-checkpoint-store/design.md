@@ -434,38 +434,48 @@ result. Both methods instead wrap their own multi-statement read in
 `withTransaction(fn, { isolation: "repeatable read" })` — see §4/§5 for the exact race this closes
 and why REPEATABLE READ specifically (not just any transaction) is what's needed.
 
-One clarification to preempt a reader checking the wrong file: `resolveTransaction` is an
-adapter-internal export of Sprint 2's Postgres module (`src/postgres/transaction-lease.ts` on
-`origin/sprint-2-transaction-lease`), **not** part of the public
-`src/interfaces/transaction-lease.ts` file — by design, per that interface's own "that plumbing
-never appears in this interface" rule. Verifying §8's contract means checking the branch's
-adapter module, not the committed interface file, which will (correctly) never contain it.
+**Sprint 2 has since merged to `main`** (`3db3c8d`, "Merge sprint-2-transaction-lease:
+Transaction/Lease implementation, 2-round audit cycle") — the dependency this section originally
+described as "unmerged, accepted explicitly" (proposal.md) is now real, released code, not a
+draft interface. `resolveTransaction` is confirmed present exactly as assumed, as an
+adapter-internal export of `src/postgres/transaction-lease.ts` (now on `main`), **not** part of
+the public `src/interfaces/transaction-lease.ts` file — by design, per that interface's own "that
+plumbing never appears in this interface" rule.
 
-**Cancellation (`opts.signal`).** Every `CheckpointStore` method accepts an optional
-`AbortSignal` (`SaveCheckpointOptions`/`HistoryOptions`' intersected `signal?`; `load`/`prune`'s
-inline `opts`), and this design honors it rather than silently ignoring a declared parameter.
-All four methods reject with `AbortError` up front, before issuing any statement, when the
-signal is already aborted at call time. **Simplified after the H1 fix (§4/§5/§8 above) put
-`load`/`history` inside their own `withTransaction` call, the same as `save`/`prune`:** all four
-methods now uniformly forward `opts.signal` to their respective `withTransaction` call as
-`TransactionOptions.signal` — Sprint 2's documented cancellation contract ("abort rolls back and
-rejects with `AbortError`") — so an abort landing mid-flight rolls back that call's transaction
-and persists/returns nothing, for all four methods identically. For `save`/`prune` this means no
-manifest, junction, or chunk row survives, and no consumed sequence number (the §2.2 counter
-increment rolls back with the rest); for `load`/`history` it means no partial read is returned —
-an abort simply becomes an `AbortError` instead of a result, with no separate per-statement
-signal-checking logic needed (an earlier draft of this paragraph described `load`/`history`
-checking the signal manually before each of their own statements, which both undercounted their
-actual statement count — `history`'s per-manifest aggregation adds more than the one statement
-originally stated — and was strictly more complex than simply reusing the same
-`withTransaction`-level forwarding `save`/`prune` already needed once §4/§5 wrapped these methods
-in a transaction anyway).
+**Cancellation (`opts.signal`) — corrected against the real, merged `withTransaction`, which does
+NOT provide what an earlier draft of this section claimed.** Every `CheckpointStore` method
+accepts an optional `AbortSignal`, and all four methods reject with `AbortError` up front, before
+issuing any statement, when the signal is already aborted at call time — this part holds. **What
+does not hold, found by reading the actual merged `src/postgres/abort.ts`/`transaction-lease.ts`
+rather than assuming Sprint 2's interface doc described the implementation completely:**
+`withTransaction` forwards `opts.signal` through `withAbort`, and `withAbort`'s own doc comment is
+explicit that it is "a pre-check-only contract: an abort that fires AFTER `fn()` has been
+dispatched has no effect on that in-flight call" — unlike `acquireLease`/`withLease`, which build
+genuine mid-wait cancellation via a dedicated `raceAgainstAbort` helper (real `Query.cancel()`,
+because a lock wait can block indefinitely), `withTransaction` has no equivalent. There is no
+`Query` handle `PgCheckpointStore` could call `.cancel()` on either way — `withTransaction`'s
+callback boundary only exposes the transaction-scoped `sql`/`TransactionHandle`, never the
+individual in-flight `Query` objects `raceAgainstAbort` needs.
 
-**Reconciliation task, tracked explicitly (proposal.md's "accepted dependency" note):** if
-Sprint 2's Codex-clearing pass changes `TransactionLeaseLayer`'s method signatures,
-`TransactionHandle`'s shape, or `resolveTransaction`'s error behavior, task 0.0 (tasks.md) is
-where this design's §8 gets re-verified against the merged contract before any other task in this
-sprint starts implementation.
+**Consequently, this design makes no claim beyond what `withTransaction` actually delivers**: for
+`save`, `load`, `history`, and `prune` alike, `opts.signal` is checked once, before the call's
+`withTransaction` invocation begins — an already-aborted signal rejects with `AbortError` and
+issues no statement, exactly as stated above — but a signal that aborts *after* the call has
+begun has **no defined effect**: the call proceeds to its natural completion (success, or its own
+unrelated failure) regardless of the later abort, and does not itself reject with `AbortError`
+just because the signal fired. This is an accepted limitation inherited directly from Sprint 2's
+real, already-audit-cleared `withTransaction` contract, not a Sprint 3 design choice — closing it
+would mean either Sprint 2 growing its own mid-flight transaction cancellation (a Sprint 2 API
+change, out of this sprint's scope) or `PgCheckpointStore` building a `raceAgainstAbort`-equivalent
+of its own, which the callback-boundary limitation above rules out without a materially different
+composition than "call `withTransaction`."
+
+**Reconciliation, resolved:** Sprint 2 merged to `main` at `3db3c8d` with a 2-round audit cycle
+already complete. `TransactionLeaseLayer`'s method signatures, `TransactionHandle`'s shape, and
+`resolveTransaction`'s error behavior (`TransactionHandleInvalidError`) all match what this design
+assumed throughout §2.2/§8 — the one real discrepancy found by reconciling against the merged
+code is the cancellation gap just described above, now corrected in this section rather than left
+as the false claim an earlier draft made. Task 0.0 (tasks.md) records this resolution.
 
 ## 9. Test infrastructure
 

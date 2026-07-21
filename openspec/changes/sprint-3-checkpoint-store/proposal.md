@@ -2,12 +2,13 @@
 
 ## Why
 
-TemporalKV (Sprint 1) is implemented and merged. Transaction/Lease (Sprint 2) is drafted on
-`sprint-2-transaction-lease` and under audit (its own review cycle found real runtime-breaking
-bugs, since fixed in that branch's revised draft; it is not yet Codex-cleared or merged). Per
-`design/tasks.md`'s phase map, §2 (checkpoint chunker) and §3 (checkpoint manifests, GC, prune)
-are "not yet drafted as its own sprint... likely the same sprint... CheckpointStore is one module
-per `src/interfaces/checkpoint-store.ts`" — this change drafts that sprint.
+TemporalKV (Sprint 1) is implemented and merged. Transaction/Lease (Sprint 2) **has since merged
+to `main` as well** (`3db3c8d`, a 2-round audit cycle), after starting this draft against it as an
+in-flight dependency (see the acceptance note below, kept for the historical record of how this
+change was actually drafted). Per `design/tasks.md`'s phase map, §2 (checkpoint chunker) and §3
+(checkpoint manifests, GC, prune) are "not yet drafted as its own sprint... likely the same
+sprint... CheckpointStore is one module per `src/interfaces/checkpoint-store.ts`" — this change
+drafts that sprint.
 
 This is the largest remaining module: content-addressed chunking, global cross-wallet dedup, a
 two-step GC pass (manifest prune, then grace-windowed chunk reclamation), and the project's only
@@ -15,14 +16,15 @@ module whose correctness properties (`Formal/STORAGE_ALGEBRA.md` §2, Laws C1/C2
 composing the Transaction/Lease layer internally rather than exposing its own `tx` option
 (`src/interfaces/checkpoint-store.ts`'s interface doc, final paragraph).
 
-**Dependency on an unmerged sprint, accepted explicitly (per project direction on this point):**
-this change drafts `PgCheckpointStore` against Sprint 2's `TransactionLeaseLayer`/
-`TransactionHandle`/`resolveTransaction` contract as it stands on `sprint-2-transaction-lease`
-today. Those are stable TypeScript interface shapes even though Sprint 2's *implementation* is
-still pre-audit; if Sprint 2's Codex-clearing pass changes that contract's shape, this change's
-design/tasks must be reconciled before Sprint 3 implementation starts (tracked as task 0.0 below).
-Sprint 3 does not implement anything until Sprint 2 actually merges — only the spec is drafted in
-parallel, matching how Sprint 2 itself was drafted while Sprint 1 was only newly merged.
+**Dependency on Sprint 2, now resolved.** This change was drafted against Sprint 2's
+`TransactionLeaseLayer`/`TransactionHandle`/`resolveTransaction` contract while that sprint was
+still an in-flight, unmerged branch — accepted explicitly at the time, matching how Sprint 2
+itself was drafted while Sprint 1 was only newly merged. Sprint 2 has since merged (`3db3c8d`),
+and task 0.0 (tasks.md) records the reconciliation: every assumed shape matched, with one real
+discrepancy found by reading the merged implementation directly rather than trusting the
+interface doc alone — `withTransaction`'s cancellation is pre-check-only (no mid-flight abort),
+unlike `acquireLease`/`withLease`'s dedicated cancellation. `design.md` §8's cancellation section
+was corrected accordingly; see that section for the full explanation.
 
 ## What changes
 

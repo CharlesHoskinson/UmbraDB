@@ -93,7 +93,9 @@ and independently per distinct `(walletId, networkId)` pair.
 
 #### Scenario: A rolled-back save consumes no sequence number
 - **WHEN** a `save` call's internal transaction rolls back after claiming a sequence number
-  (whatever the rollback cause — a fault, an abort, or a deliberate rollback)
+  (a fault, or a deliberate rollback — **not** an aborted `opts.signal`, which has no effect on
+  an already-dispatched call and therefore does not roll anything back; see the AbortSignal
+  requirement)
 - **THEN** the next successful `save` for that `(walletId, networkId)` SHALL be assigned the
   sequence number the rolled-back call had claimed
 - **AND** the assigned sequence numbers across all successful saves SHALL remain gapless
@@ -322,23 +324,19 @@ label unchanged (`design.md` §5's `label` column), and SHALL carry no label whe
 - **THEN** every summary returned for it SHALL report `byteLength = L` and `chunkCount = n`
 - **AND** `createdAt` SHALL be a populated `Date`, not a missing or unmapped driver value
 
-### Requirement: An aborted opts.signal rejects with AbortError and persists/returns nothing
+### Requirement: An already-aborted opts.signal rejects before any database work; a signal aborting after the call has begun has no effect
 
 `PgCheckpointStore.save`, `load`, `history`, and `prune` SHALL each reject with `AbortError` —
-before issuing any database statement — when their `opts.signal` is already aborted at call
-time. All four methods SHALL forward the signal to their own internal `withTransaction`
-(`TransactionOptions.signal`, Sprint 2's cancellation contract) — `load`/`history` run inside
-their own `withTransaction` for snapshot consistency regardless (the requirement above), so this
-applies uniformly rather than needing separate per-statement signal-checking logic for those two
-— such that an abort landing while the transaction is in flight rolls it back and rejects with
-`AbortError`: for `save`/`prune`, persisting nothing; for `load`/`history`, returning nothing
-(no partial read).
-
-#### Scenario: Aborting load or history mid-flight rejects with AbortError and returns no partial result
-- **WHEN** `load` or `history`'s `opts.signal` is aborted while its internal transaction is still
-  in flight
-- **THEN** the call SHALL reject with `AbortError`
-- **AND** SHALL NOT resolve with a partial or inconsistent result
+before issuing any database statement — when their `opts.signal` is already aborted at call time.
+**This is the full extent of cancellation support** — corrected from an earlier draft of this
+requirement, which incorrectly claimed a mid-flight abort rolls back an in-flight transaction.
+It does not: all four methods forward `opts.signal` to their own internal `withTransaction`
+(`TransactionOptions.signal`), and that forwarding is pre-check-only (Sprint 2's real, merged
+`src/postgres/abort.ts` `withAbort` contract) — an abort firing after the call has begun has no
+effect on it. A call already in flight when its signal aborts SHALL proceed to its ordinary
+outcome (success or its own unrelated failure) exactly as if the signal had never aborted; it
+SHALL NOT reject with `AbortError` on that account, and SHALL NOT leave a partial or
+inconsistent effect caused by the late abort itself.
 
 #### Scenario: A call with an already-aborted signal is rejected before any database work
 - **WHEN** any of `save`/`load`/`history`/`prune` is called with an `opts.signal` that is
@@ -346,9 +344,11 @@ applies uniformly rather than needing separate per-statement signal-checking log
 - **THEN** the call SHALL reject with `AbortError`
 - **AND** no database statement SHALL have been issued by that call
 
-#### Scenario: Aborting a save mid-transaction persists nothing and consumes no sequence number
-- **WHEN** `save`'s `opts.signal` is aborted while its internal transaction is still in flight
-- **THEN** the call SHALL reject with `AbortError`
-- **AND** no manifest, junction row, or chunk written by that call SHALL be visible afterward
-- **AND** the next successful `save` for that `(walletId, networkId)` SHALL be assigned the
-  sequence number the aborted call had claimed (no gap)
+#### Scenario: A signal aborting after the call has begun does not interrupt it
+- **WHEN** any of `save`/`load`/`history`/`prune`'s `opts.signal` is aborted after the call has
+  already begun (its internal transaction already dispatched)
+- **THEN** the call SHALL complete its ordinary outcome unaffected by that abort — `save`/`prune`
+  SHALL commit and persist their effect normally, and `load`/`history` SHALL resolve with their
+  correct result normally
+- **AND** the call SHALL NOT reject with `AbortError` solely because the signal aborted after it
+  had already begun
