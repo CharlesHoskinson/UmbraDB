@@ -10,9 +10,9 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Scan Lean project sources for forbidden declarations
         shell: bash
@@ -82,6 +82,14 @@ jobs:
                       index += 1
                       continue
 
+                  if state == "quoted-identifier":
+                      if character == "»":
+                          state = "code"
+                      elif character == "\n":
+                          line += 1
+                      index += 1
+                      continue
+
                   if character == "-" and next_character == "-":
                       state = "line-comment"
                       index += 2
@@ -93,6 +101,10 @@ jobs:
                       continue
                   if character == '"':
                       state = "string"
+                      index += 1
+                      continue
+                  if character == "«":
+                      state = "quoted-identifier"
                       index += 1
                       continue
                   if character == "'" and (
@@ -120,7 +132,7 @@ jobs:
           PY
 
       - name: Build and independently check Lean declarations
-        uses: leanprover/lean-action@v1
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
         with:
           lake-package-directory: Formal/Lean
           build: true

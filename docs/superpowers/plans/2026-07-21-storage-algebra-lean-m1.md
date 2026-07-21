@@ -372,14 +372,15 @@ Expected: all three commands exit 0 with no errors or warnings.
 
 **Files:**
 - Create: `Formal/Lean/scripts/check-trust.ps1`
+- Create: `Formal/Lean/UmbraDBFormalTest/Trust.lean`
 - Create: `.github/workflows/lean.yml`
 - Modify: `README.md`
 - Modify: `Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md`
 
 **Interfaces:**
 - Consumes: the complete M1 library and generated Lake manifest.
-- Produces: local `check-trust.ps1`, GitHub Actions build/no-`sorry` gate, concise README commands,
-  and accurate M1 status.
+- Produces: local `check-trust.ps1`, a default-build elaborated-environment axiom audit, GitHub
+  Actions build/no-`sorry` gate, concise README commands, and accurate M1 status.
 
 - [ ] **Step 1: Write a red trust-gate fixture outside the repository**
 
@@ -392,10 +393,15 @@ the repository.
 - [ ] **Step 2: Implement the local trust gate**
 
 `check-trust.ps1` SHALL accept `-Root` defaulting to its parent Lean project, recursively inspect
-tracked `.lean` files, and fail on declaration tokens `sorry`, `admit`, `axiom`, or `unsafe` after
+project `.lean` files, and fail on declaration tokens `sorry`, `admit`, `axiom`, or `unsafe` after
 excluding comments and strings. It SHALL run `lake build` from the Lean project root and preserve
 the command's exit code. It SHALL print the exact offending relative file and line without dumping
 unrelated source.
+
+The default test target SHALL also compile an environment-level audit. It rejects any axiom
+declaration beyond the pinned Lean/mathlib import baseline and checks every declaration originating
+from an `UmbraDBFormal*` module against the permitted transitive set `propext`,
+`Classical.choice`, and `Quot.sound`.
 
 - [ ] **Step 3: Verify red and green trust-gate behavior**
 
@@ -421,7 +427,6 @@ Add a short README Formal Verification section with:
 
 ```powershell
 Set-Location Formal/Lean
-lake update
 lake build
 powershell -ExecutionPolicy Bypass -File scripts/check-trust.ps1
 ```
@@ -467,5 +472,5 @@ user-owned paths.
   and PostgreSQL refinement remain excluded; the API smoke theorems only verify imports.
 - Type consistency: all model/law/test declarations use `History Value Time`, one-based `Nat`
   versions, `Outcome Value Time`, and `Failure Time` consistently.
-- Trust consistency: the source scan, warning-free build, nanoda no-`sorry` check, and review
-  council are independent gates; none substitutes for Lean's kernel.
+- Trust consistency: the source scan, environment-level axiom audit, warning-free build, nanoda
+  no-`sorry` check, and review council are independent gates; none substitutes for Lean's kernel.

@@ -655,11 +655,13 @@ relevant content markers checked with Scrapling.
 - Pin Lean/mathlib `v4.32.0`.
 - Implement Layer A and its well-formedness invariant.
 - Prove preservation, T1, T2, lookup basics, and one T4 theorem.
-- Add `lake build` and axiom/sorry checks to CI.
+- Add default contract-test compilation, an elaborated-environment axiom audit,
+  source scanning, warning-as-error builds, and an independent no-`sorry` check to CI.
 
 ### M2 — complete temporal laws (deferred)
 
-- Prove T3 using ordered prefixes.
+- Strengthen M1's per-key ordered-prefix lookup characterization into the full
+  store-level T3 temporal-selection law.
 - Derive T5 intervals and prove disjointness/gap-freedom.
 - Generate test vectors or an executable oracle for TypeScript property tests.
 

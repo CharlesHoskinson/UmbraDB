@@ -64,13 +64,18 @@ Retention and unavailable-history semantics, interval/T5 laws, keyed
 transactions, SQL refinement, leases, garbage collection, and liveness remain
 deferred to M2–M5. The small API smoke module checks imports and selected
 library theorem contracts; it does not prove those later store models.
+The default Lake build compiles those contracts and an elaborated-environment
+audit that rejects new axiom declarations or project declarations outside the
+approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
 
 ```powershell
 Set-Location Formal/Lean
-lake update
 lake build
 powershell -ExecutionPolicy Bypass -File scripts/check-trust.ps1
 ```
+
+The committed manifest supplies the pinned dependency revisions. Run
+`lake update` only when intentionally refreshing that manifest.
 
 ## Interfaces
 

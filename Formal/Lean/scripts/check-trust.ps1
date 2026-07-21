@@ -45,7 +45,10 @@ $forbiddenTokens = @{
 function Test-LeanIdentifierCharacter {
   param([char]$Character)
 
+  $category = [Globalization.CharUnicodeInfo]::GetUnicodeCategory($Character)
   return [char]::IsLetterOrDigit($Character) -or
+    $category -eq [Globalization.UnicodeCategory]::LetterNumber -or
+    $category -eq [Globalization.UnicodeCategory]::OtherNumber -or
     $Character -eq '_' -or
     $Character -eq "'" -or
     $Character -eq '?' -or
@@ -141,6 +144,16 @@ foreach ($file in $leanFiles) {
         $index++
         continue scan
       }
+
+      'quoted-identifier' {
+        if ($character -eq [char]0x00BB) {
+          $state = 'code'
+        } elseif ($character -eq "`n") {
+          $line++
+        }
+        $index++
+        continue scan
+      }
     }
 
     if ($character -eq '-' -and $hasNext -and $nextCharacter -eq '-') {
@@ -156,6 +169,11 @@ foreach ($file in $leanFiles) {
     }
     if ($character -eq '"') {
       $state = 'string'
+      $index++
+      continue
+    }
+    if ($character -eq [char]0x00AB) {
+      $state = 'quoted-identifier'
       $index++
       continue
     }
