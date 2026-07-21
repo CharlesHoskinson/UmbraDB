@@ -19,7 +19,8 @@ theorem checkpoint_union_assoc [DecidableEq Hash] (a b c : Finset Hash) :
 theorem checkpoint_union_idem [DecidableEq Hash] (chunks : Finset Hash) :
     chunks ∪ chunks = chunks := Finset.union_idempotent chunks
 
-theorem adjacent_Ico_disjoint [Preorder Time] (start middle finish : Time) :
+theorem adjacent_Ico_disjoint [Preorder Time] (start middle finish : Time)
+    (_h₁ : start ≤ middle) (_h₂ : middle ≤ finish) :
     Disjoint (Set.Ico start middle) (Set.Ico middle finish) := by
   exact Set.Ico_disjoint_Ico_same
 
