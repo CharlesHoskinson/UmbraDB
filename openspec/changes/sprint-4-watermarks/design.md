@@ -127,8 +127,11 @@ async set<T extends WatermarkValue>(
 Unlike `CheckpointStore.save`/`prune` (which compose `withTransaction` internally and accept no
 `tx` option, per that interface's own doc), `Watermarks.set`/`get` accept a caller-supplied
 `TransactionHandle` directly — the same composition pattern `PgTemporalKV.put`/`get` already use.
-`sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql` (mirroring
-`temporal-kv.ts`'s own `putImpl` exactly). Validate `value` against `WatermarkValueSchema`
+`sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql` (mirroring the real,
+merged `temporal-kv.ts` exactly — this line lives in the public `put`/`get` methods themselves,
+which resolve the connection before calling their own private `putImpl`/`getImpl`, not inside
+those impl functions; corrected per Codex's audit, which found the original citation named the
+wrong function). Validate `value` against `WatermarkValueSchema`
 (`ValidationError` before any statement, per the interface's own `@throws` doc), then:
 
 ```sql
@@ -170,7 +173,7 @@ pre-existing gap left for a future change to close at its own boundary.
 
 No CAS, no version, no history: `set` unconditionally overwrites, matching Law W1 exactly
 (`set(set(x, v), v) = set(x, v)`, `Formal/STORAGE_ALGEBRA.md` §3). Cancellation is pre-check-only
-`withAbort` (§6 below) — no transaction to roll back on a late abort, no lock wait, no cursor;
+`withAbort` (§7 below) — no transaction to roll back on a late abort, no lock wait, no cursor;
 the call either hasn't started (abort honored) or has already committed (abort has no effect),
 with nothing in between worth building dedicated cancellation for.
 
@@ -286,9 +289,14 @@ understanding of `withAbort`'s real contract (`sprint-3-checkpoint-store/design.
 Per the interface's own doc: "this module defines no error hierarchy of its own; its only failure
 modes are the shared infrastructure errors" — `ValidationError` (boundary check, raised directly,
 never a SQLSTATE translation), `ConnectionError` (driver-level failure, already handled generically
-by `translatePostgresError`), `SerializationFailedError` (a JSONB round-trip failure — not
-expected to fire in the currently-used `sql.json()` path, but already a generic, existing
-translation, not something this module adds). No new SQLSTATE mapping, matching
+by `translatePostgresError`), `SerializationFailedError` (a JSONB round-trip failure — **corrected
+per Codex's audit, which found the prior wording wrong**: this is NOT "already a generic, existing
+translation" — `src/postgres/errors.ts` never imports or throws it today; it exists only as an
+interface-level `StorageError` subclass this module *could* raise directly if a JSONB round-trip
+ever genuinely failed, not something `translatePostgresError` maps any SQLSTATE to. The practical
+conclusion is unchanged — not expected to fire on the currently-used `sql.json()` path, so no test
+or new translation is added for it — only the "already a generic, existing translation" phrasing
+was inaccurate). No new SQLSTATE mapping, matching
 `sprint-3-checkpoint-store/design.md` §7's identical conclusion for the same underlying reason:
 this module has no database-level constraint whose violation needs a bespoke translated error
 type.

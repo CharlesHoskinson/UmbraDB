@@ -10,34 +10,48 @@ Sprint 1-3's own review cadence.
 - [ ] 0.1 Write `src/postgres/migrations/003_watermarks.ts` (`design.md` §1/§9): the single
   `watermarks` table, schema-qualified via `sql(schema)`, with `WITH (fillfactor = 90)` and the
   `updated_at DEFAULT now()` intra-transaction-caveat comment. Add the migration to
-  `src/postgres/migrate.ts`'s `migrations` array. **Acceptance:** after `runMigrations`, the table
-  exists with exactly the columns/PK `design.md` §1 specifies (verified via
+  `src/postgres/migrate.ts`'s `migrations` array. **Also do the citation re-verification design.md
+  §1 hedges on but this task previously never actually required** (Codex's audit noted the gap
+  between the promise and the acceptance criteria): before finalizing this task, confirm the
+  Debezium/Sui/Aptos file paths and the Midnight indexer's `spo_stake_refresh_state` table
+  (design.md §1) still resolve against freshly-fetched upstream source, and record either "matches
+  as cited" or what changed, in this file or a follow-up commit — matching `design/design.md`
+  §2's own precedent for this kind of external claim. **Acceptance:** after `runMigrations`, the
+  table exists with exactly the columns/PK `design.md` §1 specifies (verified via
   `information_schema`, not just "the migration didn't error"); a test asserts the table's
   `reloptions` (via `pg_class.reloptions` or `SHOW (fillfactor)` equivalent) actually includes
   `fillfactor=90` — a schema-shape regression here would silently drop the HOT-eligibility fix
   `design.md` §1 makes; a test asserts no index exists on `value` or `updated_at` beyond the
   primary key (`design.md` §1's hard invariant), so a future migration can't accidentally violate
   it without at least one existing test needing to change.
-- [ ] 0.2 **HOT-update regression test, direct SQL level.** Insert a `watermarks` row, then
-  `UPDATE` it in place (same `kind`/`key`, different `value`) many times (e.g. 50) in a loop,
-  using **fixed-size `value`s across the whole loop** (same serialized byte length every
-  iteration — a growing value forces page-growth non-HOT fallbacks that have nothing to do with
-  the `fillfactor` setting under test), and assert via `pg_stat_user_tables` (`n_tup_hot_upd` vs
-  `n_tup_upd` for this table) that `fillfactor=90` actually delivers HOT updates in practice, not
-  just that the reloption is present. Two known non-determinism sources MUST be handled
-  explicitly, not assumed away: (a) Postgres's cumulative statistics system does not guarantee
-  immediate visibility after commit — the test SHALL call `pg_stat_force_next_flush()` (PG15+,
-  which the Testcontainers image satisfies) and then poll `pg_stat_user_tables` until the
-  `n_tup_upd` delta reaches the update count issued (bounded retry loop, not a single
-  read-after-commit); (b) an individual update can legitimately fall back to non-HOT as a page
-  fills, so an exact ratio of 1 is not guaranteed run-to-run even when the fix works.
-  **Acceptance:** the test reads `pg_stat_user_tables` before the loop, performs the
-  flush-and-poll settle step above after it, and asserts `n_tup_hot_upd` accounts for **at least
-  90% of the `n_tup_upd` delta** — tolerance justified explicitly: with fixed-size values and
-  `fillfactor=90`'s 10% per-page slack, occasional page-local non-HOT fallbacks are legitimate,
-  but a sub-90% ratio at this row count means HOT is not actually engaged. The initial insert is
-  excluded from the calculation entirely (it is not an `UPDATE` and is never HOT by definition),
-  not folded into an unquantified "tolerance."
+- [ ] 0.2 **HOT-update regression test, direct SQL level, isolating `fillfactor`'s actual effect**
+  (**tightened per Codex's audit, which found the original single-table version could reach a
+  near-100% HOT ratio even at the DEFAULT `fillfactor=100` — a lone row sitting on an otherwise-
+  empty page has ample same-page slack regardless of `fillfactor`, so that version never actually
+  isolated what this test claims to prove**). Create TWO tables in the test's own scratch schema
+  with otherwise-identical DDL to `watermarks`: one with `fillfactor=90` (the real setting), one
+  with the Postgres default `fillfactor=100` (the counterfactual). Insert one row into each, then
+  run the SAME `UPDATE` loop (many iterations, e.g. 50; same fixed-size `value` across every
+  iteration and across both tables — a growing value forces page-growth non-HOT fallbacks
+  unrelated to the setting under test) against both tables, packing enough OTHER filler rows onto
+  each table beforehand (e.g. via `pg_freespacemap`-informed row count, or simply enough rows that
+  the target row's page is genuinely near-full) that the two `fillfactor` settings can actually
+  produce different outcomes — a test where neither table's page is ever under real pressure
+  proves nothing either way. Two known non-determinism sources MUST be handled explicitly: (a)
+  Postgres's cumulative statistics system does not guarantee immediate visibility after commit —
+  call `pg_stat_force_next_flush()` (added in PG15; `test/postgres/setup.ts`'s
+  `postgres:17-alpine` image satisfies this) then poll `pg_stat_user_tables` in a **bounded loop**
+  (state the bound and interval explicitly, e.g. up to 20 attempts, 50ms apart) until each table's
+  `n_tup_upd` delta reaches the issued update count, rather than a single read-after-commit; (b)
+  run the entire update loop for a given table through **one pinned connection** (`sql.reserve()`,
+  not the ambient pool — this project's default pool size is 5, and letting the driver route
+  updates across different pooled connections adds session-level noise this test doesn't need).
+  **Acceptance:** the test asserts the `fillfactor=90` table's `n_tup_hot_upd`/`n_tup_upd` ratio is
+  measurably higher than the `fillfactor=100` table's under the SAME page-pressure conditions —
+  the comparison, not an absolute threshold on one table alone, is what actually demonstrates the
+  setting does something (a single-table "at least 90%" assertion, as the original version had,
+  cannot distinguish "the setting works" from "this workload never needed it"). The initial
+  inserts are excluded from both tables' calculations (never HOT by definition).
 
 - [ ] 0.3 **Interface doc-only change** (`design.md` §4): add a TSDoc note to
   `src/interfaces/watermarks.ts`'s `WatermarkValue`/`WatermarkValueSchema` documenting the
@@ -64,19 +78,21 @@ Sprint 1-3's own review cadence.
   raw SQLSTATE 23502 error, with no row written (`design.md` §2's top-level-null guard, an
   application-level check, not a schema change); a test calls
   `set(kind, key, v)` twice with the identical `v` and confirms exactly one row exists for
-  `(kind, key)` afterward, not two.
+  `(kind, key)` afterward, not two. **Tightened per Codex's audit — "no row written" alone is a
+  weaker proxy than spec.md's own promised "before issuing any database statement" and could pass
+  even if a query round-trip happened before the rejection:** for both the `bigint`-value and the
+  `null`-value cases, additionally assert no statement was issued at all — e.g. via a test-only
+  connection wrapper/spy counting queries issued on the pool, asserting the count is unchanged
+  across the rejected call. If no such instrumentation point is practical against this project's
+  actual `sql`/`postgres.js` usage, that limitation must be recorded explicitly in the test's own
+  comment (state which of the two guarantees — "no row persisted" vs. "no statement issued" — is
+  actually being verified), not silently treated as equivalent.
 - [ ] 1.2 **Non-object JSON root test** (`design.md` §2's `sql.json()` requirement, the spec's
   round-trip requirement): call `set` with a bare number and, separately, a bare string as the
-  entire `value`, and confirm `get` returns each exactly. Additionally, exercise `design.md` §4's
-  large-integer convention with its recommended encoding: `set(kind, key, "9007199254740993")`
-  (a decimal-string encoding of a value above `Number.MAX_SAFE_INTEGER`) must round-trip through
-  `get` digit-for-digit exactly — proving the documented mitigation for the proposal's own named
-  #1 risk actually works, without re-proving the bare-number precision-loss failure mode itself
-  (that is established Node.js `JSON.parse` behavior, not this project's bug). **Acceptance:**
-  all three cases pass without
-  a type-inference error from the driver (the specific failure mode `design.md` §2 cites,
+  entire `value`, and confirm `get` returns each exactly. **Acceptance:** both cases pass without a
+  type-inference error from the driver (the specific failure mode `design.md` §2 cites,
   `porsager/postgres#386`) — a regression here would mean `sql.json()` was dropped from the
-  implementation — and the decimal-string case asserts exact string equality, digit for digit.
+  implementation.
 - [ ] 1.3 **Transaction participation test** (`design.md` §6, the spec's tx-handle requirement):
   open a transaction via `PgTransactionLeaseLayer.withTransaction`, call `set` with that
   transaction's handle as `opts.tx`, and confirm `get` — called with the SAME handle, before the
@@ -89,6 +105,26 @@ Sprint 1-3's own review cadence.
   `TransactionHandleInvalidError` with no statement issued — the contract
   `src/interfaces/transaction-lease.ts` documents for every `opts.tx`-accepting storage-layer
   method, and the spec's stale-or-fabricated-handle scenario.
+- [ ] 1.4 **Large-integer convention pair, made actually diagnostic** (**corrected per Codex's
+  audit, which found the original single decimal-string round-trip test redundant with 1.2's
+  plain bare-string case — a quoted decimal string never gets numerically coerced regardless of
+  its digit count, so that test alone proves nothing specific to the large-integer risk it claims
+  to guard**). Two tests, together, not one:
+  (a) `set(kind, key, "9007199254740993")` (a decimal-string encoding of a value above
+  `Number.MAX_SAFE_INTEGER`) round-trips through `get` digit-for-digit exactly — this establishes
+  the recommended mitigation is at least mechanically sound (still redundant with 1.2's string
+  case at the driver level, kept here only because it's the artifact a reader of `design.md` §4
+  would expect to find tested alongside its neighbor);
+  (b) **the actual diagnostic**: `set(kind, key, 9007199254740993)` — the SAME value as a bare
+  JSON *number*, not a string — and confirm `get` returns `9007199254740992` (the silently
+  corrupted, precision-lost value `design.md` §4 documents), NOT the original value. This is the
+  executable proof of the exact failure mode the convention exists to avoid; without it, nothing
+  in this test suite demonstrates the risk is real, only that the workaround round-trips (which
+  any string does). **Acceptance:** (a) asserts exact string equality, digit for digit; (b)
+  asserts the returned number is exactly `9007199254740992`, documenting the real precision loss
+  as an executable fact rather than an assumed one — if a future Node.js/postgres.js
+  version somehow stopped exhibiting this, this test failing would be a signal worth investigating,
+  not a regression to silently paper over.
 
 ## 2. `get`
 
@@ -145,10 +181,18 @@ Sprint 1-3's own review cadence.
   — a CI run passing is not sufficient evidence on its own, per every prior sprint's close-out
   standard.
 - [ ] 5.2 Update `ROADMAP.md`'s Milestone 2 checklist (mark Watermarks done — this completes
-  Milestone 2's module-implementation checklist; the differential state-equivalence gate
-  `ROADMAP.md`'s Milestone 2 intro prose mentions is a Milestone 3 checklist item, tracked
-  there, and is not claimed here) and `design/tasks.md`'s phase-map table (mark the §4 row
-  superseded) so the roadmap doesn't drift from what's actually been built.
+  Milestone 2's four-module checklist) and `design/tasks.md`'s phase-map table (mark the §4 row
+  superseded) so the roadmap doesn't drift from what's actually been built. **Corrected per
+  Codex's audit, which found the prior wording understated `ROADMAP.md`'s own framing**: the
+  differential state-equivalence gate is explicitly tagged "(Milestone 2/3)" in `ROADMAP.md`'s own
+  1.0.0 acceptance checklist (not purely a Milestone 3 item), and Milestone 2's own intro prose
+  frames that gate as a precondition for considering *any* module in this checklist genuinely
+  "done" ("not just 'its own tests pass,' but verified equivalent to the reference behavior it's
+  replacing") — do not word this close-out as "Milestone 2 is entirely complete" without also
+  noting that the differential gate itself (jointly owned by Milestones 2 and 3, not resolved by
+  this or any single sprint) remains open. State plainly: this sprint completes the fourth and
+  final module's own implementation; the cross-cutting differential-equivalence gate that
+  Milestone 2's own prose ties to "done" is separately tracked and still outstanding.
 - [ ] 5.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit
   the refreshed `graphify-out/` outputs in this close-out commit, so the knowledge graph doesn't
   silently drift stale behind this sprint's new openspec change and code.
