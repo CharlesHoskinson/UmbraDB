@@ -80,9 +80,22 @@ requirement is explicitly conditional on serialization, per
 `Formal/STORAGE_ALGEBRA.md` Law T1, not a claim that concurrent
 unserialized writers cannot race.
 
+**Also explicitly conditional on the millisecond-collision caveat, corrected by a third-round
+cross-vendor re-audit that found this Requirement still claimed unconditional gaplessness after
+a DIFFERENT requirement had already documented the exception.** Since Sprint 1 does not wire
+`opts.tx` yet, each sequential `put` in the Scenario below is its own separate, autocommitting
+transaction — exactly the case `ClockRegressionError`'s own doc describes. If two of the N
+sequential writes to one key have `clock_timestamp()`-derived, millisecond-truncated instants
+landing in the SAME millisecond, the second SHALL reject with `ClockRegressionError` (SQLSTATE
+`23514`) rather than assigning the next consecutive version — this is the accepted, disclosed
+tradeoff `Formal/STORAGE_ALGEBRA.md` §1's Law T4 caveat already documents, not a violation of
+this Requirement; the Requirement's gapless-and-monotonic guarantee holds for any sequence of
+writes that does NOT hit that collision, which is what the word "serialized" above is scoped to.
+
 #### Scenario: Sequential unconditional writes produce consecutive versions
 - **WHEN** a key is written N times in sequence with no `expectedVersion`
-  supplied, no concurrent writer involved
+  supplied, no concurrent writer involved, and no two of the N writes'
+  truncated `clock_timestamp()` instants land in the same millisecond
 - **THEN** the assigned versions SHALL be exactly `1, 2, 3, ..., N` in
   order, with no gap and no repeated value
 
@@ -140,7 +153,22 @@ to one key in one transaction shared an indistinguishable commit instant). Per
 `kv_current_history_trigger` SHALL reject a second `UPDATE` to the same `(ns, scope, key)` row
 within a single transaction with SQLSTATE `UB001` (translated by the adapter to
 `TransactionKeyReuseError`), and SHALL NOT insert a `kv_history` row that would go unrecorded as
-a result of the rejection — the first write's row remains exactly as committed.
+a result of the rejection.
+
+**Corrected 2026-07-20 by a follow-up cross-vendor audit — a prior version of this Requirement
+overclaimed what actually survives.** An uncaught error raised inside a Postgres transaction
+aborts the ENTIRE transaction — Postgres's own documented behavior ("current transaction is
+aborted, commands ignored until end of transaction block") gives no way to commit part of a
+transaction while only the failing statement rolls back, absent an explicit `SAVEPOINT` this
+design does not use. This Requirement therefore does NOT claim the first write's row "remains
+committed" after a rejected second write — nothing in that transaction commits at all unless the
+caller catches the error and takes its own recovery action (e.g. retrying the whole transaction
+with only the first write). What IS guaranteed, and is the actual point of this Requirement: no
+`kv_history` row is silently dropped as a side effect of the rejection (the original bug this
+Requirement replaces) — the trigger fails loudly instead of losing data quietly. Whether a
+future sprint wraps each `put` in its own `SAVEPOINT` so a same-transaction reuse only rolls back
+to that savepoint (preserving the first write) is an open design question for the Transaction/
+Lease module wiring `opts.tx` (a later sprint), not settled by this Requirement.
 
 **Scope note, corrected after a follow-up review found the original scenario unreachable as
 written:** this sprint's `PgTemporalKV.put` never issues two `UPDATE`s within one transaction on
@@ -157,15 +185,34 @@ should be re-verified end-to-end through the public API too.
 - **WHEN** a `sql.begin()` transaction issues an `UPDATE` to a `kv_current` row, followed by a
   second `UPDATE` to that same row, before committing
 - **THEN** the second `UPDATE` SHALL reject with SQLSTATE `UB001`
-- **AND** the first `UPDATE`'s version SHALL remain the current value after the transaction commits
-- **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection
+- **AND** the entire transaction SHALL fail to commit as a result (Postgres aborts the whole
+  transaction on an uncaught in-transaction error; there is no partial commit without an
+  explicit `SAVEPOINT`, which this design does not use)
+- **AND** after the caller's own rollback, the row's version SHALL be whatever it was
+  immediately before this transaction began — i.e. NEITHER write took effect, not just the
+  second one
+- **AND** no `kv_history` row SHALL be silently dropped as a side effect of the rejection (this
+  is the property this Requirement actually exists to guarantee — see the note above)
 
-#### Scenario: Sequential puts to the same key in separate transactions are unaffected
+#### Scenario: Sequential puts to the same key in separate transactions succeed, outside the millisecond-collision caveat
 - **WHEN** `put(ns, scope, key, v1)` commits in one transaction, then `put(ns, scope, key, v2)`
-  is issued in a separate transaction immediately afterward (arbitrarily close in wall-clock
-  time)
+  is issued in a separate transaction immediately afterward, with the two writes' truncated
+  `clock_timestamp()` values (millisecond precision, `Formal/STORAGE_ALGEBRA.md` §1's second Law
+  T4 caveat) landing in DIFFERENT milliseconds
 - **THEN** the second `put` SHALL succeed normally
 - **AND** `getAt({version: 1})` SHALL still return `v1`'s value afterward
+
+**Revised 2026-07-20 by a follow-up cross-vendor audit — the prior wording of this Scenario
+("arbitrarily close in wall-clock time") overclaimed unconditional success, contradicting the
+already-documented millisecond-truncation caveat.** If the two writes' truncated instants land
+in the SAME millisecond, `valid_from` (the first write's timestamp) equals `valid_to` (the
+second write's timestamp) for the history row the trigger would insert, violating
+`kv_history_range`'s `CHECK (valid_from < valid_to)` and rejecting the second `put` with
+`ClockRegressionError` (SQLSTATE `23514`) — even though the two writes are in genuinely separate
+transactions, not the same-transaction-reuse case this Requirement's main Scenario covers. This
+is the accepted, narrower tradeoff `Formal/STORAGE_ALGEBRA.md` already documents in exchange for
+fixing the far worse `now()`-based data-loss bug; it is a real, disclosed limitation, not an
+edge case this Scenario should paper over by claiming unconditional success.
 
 ### Requirement: listKeys streams without materializing the full result set first, and orders results correctly
 
