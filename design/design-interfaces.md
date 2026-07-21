@@ -266,8 +266,17 @@ failure mode is ever represented by two differently-named classes in two modules
 
 ### 3.1 Transaction/Lease layer
 
-Foundational — the other three modules depend on its `TransactionHandle` type and compose
-`withTransaction`/`withLease` internally.
+**STALE, superseded by the shipped interface — found by a Sprint 2 cross-vendor audit.** This
+section predates a later revision that REMOVED TTL/lease-stealing/fencing entirely (a
+cross-vendor audit found the original design made the mutual-exclusion guarantee, Law L1,
+impossible for arbitrary caller code — see `src/interfaces/transaction-lease.ts`'s own revision
+note, the actual, authoritative source). Concretely stale below: `ttlMs`, `Lease.expiresAt`,
+`LeaseHeldByOtherError` (replaced by `LeaseTimeoutError` for `acquireLease` / `null` for
+`tryAcquireLease`), and "release failures are logged" (this project has no logging
+infrastructure; they are swallowed instead — see the shipped interface's own JSDoc). Treat this
+section as historical context for HOW the design evolved, not as the current contract; the
+current contract lives in `src/interfaces/transaction-lease.ts` and
+`openspec/changes/sprint-2-transaction-lease/`.
 
 ```typescript
 import { z } from "zod";

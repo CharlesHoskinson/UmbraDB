@@ -17,6 +17,42 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   // `<schema>, public` before calling any migration, specifically to fix this — every object
   // this migration creates is schema-qualified via `sql(schema)` so widening the path cannot
   // collide with anything.
+  //
+  // Revised after a cross-vendor audit found a real race here: `runMigrations`'s advisory lock
+  // is keyed per-schema (`hashtext(schema)`), so two DIFFERENT schemas' migrations run under
+  // DIFFERENT lock keys and can execute concurrently — but `CREATE EXTENSION IF NOT EXISTS`
+  // touches one shared, database-global `pg_extension` catalog row regardless of schema.
+  // PostgreSQL's own extension-creation code has a documented existence-check-then-insert race
+  // for exactly this case: two concurrent `CREATE EXTENSION IF NOT EXISTS` calls can both pass
+  // the precheck and race inserting the catalog row, and one fails outright instead of
+  // no-op'ing. Fix: a second, schema-INDEPENDENT advisory lock (class `3`, fixed key `0` — a
+  // constant, not derived from `schema`) that every schema's migration acquires before this
+  // statement.
+  //
+  // **Revised AGAIN after a follow-up cross-vendor re-audit found the first fix (a session-level
+  // `pg_advisory_lock`/`pg_advisory_unlock` pair around just this one statement) still didn't
+  // work**: this `up()` function always runs inside `migrate.ts`'s `withReservedTransaction`
+  // (a real `BEGIN`/`COMMIT`), and `CREATE EXTENSION`'s effect on `pg_extension` — like any DML
+  // — is only visible to OTHER sessions once that transaction actually COMMITS, not the instant
+  // the statement itself finishes executing. Releasing the lock right after the statement (but
+  // before the enclosing COMMIT) let a second migration acquire the now-free lock, find the
+  // extension not yet visible in its own snapshot, and race the same catalog insert anyway —
+  // the exact original defect, just delayed by one lock-acquisition. It also meant a genuine
+  // `CREATE EXTENSION` failure (not the benign "already exists" case) would abort this
+  // transaction and make the `finally`'s `pg_advisory_unlock` itself fail (SQLSTATE `25P02`,
+  // "current transaction is aborted") — and a session-level lock is NOT released by ROLLBACK,
+  // so it would leak on the pooled connection, potentially wedging every future migration's
+  // extension step.
+  //
+  // Fix: `pg_advisory_xact_lock`, not `pg_advisory_lock` — transaction-scoped, released
+  // automatically at this transaction's COMMIT *or* ROLLBACK, no manual unlock and therefore no
+  // unlock-inside-an-aborted-transaction failure mode. Because release now happens at COMMIT
+  // (not at statement completion), a second migration blocked on this lock only proceeds once
+  // the first's entire transaction — including its CREATE EXTENSION — has actually committed,
+  // so its own subsequent statement genuinely sees the extension as installed. The lock is held
+  // for the rest of this transaction rather than just this one statement, which is an
+  // acceptable, negligible cost for a one-time migration step.
+  await sql`select pg_advisory_xact_lock(3, 0)`;
   await sql`
     CREATE EXTENSION IF NOT EXISTS btree_gist
   `;

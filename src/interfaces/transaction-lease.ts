@@ -47,6 +47,7 @@ export interface Lease {
 export type TransactionLeaseErrorCode =
   | "TRANSACTION_ROLLED_BACK"
   | "TRANSACTION_FAULT"
+  | "TRANSACTION_HANDLE_INVALID"
   | "LEASE_TIMEOUT"
   | "LEASE_NOT_HELD"
   | "LEASE_FAULT";
@@ -88,15 +89,18 @@ export class LeaseTimeoutError extends TransactionLeaseError {
   }
 }
 
-/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the lease was already released or
- *  its connection already closed — releasing twice is routine under normal cleanup paths (e.g.
- *  a `finally` block racing an already-completed release), not a bug, but the caller is still
- *  told so via a distinct, catchable error rather than a silent no-op. With TTL/stealing
- *  removed, this is the only way a release can fail to find its lease. */
+/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the given `Lease` object was
+ *  already released — releasing twice is routine under normal cleanup paths (e.g. a `finally`
+ *  block racing an already-completed release), not a bug, but the caller is still told so via a
+ *  distinct, catchable error rather than a silent no-op. **Corrected by a Sprint 2 review**: this
+ *  previously also claimed "or its connection already closed," which does not hold — a lease
+ *  whose connection has died surfaces {@link LeaseFaultError} (`faultKind: "connection-lost"`)
+ *  on release instead, since the lease genuinely WAS held, just not releasable cleanly; this
+ *  error is specifically for a lease this layer no longer has any record of holding at all. */
 export class LeaseNotHeldError extends TransactionLeaseError {
   readonly code = "LEASE_NOT_HELD" as const;
   constructor(readonly key: string) {
-    super(`lease "${key}" was not held (already released, or its connection closed)`);
+    super(`lease "${key}" was not held (already released)`);
   }
 }
 
@@ -108,6 +112,17 @@ export class LeaseFaultError extends TransactionLeaseError {
     readonly faultKind: "connection-lost" | "reserve-failed" | "unknown",
     cause?: unknown,
   ) { super(message, cause); }
+}
+
+/** Thrown when `opts.tx` names a {@link TransactionHandle} that is not (or is no longer) a live
+ *  transaction — reused after its transaction committed/rolled back, or fabricated. Every
+ *  storage-layer method accepting `opts.tx` (not just this layer's own methods) can throw this,
+ *  since resolving the handle happens before that method's query ever runs. */
+export class TransactionHandleInvalidError extends TransactionLeaseError {
+  readonly code = "TRANSACTION_HANDLE_INVALID" as const;
+  constructor(readonly handleId: string) {
+    super(`transaction handle "${handleId}" does not refer to a live transaction`);
+  }
 }
 
 /**
@@ -131,13 +146,26 @@ export type TransactionRollbackCause =
 // Options — Zod-first (data fields in the schema; live handles intersected on)
 // ---------------------------------------------------------------------------
 
+/** Postgres's `statement_timeout` (and other millisecond-valued integer GUCs) is stored as a
+ *  32-bit signed `int4` — a value above this, though a syntactically valid positive integer,
+ *  makes the underlying `SET`/`SET LOCAL` statement fail at the server. **Added by a
+ *  cross-vendor Sprint 2 audit**: the schemas below originally accepted any positive integer,
+ *  so an out-of-range `timeoutMs` would pass validation here and then fail confusingly deep
+ *  inside the driver instead of with a clear `ValidationError` at the call site. */
+const POSTGRES_INT4_MAX = 2_147_483_647;
+
 export const TransactionOptionsSchema = z.object({
   isolation: z.enum(["read committed", "repeatable read", "serializable"]).optional(),
   /** Statement/transaction timeout; a timeout surfaces as {@link TransactionFaultError}. */
-  timeoutMs: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().max(POSTGRES_INT4_MAX).optional(),
 });
 export type TransactionOptions = z.infer<typeof TransactionOptionsSchema> & {
-  /** Cancellation: abort rolls back and rejects with `AbortError`. */
+  /** Cancellation is pre-check-only, matching every other method in this storage layer
+   *  (`PgTemporalKV`'s own `withAbort`): an already-aborted `signal` rejects with `AbortError`
+   *  before any transaction opens. `fn` is arbitrary caller code with no mechanism for this
+   *  layer to interrupt it partway through, so an abort that fires AFTER `fn` has already begun
+   *  running has NO EFFECT on that in-flight transaction — it proceeds to commit or roll back
+   *  based on `fn`'s own outcome only. This is a real, disclosed narrowing, not an oversight. */
   signal?: AbortSignal;
 };
 
@@ -146,7 +174,7 @@ export const LeaseAcquireOptionsSchema = z.object({
    *  `acquireLease`/`withLease`, `null` from `tryAcquireLease`. Omit to wait indefinitely
    *  (`acquireLease`) or to fail fast with no wait at all (`tryAcquireLease` — see its own
    *  doc). */
-  timeoutMs: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().max(POSTGRES_INT4_MAX).optional(),
 });
 export type LeaseAcquireOptions = z.infer<typeof LeaseAcquireOptionsSchema> & {
   /** Cancellation: abort while waiting rejects with `AbortError`; if the lock was already
@@ -161,6 +189,26 @@ export type LeaseAcquireOptions = z.infer<typeof LeaseAcquireOptionsSchema> & {
 export interface TransactionLeaseLayer {
   /**
    * Runs `fn` inside a database transaction and resolves with its return value on commit.
+   *
+   * **Not reentrant: calling `withTransaction` again from inside `fn` does not nest.** It opens
+   * an unrelated, independent transaction on a different connection — under a small connection
+   * pool this can deadlock (waiting for a connection the outer transaction is holding); under a
+   * larger pool it silently breaks atomicity, since the "inner" transaction can commit or fail
+   * with no relationship to the outer one at all. This layer does not implement save
+   * point-based real nesting. Do not call `withTransaction` from within another
+   * `withTransaction`'s `fn`.
+   *
+   * **Do not catch a query's rejection inside `fn` and continue as though the transaction were
+   * still usable.** Once ANY query issued through `tx` rejects, the whole underlying Postgres
+   * transaction is poisoned server-side, matching standard transaction-abort semantics — this
+   * holds regardless of whether `fn`'s own code catches that specific rejection. Concretely,
+   * verified against the installed `postgres.js` driver: every query dispatched through `tx`
+   * has its own independent `.catch()` attached internally, so if `fn` returns normally after
+   * swallowing a query's rejection, that SAME raw, untranslated error resurfaces from
+   * `withTransaction`'s own returned promise anyway — not the more specific, properly-typed
+   * error a caller who instead let the rejection propagate naturally out of `fn` would see. Let
+   * a failed query's rejection propagate out of `fn` unchanged; do not `try`/`catch` (or
+   * `.catch()`) it and keep issuing further queries on the same `tx`.
    * @throws {ValidationError} if `opts` fails {@link TransactionOptionsSchema}.
    * @throws {TransactionRolledBackError} if `fn` threw {@link Rollback}.
    * @throws {TransactionFaultError} on connection loss, serialization failure, deadlock, or
@@ -199,9 +247,9 @@ export interface TransactionLeaseLayer {
 
   /**
    * Releases a previously acquired lease.
-   * @throws {LeaseNotHeldError} if the lease was already released or its connection already
-   *   closed.
-   * @throws {LeaseFaultError} on connection loss.
+   * @throws {LeaseNotHeldError} if the lease was already released.
+   * @throws {LeaseFaultError} (`faultKind: "connection-lost"`) if the lease's held connection
+   *   has died — the lease genuinely was held, so this is distinct from `LeaseNotHeldError`.
    */
   releaseLease(lease: Lease): Promise<void>;
 
@@ -209,8 +257,12 @@ export interface TransactionLeaseLayer {
    * Convenience combinator: acquire → run `fn` → always release, even on throw.
    * Prefer this over manual `acquireLease`/`releaseLease` pairs.
    * @throws Same as {@link TransactionLeaseLayer.acquireLease}; if `fn` throws, that error
-   *   propagates after the lease is released (release failures are logged, not thrown, so they
-   *   never mask the caller's real error).
+   *   propagates after the lease is released. A release failure in this cleanup step is
+   *   swallowed (this project has no logging infrastructure to route it through — an earlier
+   *   draft of this doc claimed it would be "logged," which was never actually implementable),
+   *   so it never masks `fn`'s own error, but it is also not surfaced anywhere; callers who need
+   *   to observe release failures should call `acquireLease`/`releaseLease` manually instead of
+   *   this combinator.
    */
   withLease<T>(
     key: string,

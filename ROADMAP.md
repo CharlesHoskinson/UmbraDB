@@ -45,6 +45,24 @@ against its interface and design, with a differential state-equivalence
 gate before anything is considered done — not just "its own tests pass,"
 but verified equivalent to the reference behavior it's replacing.
 
+- [x] TemporalKV (`sprint-1-setup-and-temporal-kv`, archived) — Postgres
+  adapter, migrations, and test suite; merged to `main` after a 5-round
+  cross-vendor re-audit cycle.
+- [x] Transaction/Lease (`sprint-2-transaction-lease`) — `PgTransactionLeaseLayer`
+  (`withTransaction`, `acquireLease`/`tryAcquireLease`/`releaseLease`/`withLease`),
+  the cross-module transaction-handle registry, and `PgTemporalKV`'s
+  `opts.tx` wiring.
+- [x] CheckpointStore (`sprint-3-checkpoint-store`) — `PgCheckpointStore`
+  (`save`/`load`/`history`/`prune`), content-addressed chunking with global
+  cross-wallet dedup, the two-step manifest-prune-then-chunk-reclaim GC
+  pass, `manifest_hash` write-time computation and load-time
+  re-verification, and REPEATABLE READ-wrapped `load`/`history` reads for
+  snapshot consistency against a concurrently-committing `prune`; 133/133
+  tests passing (unit + P6-P8 property tests) after a 3-round Opus panel +
+  Fable 5 consolidation + 4-round Codex GPT-5.6 Sol audit on the spec, then
+  a 2-auditor (spec-compliance + code-quality) review of the implementation.
+- [ ] Watermarks — not yet drafted.
+
 ## Milestone 3 — Testing
 
 - [ ] The property-based test suite (P1–P10) derived directly from

@@ -6,9 +6,15 @@
       "output_tokens": 0,
       "files": 50,
       "token_accounting": "Unavailable from the collaboration runtime; zero values are placeholders, not measured usage."
+    },
+    {
+      "date": "2026-07-21T17:09:59.501265+00:00",
+      "input_tokens": 300000,
+      "output_tokens": 20000,
+      "files": 39
     }
   ],
-  "total_input_tokens": 0,
-  "total_output_tokens": 0,
+  "total_input_tokens": 300000,
+  "total_output_tokens": 20000,
   "token_accounting": "Unavailable from the collaboration runtime; zero values are placeholders, not measured usage."
 }
