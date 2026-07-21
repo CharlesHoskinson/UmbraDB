@@ -1,4 +1,5 @@
-import { StorageError, ValidationError } from "../interfaces/storage-errors.js";
+import type { ISql } from "postgres";
+import { ValidationError } from "../interfaces/storage-errors.js";
 import {
   ExpectedVersionSchema,
   HistoryUnavailableError,
@@ -20,64 +21,10 @@ import {
   type VersionedEntry,
 } from "../interfaces/temporal-kv.js";
 import type { TransactionHandle } from "../interfaces/transaction-lease.js";
+import { abortError, withAbort } from "./abort.js";
 import type { UmbraDBSql } from "./client.js";
 import { translatePostgresError } from "./errors.js";
-
-/**
- * Thrown by every `PgTemporalKV` method when a caller passes `opts.tx` — transaction
- * participation wiring is deferred until the Transaction/Lease module exists (a later sprint),
- * per `openspec/changes/sprint-1-setup-and-temporal-kv/design.md` §4. Silently accepting and
- * ignoring `opts.tx` would run the operation outside the caller's intended transaction, a
- * silent atomicity loss — this makes the gap loud instead. Thrown before any query runs.
- */
-export class TransactionParticipationNotSupportedError extends StorageError {
-  readonly code = "TRANSACTION_NOT_SUPPORTED" as const;
-  constructor(method: string) {
-    super(`PgTemporalKV.${method}: opts.tx is not yet supported (Transaction/Lease module not wired this sprint)`);
-  }
-}
-
-function assertNoTx(tx: TransactionHandle | undefined, method: string): void {
-  if (tx !== undefined) throw new TransactionParticipationNotSupportedError(method);
-}
-
-/**
- * Always produces a real, correctly-named `AbortError` — regardless of what `signal.reason`
- * actually is. **Fixed after a cross-vendor audit**: the original version returned
- * `signal.reason` directly whenever it happened to be an `Error` instance, so
- * `controller.abort(new Error("some unrelated failure"))` would surface that arbitrary error
- * to the caller instead of the `AbortError` this interface's contract promises. Only a
- * `reason` that is ALREADY a correctly-named `AbortError`/`DOMException` is passed through
- * unchanged; anything else (a custom reason, or none) gets wrapped.
- */
-function abortError(signal: AbortSignal): Error {
-  const reason = signal.reason;
-  if (reason instanceof DOMException && reason.name === "AbortError") return reason;
-  if (reason instanceof Error && reason.name === "AbortError") return reason;
-  return new DOMException("The operation was aborted", "AbortError");
-}
-
-/**
- * Runs `fn()` unless `signal` is already aborted, in which case it rejects with `AbortError`
- * WITHOUT ever calling `fn`. **Revised after a cross-vendor audit found the original
- * implementation raced an already-started promise against the abort event** — since
- * `this.putImpl(...)` (etc.) was evaluated as a plain function argument, the query was always
- * dispatched to Postgres regardless of whether the signal was already aborted, and there is no
- * way to cancel an in-flight Postgres query from here (that would need a dedicated
- * `pg_cancel_backend()` connection tracking the query's backend PID, well beyond this
- * adapter's scope). Racing a live query against abort therefore produced exactly the failure
- * mode a cancellation contract exists to prevent: a `put` could reject with `AbortError` while
- * its write still committed moments later, and a caller retrying after that rejection could
- * double-apply the write. This version only ever honors an abort that has ALREADY happened
- * before the call starts — an abort that fires after `fn()` has been dispatched has no effect
- * on that in-flight call, which is a real, disclosed narrowing of the cancellation contract
- * (see the updated JSDoc on `TemporalKV`'s methods), not a partial fix pretending to be a full
- * one.
- */
-function withAbort<T>(fn: () => Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (signal?.aborted) return Promise.reject(abortError(signal));
-  return fn();
-}
+import { resolveTransaction } from "./transaction-lease.js";
 
 interface KvRow {
   value: JsonValue;
@@ -109,8 +56,9 @@ function escapeLikePrefix(prefix: string): string {
  * `kv_current`/`kv_history` schema in `migrations/001_temporal_kv.ts`
  * (`openspec/changes/sprint-1-setup-and-temporal-kv/design.md` §2/§4). Does not run migrations
  * itself — call `runMigrations` (`migrate.ts`) before constructing this against a fresh
- * database. `opts.tx` is accepted (matching the interface) but rejected at runtime this sprint;
- * see `TransactionParticipationNotSupportedError`.
+ * database. `opts.tx`, once resolved via `resolveTransaction`
+ * (`openspec/changes/sprint-2-transaction-lease/design.md` §4), routes that method's queries
+ * through the caller's own transaction-scoped connection instead of this instance's own `sql`.
  *
  * The `schema` constructor parameter defaults to `sql.umbradbSchema` — the schema
  * `createClient` actually configured this connection with (`client.ts`) — NOT an independent
@@ -144,7 +92,7 @@ export class PgTemporalKV implements TemporalKV {
     namespace: Namespace, scope: Scope, key: Key, value: T,
     opts?: { expectedVersion?: Version; tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T>> {
-    assertNoTx(opts?.tx, "put");
+    const sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql;
     this.validateKey(namespace, scope, key);
     const valueCheck = JsonValueSchema.safeParse(value);
     if (!valueCheck.success) throw ValidationError.fromZod("PgTemporalKV value", valueCheck.error);
@@ -153,13 +101,12 @@ export class PgTemporalKV implements TemporalKV {
       if (!evCheck.success) throw ValidationError.fromZod("PgTemporalKV expectedVersion", evCheck.error);
     }
 
-    return withAbort(() => this.putImpl<T>(namespace, scope, key, value, opts?.expectedVersion), opts?.signal);
+    return withAbort(() => this.putImpl<T>(sql, namespace, scope, key, value, opts?.expectedVersion), opts?.signal);
   }
 
   private async putImpl<T extends JsonValue>(
-    ns: Namespace, scope: Scope, key: Key, value: T, expectedVersion: Version | undefined,
+    sql: ISql<{ bigint: bigint }>, ns: Namespace, scope: Scope, key: Key, value: T, expectedVersion: Version | undefined,
   ): Promise<VersionedEntry<T>> {
-    const sql = this.sql;
     const jsonValue = sql.json(value as JsonValue);
 
     try {
@@ -224,15 +171,17 @@ export class PgTemporalKV implements TemporalKV {
     namespace: Namespace, scope: Scope, key: Key,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T> | null> {
-    assertNoTx(opts?.tx, "get");
+    const sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql;
     this.validateKey(namespace, scope, key);
-    return withAbort(() => this.getImpl<T>(namespace, scope, key), opts?.signal);
+    return withAbort(() => this.getImpl<T>(sql, namespace, scope, key), opts?.signal);
   }
 
-  private async getImpl<T extends JsonValue>(ns: Namespace, scope: Scope, key: Key): Promise<VersionedEntry<T> | null> {
+  private async getImpl<T extends JsonValue>(
+    sql: ISql<{ bigint: bigint }>, ns: Namespace, scope: Scope, key: Key,
+  ): Promise<VersionedEntry<T> | null> {
     try {
-      const rows = await this.sql<KvRow[]>`
-        SELECT value, version, updated_at AS written_at FROM ${this.sql(this.schema)}.kv_current
+      const rows = await sql<KvRow[]>`
+        SELECT value, version, updated_at AS written_at FROM ${sql(this.schema)}.kv_current
         WHERE ns = ${ns} AND scope = ${scope} AND key = ${key}
       `;
       return rows.length > 0 ? toEntry<T>(ns, scope, key, rows[0]!) : null;
@@ -245,7 +194,7 @@ export class PgTemporalKV implements TemporalKV {
     namespace: Namespace, scope: Scope, key: Key, asOf: AsOf,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },
   ): Promise<VersionedEntry<T> | null> {
-    assertNoTx(opts?.tx, "getAt");
+    const sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql;
     this.validateKey(namespace, scope, key);
     // Revised after a cross-vendor audit: the discriminant was validated but its payload
     // wasn't — {kind:"version", version:-1n} previously reached SQL and just returned null
@@ -266,11 +215,11 @@ export class PgTemporalKV implements TemporalKV {
         [{ path: "asOf.kind", message: "invalid discriminant" }],
       );
     }
-    return withAbort(() => this.getAtImpl<T>(namespace, scope, key, asOf), opts?.signal);
+    return withAbort(() => this.getAtImpl<T>(sql, namespace, scope, key, asOf), opts?.signal);
   }
 
   private async getAtImpl<T extends JsonValue>(
-    ns: Namespace, scope: Scope, key: Key, asOf: AsOf,
+    sql: ISql<{ bigint: bigint }>, ns: Namespace, scope: Scope, key: Key, asOf: AsOf,
   ): Promise<VersionedEntry<T> | null> {
     // Sprint 1 performs no history retention at all (design.md §2's explicit, narrower scope
     // decision) — HistoryUnavailableError's retention-floor check has nothing to check against
@@ -291,20 +240,20 @@ export class PgTemporalKV implements TemporalKV {
     // implementation-defined, without changing anything about the normal, non-corrupted case.
     try {
       const rows = asOf.kind === "version"
-        ? await this.sql<KvRow[]>`
-            SELECT value, version, valid_from AS written_at, 0 AS priority FROM ${this.sql(this.schema)}.kv_history
+        ? await sql<KvRow[]>`
+            SELECT value, version, valid_from AS written_at, 0 AS priority FROM ${sql(this.schema)}.kv_history
             WHERE ns = ${ns} AND scope = ${scope} AND key = ${key} AND version = ${asOf.version}
             UNION ALL
-            SELECT value, version, updated_at AS written_at, 1 AS priority FROM ${this.sql(this.schema)}.kv_current
+            SELECT value, version, updated_at AS written_at, 1 AS priority FROM ${sql(this.schema)}.kv_current
             WHERE ns = ${ns} AND scope = ${scope} AND key = ${key} AND version = ${asOf.version}
             ORDER BY priority
             LIMIT 1
           `
-        : await this.sql<KvRow[]>`
-            SELECT value, version, valid_from AS written_at, 0 AS priority FROM ${this.sql(this.schema)}.kv_history
+        : await sql<KvRow[]>`
+            SELECT value, version, valid_from AS written_at, 0 AS priority FROM ${sql(this.schema)}.kv_history
             WHERE ns = ${ns} AND scope = ${scope} AND key = ${key} AND validity @> ${asOf.at}::timestamptz
             UNION ALL
-            SELECT value, version, updated_at AS written_at, 1 AS priority FROM ${this.sql(this.schema)}.kv_current
+            SELECT value, version, updated_at AS written_at, 1 AS priority FROM ${sql(this.schema)}.kv_current
             WHERE ns = ${ns} AND scope = ${scope} AND key = ${key} AND updated_at <= ${asOf.at}::timestamptz
             ORDER BY priority
             LIMIT 1
@@ -352,7 +301,7 @@ export class PgTemporalKV implements TemporalKV {
     namespace: Namespace, scope: Scope, prefix: string,
     opts?: { tx?: TransactionHandle; signal?: AbortSignal },
   ): AsyncIterable<Key> {
-    assertNoTx(opts?.tx, "listKeys");
+    const sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql;
     this.validateNamespaceScope(namespace, scope);
     // Found missing by a follow-up cross-vendor re-audit: prefix has no dedicated Zod schema
     // of its own (it's a raw string, not a Namespace/Scope/Key/JsonValue), so the same
@@ -367,8 +316,8 @@ export class PgTemporalKV implements TemporalKV {
     if (signal?.aborted) throw abortError(signal);
     const escaped = escapeLikePrefix(prefix) + "%";
 
-    const query = this.sql<{ key: string }[]>`
-      SELECT key FROM ${this.sql(this.schema)}.kv_current
+    const query = sql<{ key: string }[]>`
+      SELECT key FROM ${sql(this.schema)}.kv_current
       WHERE ns = ${namespace} AND scope = ${scope} AND key LIKE ${escaped} ESCAPE '\\'
       ORDER BY key
     `;

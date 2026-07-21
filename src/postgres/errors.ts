@@ -1,5 +1,6 @@
 import { ConnectionError, StorageError } from "../interfaces/storage-errors.js";
 import { TransactionKeyReuseError } from "../interfaces/temporal-kv.js";
+import { TransactionFaultError } from "../interfaces/transaction-lease.js";
 
 /**
  * SQLSTATE `23P01` (exclusion_violation) firing on `kv_history_no_overlap` — NOT `23505`
@@ -62,8 +63,49 @@ interface PgDriverError extends Error {
   code: string;
 }
 
+/**
+ * **Revised again after a cross-vendor Sprint 2 audit found the `.code`-only check above still
+ * too loose** — it was originally written for call sites that only ever see errors thrown by
+ * THIS module's own SQL calls, but `withTransaction`'s catch block (`transaction-lease.ts`) also
+ * sees whatever `fn` (arbitrary caller code) throws. Any plain application error that happens to
+ * carry its OWN `.code` string property — a Node built-in like `ENOENT`/`EACCES`, or a caller's
+ * own business-error convention — would previously be misclassified as a driver error and, for
+ * any code not in this file's specific enumerations, silently relabeled `UnrecognizedPostgresError`
+ * by the `default` branch below, directly violating `withTransaction`'s own documented contract
+ * ("any other error thrown by fn propagates unchanged"). A genuine Postgres wire-protocol error
+ * ALWAYS carries a `.severity` field too (confirmed against real driver error dumps throughout
+ * this project's own test output, e.g. `{severity_local: 'ERROR', severity: 'ERROR', code:
+ * 'UB001', ...}`) — an arbitrary application error essentially never coincidentally has this AS
+ * WELL as a `.code`. Node-level connection failures (`ECONNREFUSED` etc.) never reach the wire
+ * protocol and so never carry `.severity` either, but they're a small, closed, already-enumerated
+ * set (`CONNECTION_FAILURE_CODES` below) — trusting membership in that set is safe precisely
+ * because it's closed, unlike accepting any arbitrary string `.code`. */
 function isPgDriverError(err: unknown): err is PgDriverError {
-  return err instanceof Error && typeof (err as { code?: unknown }).code === "string";
+  if (!(err instanceof Error) || typeof (err as { code?: unknown }).code !== "string") return false;
+  const code = (err as PgDriverError).code;
+  const looksLikeRealPostgresError = typeof (err as { severity?: unknown }).severity === "string";
+  return looksLikeRealPostgresError || CONNECTION_FAILURE_CODES.has(code);
+}
+
+/** Exported so callers that see arbitrary, non-adapter-internal errors (`withTransaction`'s
+ *  catch, which also sees whatever `fn` throws) can check for a genuine connection failure
+ *  specifically, without routing through the full `translatePostgresError` switch. */
+export function isConnectionFailure(err: unknown): boolean {
+  return isPgDriverError(err) && CONNECTION_FAILURE_CODES.has(err.code);
+}
+
+/**
+ * SQLSTATE `57014` (`query_canceled`) is CONTEXTUAL — it fires for a `statement_timeout`
+ * cancellation, an operator-issued `pg_cancel_backend()`, or this project's own explicit
+ * `query.cancel()` calls (`listKeys`, lease acquisition's mid-wait abort) alike, so it cannot be
+ * given one universal translation in the shared table below (`openspec/changes/
+ * sprint-2-transaction-lease/design.md` §3/§5). Centralized here (moved out of
+ * `transaction-lease.ts`, which has two separate call sites that both need it — lease
+ * acquisition's own timeout, and `withTransaction`'s) so both agree on the exact same check
+ * rather than maintaining two copies.
+ */
+export function isStatementTimeout(err: unknown): boolean {
+  return isPgDriverError(err) && err.code === "57014";
 }
 
 /**
@@ -143,6 +185,14 @@ export function translatePostgresError(
       return new ExclusionViolationError(err.message, err);
     case "23514":
       return new ClockRegressionError(err.message, err);
+    // Added for Sprint 2 (openspec/changes/sprint-2-transaction-lease/design.md §5):
+    // withTransaction reuses this shared table for these two, unlike the two CONTEXTUAL 57014
+    // cases (lease-acquisition timeout, transaction timeout), which are handled directly in
+    // their own call sites via isStatementTimeout, not here.
+    case "40001":
+      return new TransactionFaultError(`serialization failure: ${err.message}`, "serialization-failure", err);
+    case "40P01":
+      return new TransactionFaultError(`deadlock detected: ${err.message}`, "deadlock", err);
     default:
       return new UnrecognizedPostgresError(err.message, err);
   }

@@ -45,6 +45,16 @@ against its interface and design, with a differential state-equivalence
 gate before anything is considered done — not just "its own tests pass,"
 but verified equivalent to the reference behavior it's replacing.
 
+- [x] TemporalKV (`sprint-1-setup-and-temporal-kv`, archived) — Postgres
+  adapter, migrations, and test suite; merged to `main` after a 5-round
+  cross-vendor re-audit cycle.
+- [x] Transaction/Lease (`sprint-2-transaction-lease`) — `PgTransactionLeaseLayer`
+  (`withTransaction`, `acquireLease`/`tryAcquireLease`/`releaseLease`/`withLease`),
+  the cross-module transaction-handle registry, and `PgTemporalKV`'s
+  `opts.tx` wiring.
+- [ ] CheckpointStore — not yet drafted.
+- [ ] Watermarks — not yet drafted.
+
 ## Milestone 3 — Testing
 
 - [ ] The property-based test suite (P1–P10) derived directly from
