@@ -33,7 +33,21 @@ export type WatermarkKey = string;
  *  {@link JsonValueSchema} from `temporal-kv.ts` (rather than a second hand-rolled definition)
  *  guarantees the same lossless-round-trip property this store's sibling interface already
  *  relies on, and a top-level bare string/number is still valid JSON so no existing use case
- *  narrows. */
+ *  narrows.
+ *
+ *  **Large-integer convention (added, Sprint 4 — `openspec/changes/sprint-4-watermarks/design.md`
+ *  §4): a cursor value that could ever exceed `Number.MAX_SAFE_INTEGER` MUST be encoded as a
+ *  decimal string, not a bare JSON number.** Postgres stores a JSONB number as an
+ *  arbitrary-precision `numeric` internally and preserves it exactly, but the JS driver's
+ *  `JSON.parse` on read silently loses precision beyond `2^53 - 1` (RFC 8259 §6) — with no error,
+ *  no warning, and no defense from this schema (a `bigint` is rejected here, but a plain
+ *  out-of-safe-range `number` is not, since JS cannot even represent the distinction once the
+ *  literal has been parsed). A block-height or byte-offset cursor for a sufficiently long-running
+ *  sync could hit this silently. Mirrors Ethereum's own JSON-RPC "Quantities" convention
+ *  (`ethereum.org`), which hex/decimal-string-encodes every quantity for the identical reason.
+ *  This is a documented caller convention, not a schema-level restriction — deliberately: this
+ *  schema is shared with `TemporalKV`, and narrowing it to reject large numbers would change that
+ *  module's own already-implemented contract as a side effect. */
 export const WatermarkValueSchema = JsonValueSchema;
 export type WatermarkValue = JsonValue;
 

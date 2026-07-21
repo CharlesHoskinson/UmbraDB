@@ -24,34 +24,29 @@ Sprint 1-3's own review cadence.
   `design.md` §1 makes; a test asserts no index exists on `value` or `updated_at` beyond the
   primary key (`design.md` §1's hard invariant), so a future migration can't accidentally violate
   it without at least one existing test needing to change.
-- [ ] 0.2 **HOT-update regression test, direct SQL level, isolating `fillfactor`'s actual effect**
-  (**tightened per Codex's audit, which found the original single-table version could reach a
-  near-100% HOT ratio even at the DEFAULT `fillfactor=100` — a lone row sitting on an otherwise-
-  empty page has ample same-page slack regardless of `fillfactor`, so that version never actually
-  isolated what this test claims to prove**). Create TWO tables in the test's own scratch schema
-  with otherwise-identical DDL to `watermarks`: one with `fillfactor=90` (the real setting), one
-  with the Postgres default `fillfactor=100` (the counterfactual). Insert one row into each, then
-  run the SAME `UPDATE` loop (many iterations, e.g. 50; same fixed-size `value` across every
-  iteration and across both tables — a growing value forces page-growth non-HOT fallbacks
-  unrelated to the setting under test) against both tables, packing enough OTHER filler rows onto
-  each table beforehand (e.g. via `pg_freespacemap`-informed row count, or simply enough rows that
-  the target row's page is genuinely near-full) that the two `fillfactor` settings can actually
-  produce different outcomes — a test where neither table's page is ever under real pressure
-  proves nothing either way. Two known non-determinism sources MUST be handled explicitly: (a)
-  Postgres's cumulative statistics system does not guarantee immediate visibility after commit —
-  call `pg_stat_force_next_flush()` (added in PG15; `test/postgres/setup.ts`'s
-  `postgres:17-alpine` image satisfies this) then poll `pg_stat_user_tables` in a **bounded loop**
-  (state the bound and interval explicitly, e.g. up to 20 attempts, 50ms apart) until each table's
-  `n_tup_upd` delta reaches the issued update count, rather than a single read-after-commit; (b)
-  run the entire update loop for a given table through **one pinned connection** (`sql.reserve()`,
-  not the ambient pool — this project's default pool size is 5, and letting the driver route
-  updates across different pooled connections adds session-level noise this test doesn't need).
-  **Acceptance:** the test asserts the `fillfactor=90` table's `n_tup_hot_upd`/`n_tup_upd` ratio is
-  measurably higher than the `fillfactor=100` table's under the SAME page-pressure conditions —
-  the comparison, not an absolute threshold on one table alone, is what actually demonstrates the
-  setting does something (a single-table "at least 90%" assertion, as the original version had,
-  cannot distinguish "the setting works" from "this workload never needed it"). The initial
-  inserts are excluded from both tables' calculations (never HOT by definition).
+- [ ] 0.2 **HOT-update regression smoke test against the real `watermarks` table** (**revised a
+  second time, after actually building and running the two-table differential-comparison version
+  Codex's audit called for**: that version was implemented exactly as specified — two scratch
+  tables, `fillfactor=90` vs. the default `100`, 200 filler rows each, 50 fixed-size `UPDATE`
+  iterations on a pinned connection, the bounded `pg_stat_force_next_flush()`-and-poll settle
+  step — and it ran successfully against real Postgres, but produced `ratio90 === ratio100 ===
+  1` every time: Postgres's HOT pruning reclaims a row's own prior tuple version efficiently once
+  a couple of update cycles have run, regardless of how much per-page slack `fillfactor` reserved
+  at insert time, so the causal isolation this task originally called for does not reproduce in a
+  short, deterministic, single-connection benchmark. Forcing the counterfactual open (e.g. via
+  much larger data volumes or genuinely concurrent multi-row page pressure) would stop this being
+  a fast, CI-safe test. **Accepted as a documented limitation**, not silently dropped: `fillfactor
+  = 90`'s value here rests on Postgres's own cited documentation/guidance (`design.md` §1), not on
+  an independently-reproduced differential proof in this suite.). Instead: `set` a single
+  `(kind, key)` on the REAL `watermarks` table (its actual `fillfactor=90`, via the ordinary
+  `PgWatermarks` adapter, not a scratch table) 50 times in a fixed-size loop, using the same
+  bounded `pg_stat_force_next_flush()`-and-poll settle step as before. **Acceptance:** the
+  resulting `n_tup_hot_upd`/`n_tup_upd` ratio is at least 0.9 — a meaningful regression check on
+  its own (it WOULD catch a future index accidentally added on `value` or `updated_at`,
+  `design.md` §1's hard invariant, since any such index defeats HOT entirely regardless of
+  `fillfactor`), explicitly NOT claimed to isolate `fillfactor=90`'s own specific causal
+  contribution versus the default. The initial insert is excluded from the calculation (never HOT
+  by definition).
 
 - [ ] 0.3 **Interface doc-only change** (`design.md` §4): add a TSDoc note to
   `src/interfaces/watermarks.ts`'s `WatermarkValue`/`WatermarkValueSchema` documenting the
