@@ -1,7 +1,7 @@
 # Proposal — Sprint 5: Lean M3a Watermarks W1
 
-> **Status:** Proof implementation complete; integrated close-out validation and the final
-> exact-commit three-persona audit remain pending.
+> **Status:** Proof implementation and integrated close-out validation complete; the final
+> exact-commit three-persona audit and push/CI evidence remain pending.
 
 ## Why
 
