@@ -1,14 +1,14 @@
 # Proposal — Sprint 5: Lean M3a Watermarks W1
 
-> **Status:** Planning; proof implementation is blocked until the specification and proof plan
-> pass the three-persona planning audit.
+> **Status:** Proof implementation complete; integrated close-out validation and the final
+> exact-commit three-persona audit remain pending.
 
 ## Why
 
 The abstract per-key TemporalKV M1/M2 tranche is complete. The detailed formal roadmap schedules
 M3 simple stores next, beginning with Watermarks Law W1 before CheckpointStore C1/C2 and before
-keyed transaction or PostgreSQL refinement work. The current Lean project has only a generic
-`Function.update` API smoke theorem; it does not define or verify the Watermarks domain model.
+keyed transaction or PostgreSQL refinement work. Before this sprint, the Lean project had only a
+generic `Function.update` API smoke theorem and no verified Watermarks domain model.
 
 ## What changes
 

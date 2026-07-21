@@ -38,8 +38,11 @@ below is **1.0.0**.
 - [x] Abstract per-key TemporalKV kernel mechanized: transition preservation,
   replay and addressing laws, extensional T5 validity coverage, executable
   prefix retention, unavailable-history classification, and retention-aware T3.
-- [ ] Extend the mechanized model to CheckpointStore, Watermarks, keyed
-  transactions, lease traces, and concrete PostgreSQL refinement obligations.
+- [x] Abstract Watermarks W1 mechanized over complete `(kind, key)` addresses:
+  overwrite/idempotence, distinct-address commutation and framing, trace
+  composition, and final-matching-command lookup with initial fallback.
+- [ ] Extend the mechanized model to CheckpointStore, keyed transactions,
+  lease traces, and concrete PostgreSQL refinement obligations.
 
 ## Milestone 2 — Core implementation (module implementations complete)
 

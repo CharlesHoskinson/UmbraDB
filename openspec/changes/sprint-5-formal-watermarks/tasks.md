@@ -64,20 +64,20 @@ specified persona review passes or all findings are fixed and re-reviewed.
 
 ## 3. Close-out
 
-- [ ] 3.1 Integrate current `main` into the clean, committed proof branch before final artifacts.
+- [x] 3.1 Integrate current `main` into the clean, committed proof branch before final artifacts.
   - **Acceptance:** explicitly fetch `refs/heads/main:refs/remotes/origin/main`, verify
     `git rev-parse origin/main` equals the SHA returned by `git ls-remote --heads origin
     refs/heads/main`, then require `git merge-base --is-ancestor origin/main HEAD` to exit 0 and
     `git status --short` to be clean.
-- [ ] 3.2 Update README, ROADMAP, OpenSpec, and formal research status without claiming SQL
+- [x] 3.2 Update README, ROADMAP, OpenSpec, and formal research status without claiming SQL
   refinement or completion of CheckpointStore C1/C2.
   - **Acceptance:** targeted `rg` review finds one consistent W1 status, and the updated
     documentation contains the explicit abstract-only/refinement boundary.
-- [ ] 3.3 Regenerate Graphify after all source/spec/status edits and run graph diagnostics.
+- [x] 3.3 Regenerate Graphify after all source/spec/status edits and run graph diagnostics.
   - **Acceptance:** `graphify update .` and
     `graphify diagnose multigraph --graph graphify-out/graph.json --json` both exit 0; machine-local
     Graphify labels are absent from the staged diff.
-- [ ] 3.4 Run the complete release matrix from the integrated tree, including Node checks after a
+- [x] 3.4 Run the complete release matrix from the integrated tree, including Node checks after a
   clean install in a fresh worktree.
   - **Acceptance:** Lean trust/build/leanchecker, strict OpenSpec validation, `npm ci`, TypeScript,
     TypeDoc, Vitest, actionlint, and `git diff --check` exit 0; against the explicitly refreshed
