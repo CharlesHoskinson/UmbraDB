@@ -127,12 +127,12 @@ void _versionedEntrySyncCheck;
  * a runtime ambiguity.
  *
  * `{kind: "version"}` addresses the store's own logical clock (cheap on both backends).
- * `{kind: "at"}` addresses wall-clock time. Given the one-`put`-per-key-per-transaction rule
- * above, every committed version has a distinct, well-defined commit instant, so the two
- * addressing schemes agree (Law T4) — see STORAGE_ALGEBRA.md §1 for the accepted residual
- * caveat (the recorded instant is `clock_timestamp()` at write time, not a true post-commit
- * visibility timestamp; this does not matter in practice because writes to the same key are
- * already serialized by the row lock).
+ * `{kind: "at"}` addresses the successfully persisted `writtenAt` coordinate. Given strict
+ * same-key timestamp increase and the one-`put`-per-key-per-transaction rule, every committed
+ * version has a distinct recorded write timestamp, so the two addressing schemes agree there
+ * (Law T4). The coordinate is `clock_timestamp()` at statement/trigger execution, not a true
+ * transaction commit or visibility timestamp; commit-time refinement remains a separate
+ * obligation.
  */
 export type AsOf =
   | { readonly kind: "version"; readonly version: Version }
@@ -189,7 +189,7 @@ export class HistoryUnavailableError extends TemporalKVError {
  * key) within one transaction (`opts.tx`). See this file's top-level doc comment for why this
  * is forbidden rather than merely discouraged: Postgres's `now()` is fixed for the whole
  * transaction, so a same-transaction second write cannot be given a distinct, well-defined
- * commit instant, and the adapter's trigger detects and rejects it rather than silently
+ * recorded write timestamp, and the adapter's trigger detects and rejects it rather than silently
  * discarding the first write's history row (the bug this rule replaces). Detection is
  * transaction-scoped (keyed off the writing transaction's ID, not a timestamp comparison), so
  * this SPECIFIC error can only be thrown when both writes share one transaction — sequential

@@ -56,6 +56,34 @@ theorem prunePrefix_rejects_all (history : History Value Time) (prunedCount : Na
       simp only [prunePrefix]
       rw [List.drop_eq_nil_of_le hbound]
 
+/-- Prefix pruning fails exactly when a positive request would remove the live event. -/
+theorem prunePrefix_eq_none_iff (history : History Value Time) (prunedCount : Nat) :
+    prunePrefix history prunedCount = none ↔
+      0 < prunedCount ∧ history.length ≤ prunedCount := by
+  cases prunedCount with
+  | zero => simp [prunePrefix]
+  | succ count =>
+      simp only [prunePrefix]
+      constructor
+      · intro hnone
+        cases hdrop : history.drop (count + 1) with
+        | nil => exact ⟨Nat.succ_pos count, List.drop_eq_nil_iff.mp hdrop⟩
+        | cons first rest => simp [hdrop] at hnone
+      · rintro ⟨_, hbound⟩
+        rw [List.drop_eq_nil_of_le hbound]
+
+/-- Every positive in-range pruning request succeeds with a retained suffix. -/
+theorem prunePrefix_exists_of_positive_lt {history : History Value Time} {prunedCount : Nat}
+    (hpositive : 0 < prunedCount) (hbound : prunedCount < history.length) :
+    ∃ suffix, prunePrefix history prunedCount = some (.pruned suffix) := by
+  cases hprune : prunePrefix history prunedCount with
+  | none =>
+      have hfailure := (prunePrefix_eq_none_iff history prunedCount).mp hprune
+      exact (Nat.not_lt_of_ge hfailure.2 hbound).elim
+  | some retained =>
+      obtain ⟨suffix, hretained⟩ := prunePrefix_positive_is_pruned hpositive hprune
+      exact ⟨suffix, congrArg some hretained⟩
+
 /-- Successful prefix pruning preserves timestamp well-formedness. -/
 theorem prunePrefix_preserves_wellFormed [LinearOrder Time]
     {history : History Value Time} {prunedCount : Nat}

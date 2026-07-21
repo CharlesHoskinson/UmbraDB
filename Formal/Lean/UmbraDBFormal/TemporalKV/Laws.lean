@@ -39,6 +39,41 @@ theorem attempt_applied_version [LinearOrder Time] {history : History Value Time
         cases h
         exact ⟨rfl, rfl⟩
 
+/-- An applied attempt returns exactly the entry represented by its appended event. -/
+theorem attempt_applied_entry [LinearOrder Time] {history : History Value Time}
+    {write : Write Value Time} {entry : VersionedEntry Value Time}
+    {nextHistory : History Value Time}
+    (h : attempt history write = (.applied entry, nextHistory)) :
+    entry = VersionedEntry.mk write.value (history.length + 1) write.writtenAt ∧
+      nextHistory = history ++ [{ value := write.value, writtenAt := write.writtenAt }] := by
+  simp only [attempt] at h
+  split at h
+  · simp at h
+  · split at h
+    · change
+        (Outcome.applied (VersionedEntry.mk write.value (history.length + 1) write.writtenAt),
+          history ++ [Event.mk write.value write.writtenAt]) =
+          (Outcome.applied entry, nextHistory) at h
+      cases h
+      exact ⟨rfl, rfl⟩
+    · split at h
+      · simp at h
+      · change
+          (Outcome.applied (VersionedEntry.mk write.value (history.length + 1) write.writtenAt),
+            history ++ [Event.mk write.value write.writtenAt]) =
+            (Outcome.applied entry, nextHistory) at h
+        cases h
+        exact ⟨rfl, rfl⟩
+
+/-- The entry returned by an applied attempt is the resulting current projection. -/
+theorem attempt_applied_current [LinearOrder Time] {history : History Value Time}
+    {write : Write Value Time} {entry : VersionedEntry Value Time}
+    {nextHistory : History Value Time}
+    (h : attempt history write = (.applied entry, nextHistory)) :
+    current nextHistory = some entry := by
+  rcases attempt_applied_entry h with ⟨rfl, rfl⟩
+  simp [current]
+
 /-- A version conflict is exactly the executable expectation mismatch branch. -/
 theorem attempt_conflict_iff_snapshot_mismatch [LinearOrder Time]
     (history : History Value Time) (write : Write Value Time) :
@@ -62,6 +97,51 @@ theorem attempt_conflict_iff_snapshot_mismatch [LinearOrder Time]
               (VersionedEntry.mk write.value (history.length + 1) write.writtenAt) =
             Outcome.failed (Failure.versionConflict (snapshotVersion history))
         simp
+
+/-- Every version-conflict result carries the current snapshot version and preserves history. -/
+theorem attempt_versionConflict_iff [LinearOrder Time]
+    (history : History Value Time) (write : Write Value Time)
+    (actual : Option Version) (nextHistory : History Value Time) :
+    attempt history write = (.failed (.versionConflict actual), nextHistory) ↔
+      expectationMatches history write.expectation = false ∧
+        actual = snapshotVersion history ∧ nextHistory = history := by
+  constructor
+  · intro h
+    simp only [attempt] at h
+    split at h
+    · cases h
+      simp_all
+    · split at h
+      · change
+          (Outcome.applied (VersionedEntry.mk write.value (history.length + 1) write.writtenAt),
+            history ++ [Event.mk write.value write.writtenAt]) =
+            (Outcome.failed (Failure.versionConflict actual), nextHistory) at h
+        simp at h
+      · split at h
+        · simp at h
+        · change
+            (Outcome.applied
+                (VersionedEntry.mk write.value (history.length + 1) write.writtenAt),
+              history ++ [Event.mk write.value write.writtenAt]) =
+              (Outcome.failed (Failure.versionConflict actual), nextHistory) at h
+          simp at h
+  · rintro ⟨hmismatch, rfl, rfl⟩
+    simp [attempt, hmismatch]
+
+/-- Some version conflict occurs exactly when the executable expectation check fails. -/
+theorem attempt_any_conflict_iff_snapshot_mismatch [LinearOrder Time]
+    (history : History Value Time) (write : Write Value Time) :
+    (∃ actual, (attempt history write).1 = .failed (.versionConflict actual)) ↔
+      expectationMatches history write.expectation = false := by
+  constructor
+  · rintro ⟨actual, hactual⟩
+    have hpair : attempt history write =
+        (.failed (.versionConflict actual), (attempt history write).2) := by
+      exact Prod.ext hactual rfl
+    exact (attempt_versionConflict_iff history write actual _).mp hpair |>.1
+  · intro hmismatch
+    exact ⟨snapshotVersion history,
+      (attempt_conflict_iff_snapshot_mismatch history write).mpr hmismatch⟩
 
 private theorem attempt_failed_preserves_history [LinearOrder Time]
     {history : History Value Time} {write : Write Value Time} {failure : Failure Time}

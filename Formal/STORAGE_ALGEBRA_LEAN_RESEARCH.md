@@ -1,6 +1,6 @@
-# Storage Algebra Lean Formalization — Approved M1 Design
+# Storage Algebra Lean Formalization — Approved Design and Status
 
-- **Status:** decision package approved for M1 implementation on 2026-07-20;
+- **Status:** M1 and the abstract per-key M2 TemporalKV tranche are complete;
   later milestones remain subject to their stated proof and refinement gates
 - **Branch:** `formal/storage-algebra-lean`
 - **Repository baseline:** `148d17fd9b957136798e98ed5986e865b281fd4f`
@@ -70,7 +70,10 @@ The repository knowledge graph is regenerated on this branch so the research
 document and current code/spec relationships are included in the committed
 `graphify-out/` artifacts, as required by [`CLAUDE.md`](../CLAUDE.md).
 
-### 2.1 What is implemented at the baseline
+### 2.1 Historical implementation baseline
+
+The following table records repository state at the exact baseline commit named
+above. It is research provenance, not a statement of the current branch state.
 
 | Area | Repository state | Formalization consequence |
 |---|---|---|
@@ -80,11 +83,10 @@ document and current code/spec relationships are included in the committed
 | Transaction/Lease | Public interface plus a remote Sprint 2 proposal explicitly marked not audit-cleared. | Separate lock-holder safety from callback safety and do not certify the proposal by association. |
 | Lean | M1 project, executable Layer A model, and first theorem tranche complete with no declaration placeholders. | Keep later storage models and PostgreSQL refinement outside the M1 claim boundary. |
 
-The top-level README and ROADMAP have also drifted: the README still describes
-the PostgreSQL implementation as absent, and the ROADMAP still treats formal
-research and P1–P10 as wholly unimplemented. Those status files should be
-reconciled in a later, separately reviewed change rather than folded into this
-research branch without discussion.
+At that baseline, the top-level README and ROADMAP had also drifted. The current
+branch has since reconciled those status files, integrated the implemented
+TemporalKV, Transaction/Lease, CheckpointStore, and Watermarks sprints from
+`main`, and completed the abstract per-key M2 interval and retention tranche.
 
 ## 3. Proof-blocking findings
 
@@ -672,7 +674,7 @@ relevant content markers checked with Scrapling.
 - Add default contract-test compilation, an elaborated-environment axiom audit,
   source scanning, warning-as-error builds, and an independent no-`sorry` check to CI.
 
-### M2 — complete temporal laws (in progress)
+### M2 — complete temporal laws (abstract per-key tranche completed)
 
 - Derive bounded historical intervals plus the live tail and prove T5
   disjointness/gap-freedom. **Completed.**
@@ -719,8 +721,9 @@ The recommended decision package is:
    composition; accepted events use append.
 5. **Transactions:** temporal kernel first; same-transaction key reuse in a
    keyed wrapper with an explicit write set.
-6. **Retention:** deferred extension with version offset/seed and a three-way
-   `Found | Absent | Unavailable` result.
+6. **Retention:** implemented abstract extension with a version offset and a
+   three-way `Found | Absent | Unavailable` result; PostgreSQL retention and
+   floor/error refinement remain deferred.
 7. **Checkpoint algebra:** unconditional join only for the hash-key set;
    compatible merge or explicit collision assumption for hash-to-bytes maps.
 8. **GC:** deterministic delete-all-eligible C2a/one-pass progress now; batched

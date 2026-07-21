@@ -23,6 +23,16 @@ example :
   rfl
 
 example :
+    current
+        ([{ value := 3, writtenAt := 5 }, { value := 4, writtenAt := 8 }] :
+          History Nat Nat) =
+      some { value := 4, version := 2, writtenAt := 8 } := by
+  apply attempt_applied_current
+    (history := [{ value := 3, writtenAt := 5 }])
+    (write := { value := 4, writtenAt := 8, expectation := .unconditional })
+  rfl
+
+example :
     (attempt ([{ value := 3, writtenAt := 5 }] : History Nat Nat)
       { value := 4, writtenAt := 8, expectation := .absent }).1 =
         .failed (.versionConflict (some 1)) ↔
@@ -30,6 +40,13 @@ example :
   exact attempt_conflict_iff_snapshot_mismatch (Value := Nat) (Time := Nat)
     [{ value := 3, writtenAt := 5 }]
     { value := 4, writtenAt := 8, expectation := .absent }
+
+example :
+    attempt ([{ value := 3, writtenAt := 5 }] : History Nat Nat)
+        { value := 4, writtenAt := 8, expectation := .absent } =
+      (.failed (.versionConflict (some 1)), [{ value := 3, writtenAt := 5 }]) := by
+  apply (attempt_versionConflict_iff _ _ _ _).mpr
+  decide
 
 example :
     ([{ value := 3, writtenAt := 5 }] : History Nat Nat) =

@@ -135,7 +135,7 @@ version lookup distinguish absence from unavailable history, preserve original
 versions and the live event, and agree with the complete M1 history throughout
 the certified retained horizon.
 
-Keyed-store lifting, SQL retention/refinement, runtime selector validation,
+Keyed-store lifting, SQL retention/refinement and retention-floor error wiring,
 leases, garbage collection, and liveness remain deferred to later work. The
 T3/T5 results concern the abstract per-key history; SQL constraints, pruning
 atomicity, and trigger discipline remain external refinement obligations.
@@ -145,10 +145,10 @@ The default Lake build compiles those contracts and an elaborated-environment
 audit that rejects new axiom declarations or project declarations outside the
 approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
 
-```powershell
-Set-Location Formal/Lean
+```sh
+cd Formal/Lean
 lake build
-powershell -ExecutionPolicy Bypass -File scripts/check-trust.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-trust.ps1
 ```
 
 The committed manifest supplies the pinned dependency revisions. Run

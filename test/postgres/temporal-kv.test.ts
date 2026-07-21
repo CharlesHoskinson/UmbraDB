@@ -116,7 +116,7 @@ describe("PgTemporalKV", () => {
       expect(at1?.version).toBe(1n);
     });
 
-    it("{at} addressing agrees with {version} addressing at that version's commit instant (Law T4)", async () => {
+    it("{at} addressing agrees with {version} addressing at that version's writtenAt (Law T4)", async () => {
       const v1 = await kv().put("ns", "sc", "kg2", { a: 1 });
       await tick();
       await kv().put("ns", "sc", "kg2", { a: 2 });

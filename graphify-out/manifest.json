@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "src/interfaces/temporal-kv.ts": {
-    "mtime": 1784664378.2036903,
-    "ast_hash": "175f59c3f1053596c1a551a38f0d7345",
+    "mtime": 1784666781.317552,
+    "ast_hash": "57157fd278cc92005f9b0d27be8d0274",
     "semantic_hash": ""
   },
   "src/interfaces/transaction-lease.ts": {
@@ -70,13 +70,13 @@
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.property.test.ts": {
-    "mtime": 1784664378.2036903,
-    "ast_hash": "e03eb4b709fd96c687da87c40eb90e15",
+    "mtime": 1784666794.5495474,
+    "ast_hash": "f12f8f6eddae018fbe655cea0994d367",
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.test.ts": {
-    "mtime": 1784664378.2036903,
-    "ast_hash": "998f8275e9b9da448cee27c4634bacd6",
+    "mtime": 1784666781.321552,
+    "ast_hash": "d1c791de05cd55d7c551d600c8f7e7ef",
     "semantic_hash": ""
   },
   "tsconfig.json": {
@@ -160,13 +160,13 @@
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA.md": {
-    "mtime": 1784655285.0993547,
-    "ast_hash": "245e32fc768f1c27e1eb2b6625d17f4e",
+    "mtime": 1784666781.337552,
+    "ast_hash": "9810e285a068a6e35ef5e139b0db9935",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
-    "mtime": 1784663965.5945344,
-    "ast_hash": "8f3b15c1932186189eb788f014500b30",
+    "mtime": 1784666457.7616642,
+    "ast_hash": "ac3129c656d102ab4ef6558634d829ce",
     "semantic_hash": ""
   },
   "Formal/STORAGE_TYPES.md": {
@@ -190,8 +190,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784665335.106056,
-    "ast_hash": "33a20aa5e45ed55909df675db3bc835f",
+    "mtime": 1784666457.7616642,
+    "ast_hash": "9ca5df6bac583c6a354085666c61ac3a",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
@@ -285,8 +285,8 @@
     "semantic_hash": ""
   },
   ".github/workflows/lean.yml": {
-    "mtime": 1784657706.9167325,
-    "ast_hash": "f8107db6704f172b5c5c919973b1e7f5",
+    "mtime": 1784666457.765664,
+    "ast_hash": "69e55e160981f981cd8a5d4c7353863d",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m1.md": {
@@ -310,8 +310,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/specs/temporal-kv/spec.md": {
-    "mtime": 1784664378.1987052,
-    "ast_hash": "3995b4478a50598ea042adba818658dc",
+    "mtime": 1784666781.337552,
+    "ast_hash": "99bdb3f90fb716ea5c12925d1e066e9c",
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/tasks.md": {
@@ -365,8 +365,8 @@
     "semantic_hash": ""
   },
   "openspec/specs/temporal-kv/spec.md": {
-    "mtime": 1784664954.7221906,
-    "ast_hash": "fe883d94030c2f45bef915393a41e295",
+    "mtime": 1784666781.325552,
+    "ast_hash": "fbd7da5e01d30f7d9f552102ba9cd636",
     "semantic_hash": ""
   },
   "src/postgres/migrations/003_watermarks.ts": {
@@ -407,6 +407,16 @@
   "openspec/changes/sprint-4-watermarks/tasks.md": {
     "mtime": 1784665307.612389,
     "ast_hash": "1b3bcdcd91618f33e886dc1350c2d1d7",
+    "semantic_hash": ""
+  },
+  ".github/pull_request_template.md": {
+    "mtime": 1784666457.765664,
+    "ast_hash": "2539ea3ef7981e60da44d569786b17d6",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1784666457.765664,
+    "ast_hash": "23b53c4882b1c17b172da67d7be9f08d",
     "semantic_hash": ""
   }
 }

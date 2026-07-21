@@ -44,6 +44,16 @@ example : retainedTwo.events = fullHistory.drop 2 := by
       (retained := RetainedHistory.pruned retainedTwo) (history := fullHistory)
       (prunedCount := 2) (by rfl))
 
+example : prunePrefix fullHistory 3 ≠ none := by
+  obtain ⟨suffix, hsuffix⟩ := prunePrefix_exists_of_positive_lt
+    (history := fullHistory) (prunedCount := 3) (by decide) (by decide)
+  rw [hsuffix]
+  simp
+
+example : prunePrefix fullHistory 4 = none := by
+  apply (prunePrefix_eq_none_iff fullHistory 4).mpr
+  decide
+
 example : WellFormed retainedTwo.events := by
   have hretained := prunePrefix_preserves_wellFormed
     (history := fullHistory) (prunedCount := 2)
