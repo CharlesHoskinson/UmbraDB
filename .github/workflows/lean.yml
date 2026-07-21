@@ -137,5 +137,4 @@ jobs:
           lake-package-directory: Formal/Lean
           build: true
           build-args: "--wfail"
-          nanoda: true
-          nanoda-allow-sorry: false
+          leanchecker: true

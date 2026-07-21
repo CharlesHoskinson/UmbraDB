@@ -12,10 +12,10 @@ checks.
 **Architecture:** `TemporalKV.Model` owns executable definitions and contains no theorem-specific
 machinery. `TemporalKV.Laws` derives the M1 laws from those definitions. Compiler-only smoke files
 exercise the pinned mathlib APIs, while CI independently builds the project, rejects placeholders
-and custom axioms, and runs an external no-`sorry` type check.
+and custom axioms, and runs a separate elaborated-environment type check.
 
 **Tech Stack:** Lean 4.32.0, mathlib v4.32.0, Lake 5, GitHub Actions,
-`leanprover/lean-action@v1`, nanoda.
+`leanprover/lean-action@v1`, bundled `leanchecker`.
 
 **Graphify policy:** Refresh the repository graph only after a major lifecycle event, such as a
 declared sprint completion or a merge to `main`. Graphify is not a per-task implementation or
@@ -417,9 +417,9 @@ Expected: the repository run exits 0 after `lake build` succeeds.
 
 Create `.github/workflows/lean.yml` using `actions/checkout@v4` and
 `leanprover/lean-action@v1`, with `working-directory: Formal/Lean`, `build: true`,
-`build-args: "--wfail"`, `nanoda: true`, and `nanoda-allow-sorry: false`. Add a separate portable
-source scan for declaration tokens before the action build. Trigger on pull requests, pushes to
-`main` and `formal/**`, and manual dispatch.
+`build-args: "--wfail"`, and `leanchecker: true`. Add a separate portable source scan for
+declaration tokens before the action build. Trigger on pull requests, pushes to `main` and
+`formal/**`, and manual dispatch.
 
 - [ ] **Step 5: Document exact local commands and M1 boundaries**
 
@@ -472,5 +472,5 @@ user-owned paths.
   and PostgreSQL refinement remain excluded; the API smoke theorems only verify imports.
 - Type consistency: all model/law/test declarations use `History Value Time`, one-based `Nat`
   versions, `Outcome Value Time`, and `Failure Time` consistently.
-- Trust consistency: the source scan, environment-level axiom audit, warning-free build, nanoda
-  no-`sorry` check, and review council are independent gates; none substitutes for Lean's kernel.
+- Trust consistency: the source scan, environment-level axiom audit, warning-free build,
+  `leanchecker`, and review council are independent gates; none substitutes for Lean's kernel.
