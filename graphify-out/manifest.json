@@ -25,8 +25,8 @@
     "semantic_hash": ""
   },
   "src/interfaces/watermarks.ts": {
-    "mtime": 1784655285.1093998,
-    "ast_hash": "2f8a5fcd4de42f965d83115d44fd5b69",
+    "mtime": 1784665307.612389,
+    "ast_hash": "44307a383c274c4cc40e3ccfbb62c94e",
     "semantic_hash": ""
   },
   "src/postgres/client.ts": {
@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/postgres/migrate.ts": {
-    "mtime": 1784664378.2036903,
-    "ast_hash": "a87663d056f8925afa3fb4e7cec69795",
+    "mtime": 1784665307.612389,
+    "ast_hash": "f997f2469ad569e98e6835f2564dfc26",
     "semantic_hash": ""
   },
   "src/postgres/migrations/000_schema.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "test/postgres/migrate.test.ts": {
-    "mtime": 1784664378.2036903,
-    "ast_hash": "97fceb8c8a8b46df34bd8661f3e02dd1",
+    "mtime": 1784665307.612389,
+    "ast_hash": "981418462d509f1ea2d44cd9d78a6542",
     "semantic_hash": ""
   },
   "test/postgres/setup.ts": {
@@ -190,13 +190,13 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784665094.0261447,
-    "ast_hash": "b4fd9e781a8329d476f19c41e57ace84",
+    "mtime": 1784665335.106056,
+    "ast_hash": "33a20aa5e45ed55909df675db3bc835f",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784665211.310105,
-    "ast_hash": "fea64a8f6f2f14105f4eb7b726ed2bbe",
+    "mtime": 1784665335.106056,
+    "ast_hash": "c2971ecfea5f86cdfa213165856cf664",
     "semantic_hash": ""
   },
   "design/design-algebra.md": {
@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "design/tasks.md": {
-    "mtime": 1784664378.1743908,
-    "ast_hash": "f0ae408d27df587da57a28e894ffca6d",
+    "mtime": 1784665307.6020648,
+    "ast_hash": "faa92efa7e112a89b489351ba2f6bb69",
     "semantic_hash": ""
   },
   "openspec/config.yaml": {
@@ -367,6 +367,46 @@
   "openspec/specs/temporal-kv/spec.md": {
     "mtime": 1784664954.7221906,
     "ast_hash": "fe883d94030c2f45bef915393a41e295",
+    "semantic_hash": ""
+  },
+  "src/postgres/migrations/003_watermarks.ts": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "3094745a3379195a0de92bb7b0cbab4e",
+    "semantic_hash": ""
+  },
+  "src/postgres/watermarks.ts": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "aa509aa542513a40053f84ee0212a32e",
+    "semantic_hash": ""
+  },
+  "test/postgres/watermarks.property.test.ts": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "19534fa87283cad516b6845c60832910",
+    "semantic_hash": ""
+  },
+  "test/postgres/watermarks.test.ts": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "901f957d721de95e42cdb7958e7b2760",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-4-watermarks/design.md": {
+    "mtime": 1784665307.6060648,
+    "ast_hash": "cab80e4e3d11da60914b182bb4dbcacf",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-4-watermarks/proposal.md": {
+    "mtime": 1784665335.106056,
+    "ast_hash": "41ca1ecbfc972c56cc5a551460f37bb1",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-4-watermarks/specs/watermarks/spec.md": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "8db006be51de4f6f3abf98bdaedd7273",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-4-watermarks/tasks.md": {
+    "mtime": 1784665307.612389,
+    "ast_hash": "1b3bcdcd91618f33e886dc1350c2d1d7",
     "semantic_hash": ""
   }
 }

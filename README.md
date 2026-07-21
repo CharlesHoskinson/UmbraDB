@@ -15,8 +15,7 @@ UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
 - **CheckpointStore**: content-addressed, deduplicated, chunked storage for large periodic
   snapshots (e.g. wallet sync state), with integrity verification and reachability-based garbage
   collection.
-- **Watermarks**: simple, unversioned sync-progress cursors. *(Designed, not yet
-  implemented.)*
+- **Watermarks**: simple, unversioned sync-progress cursors with transactional composition.
 
 ## Why
 
@@ -51,7 +50,7 @@ of, Postgres's own transactions, constraints, and locking).
     | getAt (point-in-time)  |    |  deduplicated chunks   |    |                        |
     |        listKeys        |    |   + reachability GC    |    |                        |
     |                        |    |                        |    |                        |
-    |     (implemented)      |    |     (implemented)      |    |    (designed only)     |
+    |     (implemented)      |    |     (implemented)      |    |     (implemented)      |
     +------------------------+    +------------------------+    +------------------------+
                  |                             |                             |
                  | opts.tx / internal composition (Transaction/Lease)        |
@@ -101,7 +100,7 @@ example below does, without going through a data module at all.
 
 ## Status
 
-Three of four modules are implemented and merged:
+All four modules are implemented and merged:
 
 - **TemporalKV** (Sprint 1): `put`/`get`/`getAt`/`listKeys` against a `kv_current`/`kv_history`
   schema, with a `BEFORE UPDATE` trigger populating history and a same-transaction key-reuse
@@ -112,12 +111,12 @@ Three of four modules are implemented and merged:
 - **CheckpointStore** (Sprint 3): `save`/`load`/`history`/`prune`, content-addressed chunking and
   global deduplication, integrity verification, snapshot-consistent reads, and two-step
   manifest/chunk garbage collection.
-
-**Watermarks** is designed (see [`design/`](design/)) but not yet built.
+- **Watermarks** (Sprint 4): transactional `set`/`get` sync cursors, with HOT-update-oriented
+  storage settings and runtime guards for the opaque JSON progress value.
 
 Every implemented module went through the same cycle before merge: draft an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) change in EARS format, put it through several
-independent review passes, fix what they find, and re-review until nothing new turns up. All three
+independent review passes, fix what they find, and re-review until nothing new turns up. All four
 sprints went through multiple review rounds and turned up genuine bugs: a race
 in `CREATE EXTENSION` DDL serialization, a cursor-cancellation gap in `postgres.js`, a
 connection-reservation wait with no timeout or abort handling, among others. That's the whole
@@ -223,7 +222,7 @@ await sql.end();
 - [`openspec/`](openspec/): the actual, current source of truth for anything implemented.
   `openspec/specs/` holds requirements for sprints that have been archived after merge (currently
   just TemporalKV); `openspec/changes/` holds work still in progress or completed changes awaiting
-  archival, currently including Transaction/Lease and CheckpointStore with their historical
+  archival, currently including Transaction/Lease, CheckpointStore, and Watermarks with their historical
   proposal → design → tasks → EARS-format spec records.
 
 ## Layout
@@ -235,7 +234,7 @@ src/
     transaction-lease.ts   transactions + writer leases (implemented)
     temporal-kv.ts         versioned key-value store (implemented)
     checkpoint-store.ts    content-addressed checkpoint persistence (implemented)
-    watermarks.ts          sync-progress cursors (designed)
+    watermarks.ts          sync-progress cursors (implemented)
   postgres/
     client.ts              connection factory (schema isolation, bigint typing)
     migrate.ts             schema-versioned migration runner
@@ -245,6 +244,7 @@ src/
     temporal-kv.ts         PgTemporalKV
     transaction-lease.ts   PgTransactionLeaseLayer + the cross-module handle registry
     checkpoint-store.ts    PgCheckpointStore + chunk integrity and garbage collection
+    watermarks.ts          PgWatermarks transactional cursor storage
 test/
   postgres/                unit + property-based tests, run against real Postgres
                            (Testcontainers), not mocked

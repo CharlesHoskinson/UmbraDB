@@ -3,9 +3,10 @@
 Tracked in detail per-module as `openspec/changes/sprint-N-<module>/` changes (proposal/design/
 tasks/spec, EARS-format requirements, each reviewed by an Opus panel + Fable 5 consolidation and
 a Codex GPT-5.6 Sol audit before implementation) — Sprint 1 is archived under
-`openspec/changes/archive/`, while the completed and merged Sprint 2 Transaction/Lease and Sprint
-3 CheckpointStore records remain under `openspec/changes/` pending archival. Watermarks is the
-next module and has not yet been drafted as a sprint. [`design/tasks.md`](design/tasks.md) is the
+`openspec/changes/archive/`, while the completed and merged Sprint 2 Transaction/Lease, Sprint 3
+CheckpointStore, and Sprint 4 Watermarks records remain under `openspec/changes/` pending
+archival. The next work is the cross-cutting formal, testing, equivalence, and performance program.
+[`design/tasks.md`](design/tasks.md) is the
 ORIGINAL task breakdown from before this project split into its own repo and is now retired/superseded —
 see that file's own supersession note; it is kept only as a historical phase-number map, not a
 source of task detail. This page is the public-facing summary, and the target for everything
@@ -40,7 +41,7 @@ below is **1.0.0**.
 - [ ] Extend the mechanized model to CheckpointStore, Watermarks, keyed
   transactions, lease traces, and concrete PostgreSQL refinement obligations.
 
-## Milestone 2 — Core implementation (current)
+## Milestone 2 — Core implementation (module implementations complete)
 
 Per `design/tasks.md` §§0–8: environment setup, then each module
 (TemporalKV, CheckpointStore, Watermarks, Transaction/Lease) implemented
@@ -64,9 +65,28 @@ but verified equivalent to the reference behavior it's replacing.
   tests passing (unit + P6-P8 property tests) after a 3-round Opus panel +
   Fable 5 consolidation + 4-round Codex GPT-5.6 Sol audit on the spec, then
   a 2-auditor (spec-compliance + code-quality) review of the implementation.
-- [ ] Watermarks — not yet drafted.
+- [x] Watermarks (`sprint-4-watermarks`) — `PgWatermarks` (`set`/`get`), the
+  single `fillfactor = 90` `watermarks` table with no secondary index (a
+  hard HOT-eligibility invariant), the top-level-null application-level
+  guard, the large-integer-as-decimal-string caller convention, and
+  `resolveTransaction`-based `opts.tx` composition (no dedicated lease
+  layer needed); 155/155 tests passing project-wide (23 new: 22 unit + P9
+  property test) after a research-round-informed draft, 3-round Opus panel
+  + Fable 5 consolidation + Codex GPT-5.6 Sol audit on the spec, then a
+  2-auditor (spec-compliance + code-quality) review of the implementation
+  plus a final whole-sprint differential-review gate. This completes all
+  four modules in this milestone's checklist — see the note below on what
+  that does and doesn't mean for Milestone 2 as a whole.
 
-## Milestone 3 — Testing
+**Note:** all four modules above now have their own implementation done
+and reviewed, but per this milestone's own opening framing ("not just
+'its own tests pass,' but verified equivalent to the reference behavior
+it's replacing"), the differential state-equivalence gate itself is a
+separate, still-outstanding cross-cutting item — see Milestone 3 and the
+1.0.0 checklist below, where it's tracked jointly with Milestone 3, not
+resolved by this or any single sprint.
+
+## Milestone 3 — Testing (current)
 
 - [ ] The property-based test suite (P1–P10) derived directly from
   `Formal/STORAGE_ALGEBRA.md` §5 — implemented in TypeScript against real
