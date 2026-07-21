@@ -215,9 +215,9 @@ duplicate.
   strictly older than the first page's oldest entry
 - **AND** no sequence number SHALL appear in both pages
 
-### Requirement: prune rejects a retainCount that is not a positive integer, before any deletion runs
+### Requirement: prune rejects a retainCount that is not a positive safe integer, before any deletion runs
 
-`PgCheckpointStore.prune` SHALL reject with `ValidationError` unless `retainCount` is a finite
+`PgCheckpointStore.prune` SHALL reject with `ValidationError` unless `retainCount` is a safe
 integer greater than or equal to 1, and SHALL NOT delete any manifest or chunk as a side effect of
 a rejected call.
 
@@ -229,6 +229,10 @@ a rejected call.
 #### Scenario: A non-integer or non-finite retainCount is rejected with no effect
 - **WHEN** `prune` is called with `retainCount` equal to `NaN`, `Infinity`, or a non-integer
   value such as `1.5`
+- **THEN** the call SHALL reject with `ValidationError`
+
+#### Scenario: An integer retainCount outside the safe integer range is rejected with no effect
+- **WHEN** `prune` is called with an integer `retainCount` greater than `Number.MAX_SAFE_INTEGER`
 - **THEN** the call SHALL reject with `ValidationError`
 - **AND** no row in `ckpt_manifests` or `ckpt_chunks` SHALL be deleted as a result
 
@@ -318,15 +322,23 @@ label unchanged (`design.md` §5's `label` column), and SHALL carry no label whe
 - **THEN** every summary returned for it SHALL report `byteLength = L` and `chunkCount = n`
 - **AND** `createdAt` SHALL be a populated `Date`, not a missing or unmapped driver value
 
-### Requirement: An aborted opts.signal rejects with AbortError and persists nothing
+### Requirement: An aborted opts.signal rejects with AbortError and persists/returns nothing
 
 `PgCheckpointStore.save`, `load`, `history`, and `prune` SHALL each reject with `AbortError` —
 before issuing any database statement — when their `opts.signal` is already aborted at call
-time. `save` and `prune` SHALL forward the signal to the internal `withTransaction`
-(`TransactionOptions.signal`, Sprint 2's cancellation contract), so an abort landing while the
-transaction is in flight rolls it back and rejects with `AbortError`, persisting nothing.
-`load`/`history` SHALL check the signal before each statement; a statement already in flight
-runs to completion (`design.md` §8's stated per-statement abort granularity).
+time. All four methods SHALL forward the signal to their own internal `withTransaction`
+(`TransactionOptions.signal`, Sprint 2's cancellation contract) — `load`/`history` run inside
+their own `withTransaction` for snapshot consistency regardless (the requirement above), so this
+applies uniformly rather than needing separate per-statement signal-checking logic for those two
+— such that an abort landing while the transaction is in flight rolls it back and rejects with
+`AbortError`: for `save`/`prune`, persisting nothing; for `load`/`history`, returning nothing
+(no partial read).
+
+#### Scenario: Aborting load or history mid-flight rejects with AbortError and returns no partial result
+- **WHEN** `load` or `history`'s `opts.signal` is aborted while its internal transaction is still
+  in flight
+- **THEN** the call SHALL reject with `AbortError`
+- **AND** SHALL NOT resolve with a partial or inconsistent result
 
 #### Scenario: A call with an already-aborted signal is rejected before any database work
 - **WHEN** any of `save`/`load`/`history`/`prune` is called with an `opts.signal` that is

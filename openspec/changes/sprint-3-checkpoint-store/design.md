@@ -252,15 +252,17 @@ correctly *not* reclaimed here and does not appear in this call's counts — tha
 intentional behavior, not a bug to fix.
 
 `retainCount` is rejected with `ValidationError`, before either statement runs, unless it is a
-finite integer `>= 1` — **tightened per Codex GPT-5.6 Sol's audit**: a bare `retainCount < 1`
-check alone lets `NaN`, `Infinity`, and fractional values (e.g. `1.5`) through unrejected
-(`NaN < 1` evaluates `false` in JS), each of which would reach the SQL `OFFSET` clause and fail as
-a raw driver/Postgres conversion error instead of the documented `ValidationError`. The adapter's
-actual guard is `Number.isInteger(retainCount) && retainCount >= 1`.
-(`src/interfaces/checkpoint-store.ts` doesn't declare a Zod schema for `prune`'s bare
-`retainCount: number` parameter the way `save`/`history` get one for their options object, so this
-adapter validates it directly rather than skipping validation because no schema object exists for
-it.)
+safe integer `>= 1` — **tightened per Codex GPT-5.6 Sol's audit, twice over**: a bare
+`retainCount < 1` check alone lets `NaN`, `Infinity`, and fractional values (e.g. `1.5`) through
+unrejected (`NaN < 1` evaluates `false` in JS), each of which would reach the SQL `OFFSET` clause
+and fail as a raw driver/Postgres conversion error instead of the documented `ValidationError`;
+the first fix's `Number.isInteger(retainCount)` closes that but not magnitude
+(`Number.isInteger(1e20)` is also `true`, and an `OFFSET` that large is meaningless and still not
+a `ValidationError`). The adapter's actual guard is
+`Number.isSafeInteger(retainCount) && retainCount >= 1`. (`src/interfaces/checkpoint-store.ts`
+doesn't declare a Zod schema for `prune`'s bare `retainCount: number` parameter the way
+`save`/`history` get one for their options object, so this adapter validates it directly rather
+than skipping validation because no schema object exists for it.)
 
 ## 4. `load` — full verification, no exceptions
 
@@ -287,8 +289,13 @@ This is a separate transaction from, and independent of, `save`/`prune`'s own RE
 connection-wide setting.
 
 ```sql
--- 1. resolve the target manifest (walletId, networkId, sequence?) — latest if sequence omitted
-SELECT id, seq, created_at FROM ckpt_manifests
+-- 1. resolve the target manifest (walletId, networkId, sequence?) — latest if sequence omitted.
+--    manifest_hash and label MUST be projected here (fixed after Codex's audit found this
+--    query, as originally drafted, selected only id/seq/created_at — leaving nothing for the
+--    manifest_hash verification below to compare against, and no label for the returned
+--    CheckpointRecord/CheckpointSummary): this row is the ONLY place either value lives, and
+--    both are needed downstream in this same call, not just for history's summaries.
+SELECT id, seq, created_at, manifest_hash, label FROM ckpt_manifests
 WHERE w = $1 AND net = $2 AND complete
   AND ($3::bigint IS NULL OR seq = $3)
 ORDER BY seq DESC LIMIT 1;
@@ -306,12 +313,16 @@ ORDER BY mc.position;
 
 For each row: `c.hash IS NULL` (the `LEFT JOIN` found no matching `ckpt_chunks` row at all, since
 a plain `JOIN` would just silently omit that position instead of surfacing it) →
-`ChunkMissingError(mc.chunk_hash)` — the error's hash comes from the manifest's recorded
-`mc.chunk_hash`, necessarily, since `c.hash` is `NULL` exactly when this error fires; else
+`ChunkMissingError(mc.chunk_hash.toString("hex"))` — the error's hash comes from the manifest's
+recorded `mc.chunk_hash`, necessarily, since `c.hash` is `NULL` exactly when this error fires,
+hex-encoded before it reaches the `ContentHash`-typed field (the same rule §5 states, restated
+here at its actual construction site per Codex's audit — the earlier draft stated this rule only
+in §5 and left it to be inferred here); else
 re-hash `c.data` and compare to `mc.chunk_hash` → mismatch is
-`ChunkIntegrityError(actualRehash, mc.chunk_hash)`, with the manifest-recorded `mc.chunk_hash`
-(not `c.hash`) as the `expectedHash` — both error paths source their "expected" identity from
-the same authoritative column, the manifest entry the interface doc defines them against. Concatenate `data` across all positions in
+`ChunkIntegrityError(actualRehash.toString("hex"), mc.chunk_hash.toString("hex"))`, with the
+manifest-recorded `mc.chunk_hash` (not `c.hash`) as the `expectedHash`, both hex-encoded — both
+error paths source their "expected" identity from the same authoritative column, the manifest
+entry the interface doc defines them against. Concatenate `data` across all positions in
 ascending order into the returned `CheckpointRecord.data`. A gap in `position` (e.g. a manifest
 with positions `0, 1, 3` and no `2`) is a `ManifestCorruptError` — this should be structurally
 impossible given `save()` always inserts a dense `0..n-1` range in the same transaction as the
@@ -336,7 +347,9 @@ chunk-hash *sequence as a whole* the way this one does.
 ## 5. `history` — pagination
 
 ```sql
-SELECT seq, id AS manifest_id, created_at
+-- manifest_hash and label projected here too, same fix and same reason as §4's manifest-resolve
+-- query — every returned CheckpointSummary needs both, and this table row is their only source.
+SELECT seq, id AS manifest_id, created_at, manifest_hash, label
 FROM ckpt_manifests
 WHERE w = $1 AND net = $2 AND complete
   AND ($3::bigint IS NULL OR seq < $3)   -- opts.before cursor
@@ -432,17 +445,21 @@ adapter module, not the committed interface file, which will (correctly) never c
 `AbortSignal` (`SaveCheckpointOptions`/`HistoryOptions`' intersected `signal?`; `load`/`prune`'s
 inline `opts`), and this design honors it rather than silently ignoring a declared parameter.
 All four methods reject with `AbortError` up front, before issuing any statement, when the
-signal is already aborted at call time. `save`/`prune` additionally forward the signal to
-`withTransaction` as `TransactionOptions.signal` — Sprint 2's documented cancellation contract
-("abort rolls back and rejects with `AbortError`") — so an abort landing mid-transaction
-persists nothing: no manifest, junction, or chunk row, and no consumed sequence number (the §2.2
-counter increment rolls back with the rest). For `load`/`history`, the stated tradeoff: these
-are single-shot promise reads with no cursor to interrupt (unlike Sprint 1 `listKeys`'
-mid-iteration abort requirement, which exists precisely because iteration has a natural
-interruption boundary — `sprint-1-setup-and-temporal-kv/specs/temporal-kv/spec.md`), so the
-signal is checked before each statement (`load` has two, §4; `history` one, §5), but a statement
-already in flight runs to completion. Abort granularity is per-statement, best-effort, and
-documented here as an accepted tradeoff rather than left silent.
+signal is already aborted at call time. **Simplified after the H1 fix (§4/§5/§8 above) put
+`load`/`history` inside their own `withTransaction` call, the same as `save`/`prune`:** all four
+methods now uniformly forward `opts.signal` to their respective `withTransaction` call as
+`TransactionOptions.signal` — Sprint 2's documented cancellation contract ("abort rolls back and
+rejects with `AbortError`") — so an abort landing mid-flight rolls back that call's transaction
+and persists/returns nothing, for all four methods identically. For `save`/`prune` this means no
+manifest, junction, or chunk row survives, and no consumed sequence number (the §2.2 counter
+increment rolls back with the rest); for `load`/`history` it means no partial read is returned —
+an abort simply becomes an `AbortError` instead of a result, with no separate per-statement
+signal-checking logic needed (an earlier draft of this paragraph described `load`/`history`
+checking the signal manually before each of their own statements, which both undercounted their
+actual statement count — `history`'s per-manifest aggregation adds more than the one statement
+originally stated — and was strictly more complex than simply reusing the same
+`withTransaction`-level forwarding `save`/`prune` already needed once §4/§5 wrapped these methods
+in a transaction anyway).
 
 **Reconciliation task, tracked explicitly (proposal.md's "accepted dependency" note):** if
 Sprint 2's Codex-clearing pass changes `TransactionLeaseLayer`'s method signatures,

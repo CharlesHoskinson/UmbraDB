@@ -75,6 +75,15 @@ Sprint 1/2's own review cadence.
   over raw payload bytes:** a second test compares two payloads producing the identical multiset
   of chunk hashes but in different order (e.g. swap two equal-size, distinct-content chunks) and
   confirms their `manifestHash` values differ, per the spec's order-sensitivity requirement.
+  **Added per Codex's second-pass audit, which found the above two tests still don't pin down the
+  exact scheme (SHA-256 over which bytes, in what encoding) — a known-vector test:** save a fixed,
+  single-chunk payload (so there is exactly one chunk hash, eliminating any concatenation-order
+  ambiguity), independently compute
+  `crypto.createHash("sha256").update(thatChunkHashAsRawBytes).digest("hex")` in the test itself
+  (via `node:crypto`, not by calling any `PgCheckpointStore` internals), and assert the returned
+  `manifestHash` equals that independently-computed value exactly — ruling out double-hashing,
+  hashing the hex-text representation instead of raw bytes, or a different digest function, none
+  of which the two prior tests could distinguish from a correct implementation.
 - [ ] 1.5 **`save` options-validation test** (`design.md` §1 step 1, the spec's ValidationError
   requirement): call `save` with `opts.chunkSize` above `SaveCheckpointOptionsSchema`'s 16 MiB
   bound and confirm it rejects with `ValidationError` before any work — the same standard
@@ -93,15 +102,22 @@ Sprint 1/2's own review cadence.
   least one multi-chunk payload (not just a payload smaller than one chunk, which wouldn't
   exercise concatenation order at all); a test that mutates a stored chunk's bytes directly (test-
   only helper, bypassing `save`) confirms `load` throws `ChunkIntegrityError` with the correct
-  `chunkHash`/`expectedHash`. **Corrected per Codex's audit — a plain `DELETE FROM ckpt_chunks` on
-  a still-referenced row is not reachable, since `chunk_hash`'s FK (unlike `manifest_id`'s, §2.1)
-  has no delete action and raises SQLSTATE 23503 before `load` ever runs:** the `ChunkMissingError`
-  test instead brackets the corrupting delete with `ALTER TABLE ckpt_manifest_chunks DISABLE
-  TRIGGER ALL` / `... ENABLE TRIGGER ALL` (FK enforcement is itself trigger-based in Postgres, so
-  this is the actual mechanism for constructing an otherwise database-enforced-impossible fixture,
-  not a workaround) to remove a referenced `ckpt_chunks` row while its junction row still points at
-  it, then confirms `load` throws `ChunkMissingError` carrying `mc.chunk_hash`'s value — not a
-  generic null-reference failure and not an uncaught 23503. **Added per Codex's audit — a
+  `chunkHash`/`expectedHash`. **Corrected per Codex's audit (twice — the first fix targeted the
+  wrong table) — a plain `DELETE FROM ckpt_chunks` on a still-referenced row is not reachable,
+  since `chunk_hash`'s FK (unlike `manifest_id`'s, §2.1) has no delete action and raises SQLSTATE
+  23503 before `load` ever runs:** the `ChunkMissingError` test instead brackets the corrupting
+  delete with `ALTER TABLE ckpt_chunks DISABLE TRIGGER ALL` / `... ENABLE TRIGGER ALL` — **on
+  `ckpt_chunks`, the referenced (parent) table, NOT `ckpt_manifest_chunks`**: Postgres implements
+  one FK constraint as two independent trigger sets — INSERT/UPDATE-check triggers on the
+  *referencing* (child) table, and DELETE/UPDATE-action triggers on the *referenced* (parent)
+  table — and `ALTER TABLE X DISABLE TRIGGER ALL` only reaches triggers whose `tgrelid` is `X`.
+  The trigger that raises SQLSTATE 23503 on a `DELETE FROM ckpt_chunks` while a `ckpt_manifest_chunks`
+  row still references it is the parent-side trigger, defined on `ckpt_chunks` itself — disabling
+  triggers on the child table (`ckpt_manifest_chunks`, the first fix's mistake) does nothing to
+  suppress it. Disabling `ckpt_chunks`'s own triggers for the corrupting statement, then
+  re-enabling them immediately after, is what actually removes a referenced row while its junction
+  row still points at it, then confirms `load` throws `ChunkMissingError` carrying `mc.chunk_hash`'s
+  value — not a generic null-reference failure and not an uncaught 23503. **Added per Codex's audit — a
   concurrency test:** using two raw `postgres.js` connections to control statement/commit timing
   directly (the interleaving needs finer granularity than the adapter's own methods expose), begin
   a `load` call, and — after its manifest-resolve statement but before its chunk-fetch statement —
@@ -140,33 +156,40 @@ Sprint 1/2's own review cadence.
   generic error, and not `ChunkMissingError` (the chunks all exist; the *manifest's shape* is
   what is wrong).
 - [ ] 2.5 **Cancellation (`opts.signal`) coverage** (`design.md` §8's cancellation paragraph, the
-  spec's `AbortError` requirement): for each of `save`/`load`/`history`/`prune`, calling with an
-  already-aborted signal rejects with `AbortError` and issues no statement; for `save`, aborting
-  the signal while the internal transaction is in flight rejects with `AbortError`, leaves no
-  manifest/junction/chunk row visible, and consumes no sequence number (the next save receives
-  the aborted call's number — overlaps deliberately with 1.2's rollback-gaplessness check, from
-  the abort path specifically). **Added per Codex's audit, which found no task exercised design.md
-  §8's parallel claim for `prune`:** separately, for `prune`, abort the signal while its internal
-  transaction is in flight (after the manifest-prune statement has executed internally but before
-  the transaction commits) and confirm, via direct SQL, that neither the targeted manifests nor
-  any chunk were actually removed — `design.md` §8 states `prune` forwards the signal to
-  `withTransaction` identically to `save`, and this is the first task to actually check that claim
-  for `prune` rather than only for `save`. **Acceptance:** every assertion above is made
-  explicitly; both the `save` and `prune` mid-transaction abort cases verify row
-  absence/non-removal (and, for `save`, sequence reuse) via direct SQL, not just the rejection
-  type.
+  spec's `AbortError` requirement, now unified across all four methods per the H1 fix): for each
+  of `save`/`load`/`history`/`prune`, calling with an already-aborted signal rejects with
+  `AbortError` and issues no statement. **Mid-transaction abort, made deterministic per Codex's
+  audit (twice: first for finding no task covered `prune`'s claim at all, second for finding
+  the "abort while in flight" language gave no actual synchronization mechanism for landing the
+  abort mid-transaction rather than before or after it) — for each of `save`/`prune`:** from a
+  second raw connection, hold a lock the target call's transaction will need (e.g. a row lock on
+  a `ckpt_manifests`/`ckpt_chunks` row the call must touch, or the writer-lease advisory lock if
+  the call composes one), so the real call — invoked normally through the public
+  `save`/`prune` method, not a hand-rolled replica — starts its transaction, executes its
+  statements up to the point of contention, and blocks; poll `pg_stat_activity`/`pg_locks` until
+  the call's backend is confirmed waiting on that lock (not merely "probably blocked by now" —
+  actually observed); fire the abort at that confirmed instant; release the second connection's
+  lock; confirm the call rejects with `AbortError` and, via direct SQL, that no manifest, junction,
+  or chunk row from that call is visible and (`save` only) no sequence number was consumed (the
+  next successful `save` receives the aborted call's number — overlaps deliberately with 1.2's
+  rollback-gaplessness check, from the abort path specifically). This is the first task to
+  actually pin the abort to a confirmed mid-transaction instant, for either method, rather than
+  describing the timing in prose alone.
 
 ## 3. GC (`prune`)
 
 - [ ] 3.1 Implement `PgCheckpointStore.prune` (`design.md` §3): manifest-prune then
   chunk-reclaim, both inside one transaction, `retainCount` rejected with `ValidationError`
-  before either statement runs unless it is a finite integer `>= 1`
-  (`Number.isInteger(retainCount) && retainCount >= 1`, `design.md` §3). **Acceptance:** a test
+  before either statement runs unless it is a safe integer `>= 1`
+  (`Number.isSafeInteger(retainCount) && retainCount >= 1`, `design.md` §3). **Acceptance:** a test
   with `retainCount = 0` confirms `ValidationError` and confirms neither manifests nor chunks
   changed (no partial effect from the rejected call); **added per Codex's audit, which found the
   original bare `< 1` check admits values that would otherwise reach `OFFSET` and fail as a raw
   driver error:** further tests with `retainCount` equal to `NaN`, `Infinity`, and a non-integer
-  such as `1.5` each confirm the same `ValidationError` rejection with no partial effect; a test
+  such as `1.5` each confirm the same `ValidationError` rejection with no partial effect;
+  **added per Codex's second-pass audit, which found `Number.isInteger` alone doesn't bound
+  magnitude:** a further test with `retainCount = 1e20` (an integer, but not a safe one) confirms
+  the same `ValidationError` rejection; a test
   prunes a manifest that has junction rows and confirms the manifest
   delete succeeds (no SQLSTATE 23503) with its junction rows cascade-deleted in the same pass
   (`design.md` §2.1's `ON DELETE CASCADE` — the exact failure the original no-delete-action FK
