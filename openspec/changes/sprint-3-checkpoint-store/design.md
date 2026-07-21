@@ -14,7 +14,6 @@ src/
     checkpoint-store.ts     PgCheckpointStore (this sprint)
     migrations/
       002_checkpoint_store.ts
-    errors.ts                (existing, modified: this module's constraint-violation translations)
     migrate.ts                (existing, modified: migrations array gains 002)
 test/
   postgres/
@@ -252,11 +251,16 @@ chunk that lost its last reference in this call but hasn't cleared the grace win
 correctly *not* reclaimed here and does not appear in this call's counts — that is the documented,
 intentional behavior, not a bug to fix.
 
-`retainCount < 1` is rejected with `ValidationError` in the adapter before either statement runs
+`retainCount` is rejected with `ValidationError`, before either statement runs, unless it is a
+finite integer `>= 1` — **tightened per Codex GPT-5.6 Sol's audit**: a bare `retainCount < 1`
+check alone lets `NaN`, `Infinity`, and fractional values (e.g. `1.5`) through unrejected
+(`NaN < 1` evaluates `false` in JS), each of which would reach the SQL `OFFSET` clause and fail as
+a raw driver/Postgres conversion error instead of the documented `ValidationError`. The adapter's
+actual guard is `Number.isInteger(retainCount) && retainCount >= 1`.
 (`src/interfaces/checkpoint-store.ts` doesn't declare a Zod schema for `prune`'s bare
 `retainCount: number` parameter the way `save`/`history` get one for their options object, so this
 adapter validates it directly rather than skipping validation because no schema object exists for
-it).
+it.)
 
 ## 4. `load` — full verification, no exceptions
 
@@ -265,6 +269,22 @@ Per the interface's own doc (`CheckpointRecord`, `src/interfaces/checkpoint-stor
 `integrityVerified` flag on the result (a `false` value there could never be observed, since the
 method throws instead of returning one — a prior interface-design review already found and
 removed that dead field, cited in that file's own doc comment).
+
+**Both queries below run inside one `withTransaction(fn, { isolation: "repeatable read" })` call
+(§8) — not against the pooled `sql` directly.** Found by Codex GPT-5.6 Sol's audit: `load` is
+read-only but not single-statement (a manifest lookup, then a separate ordered chunk-fetch), and
+running the two as independent pooled statements can race a concurrent `prune`. If a `prune`
+commits between them, its `ON DELETE CASCADE` (§2.1) can remove exactly the junction rows the
+second statement is about to fetch, so `load` would silently reconstruct an empty or truncated
+payload instead of raising `CheckpointNotFoundError` or a corruption error — contradicting the
+interface's own "each method is an atomic unit of work" doc. REPEATABLE READ takes its snapshot at
+the transaction's first statement, so both statements see one consistent instant regardless of
+what a concurrent `prune` commits in between: either the manifest and all its chunks are visible
+together (the pre-prune state), or the manifest itself is already gone
+(`CheckpointNotFoundError`) — never a torn view where the manifest exists but its chunks don't.
+This is a separate transaction from, and independent of, `save`/`prune`'s own READ COMMITTED
+(§3) — isolation is a per-call `TransactionOptions.isolation` choice (Sprint 2), not a
+connection-wide setting.
 
 ```sql
 -- 1. resolve the target manifest (walletId, networkId, sequence?) — latest if sequence omitted
@@ -299,6 +319,20 @@ manifest row, so this check exists as a defense-in-depth integrity assertion, no
 runtime path (mirrors §2.3's stance on `complete`: kept because it's cheap and catches an
 out-of-band corruption, not because normal operation is expected to hit it).
 
+**`manifest_hash` verification (added per Codex GPT-5.6 Sol's audit — closes a real gap:
+`ManifestCorruptError`'s own interface doc scopes it to "the manifest itself failed its own
+shape/hash validation," but nothing described here actually performed that hash validation).**
+After every chunk is rehashed and confirmed present (above) and the dense-position check passes,
+`load` recomputes SHA-256 over the concatenated, position-ordered `mc.chunk_hash` bytes — the
+identical computation `save()` performs at write time (§5) — and compares it to the resolved
+manifest's stored `manifest_hash`. A mismatch is `ManifestCorruptError`, and it catches something
+the per-chunk integrity check and the position-density check cannot catch between them: a
+junction-row *substitution* where every referenced chunk individually exists and hash-verifies,
+and the position range is still dense, but the *set* of chunk hashes the junction rows reference
+no longer matches what `save()` actually wrote (e.g. an out-of-band edit swapping one valid
+chunk reference for a different, equal-length, also-valid one). Neither prior check inspects the
+chunk-hash *sequence as a whole* the way this one does.
+
 ## 5. `history` — pagination
 
 ```sql
@@ -331,6 +365,24 @@ to an empty string). These two columns are the one *addition* this change makes 
 the two corrections) — both exist because the interface's `CheckpointSummary` requires data that
 schema simply never stored.
 
+**Same torn-read fix as `load` (§4), same reason.** The page query and each returned manifest's
+aggregate query both run inside one `withTransaction(fn, { isolation: "repeatable read" })` call
+(§8) — a `prune` committing between the page query and a page entry's aggregate query must not be
+allowed to produce a `byteLength`/`chunkCount` for a manifest that reflects a different instant
+than the manifest list itself did.
+
+**Two driver-level coercions, both found missing by Codex GPT-5.6 Sol's audit, both mirroring
+§2.2's `seq` coercion:**
+- `count(*)` and `sum(octet_length(...))` return `bigint` under Sprint 1's global
+  `types: { bigint: postgres.BigInt }` mapping (`src/postgres/client.ts`) — the adapter coerces
+  both to JS `number` (asserting `Number.MAX_SAFE_INTEGER`, exactly as §2.2 does for `seq`)
+  before populating `CheckpointSummary.byteLength`/`chunkCount`.
+- `manifest_hash`/`chunk_hash` are `bytea`, but `ContentHash` (`src/interfaces/checkpoint-store.ts`)
+  is a hex string — every `bytea` value crossing into a `ContentHash`-typed field is hex-encoded
+  (`Buffer.from(value).toString("hex")`) at this boundary before it reaches an interface-typed
+  value, never left as a raw `Buffer`. This applies here (`CheckpointSummary.manifestHash`) and in
+  §4 (`ChunkMissingError`/`ChunkIntegrityError`'s hash fields, both sourced from `mc.chunk_hash`).
+
 ## 6. Migration (`002_checkpoint_store.ts`)
 
 Schema-qualified via `sql(schema)`, matching `001_temporal_kv.ts`'s established pattern exactly —
@@ -340,7 +392,7 @@ CASCADE` manifest FK, §2.1), `ckpt_sequence_counters` (§2.2), and both indexes
 (`ckpt_manifests_lookup`, `ckpt_manifest_chunks_by_hash`). No trigger, no extension — this module
 needs neither `btree_gist` nor any `plpgsql` function, unlike TemporalKV.
 
-## 7. Error translation additions (`src/postgres/errors.ts`)
+## 7. Error translation — no additions to `src/postgres/errors.ts`
 
 `ckpt_manifests_lookup`/PK/FK violations are not expected on any normal path (dedup and sequence
 allocation are both upsert-based, never raw `INSERT` that could collide) — no new SQLSTATE
@@ -361,11 +413,13 @@ internally for every `save`/`prune` call, using that sprint's `resolveTransactio
 registry export to get the real `postgres.js` transaction-scoped `sql` for its own queries — the
 same composition pattern Sprint 2's own design.md §2 describes for any future adapter, now
 exercised for the first time by a real consumer other than `PgTemporalKV`. `load`/`history` are
-read-only and single-statement-equivalent (a manifest lookup + one ordered join, or one paginated
-select) — per the interface's own silence on transactional participation for these two methods,
-they run directly against the pooled `sql` with no `withTransaction` wrapper, matching
-`PgTemporalKV.get`/`getAt`'s existing precedent of not wrapping single reads in a transaction
-either.
+read-only but each is two round-trips, not one (§4/§5) — **revised per Codex GPT-5.6 Sol's
+audit**, which found that running those two statements independently against the pooled `sql`
+(the original design here, matching `PgTemporalKV.get`/`getAt`'s single-statement precedent,
+which doesn't actually apply to a *multi*-statement read) lets a concurrent `prune` produce a torn
+result. Both methods instead wrap their own multi-statement read in
+`withTransaction(fn, { isolation: "repeatable read" })` — see §4/§5 for the exact race this closes
+and why REPEATABLE READ specifically (not just any transaction) is what's needed.
 
 One clarification to preempt a reader checking the wrong file: `resolveTransaction` is an
 adapter-internal export of Sprint 2's Postgres module (`src/postgres/transaction-lease.ts` on

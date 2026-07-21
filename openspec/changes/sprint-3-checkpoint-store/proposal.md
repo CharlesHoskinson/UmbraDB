@@ -97,8 +97,14 @@ parallel, matching how Sprint 2 itself was drafted while Sprint 1 was only newly
 - **New in this repo**: `src/postgres/checkpoint-store.ts` (`PgCheckpointStore`), a new migration
   `src/postgres/migrations/002_checkpoint_store.ts`, and `test/postgres/checkpoint-store.test.ts`
   + `checkpoint-store.property.test.ts` (P6-P8).
-- **Modified**: `src/postgres/errors.ts` gains translations for this module's constraint
-  violations; `src/postgres/migrate.ts`'s `migrations` array gains the new migration.
+- **Modified**: `src/postgres/migrate.ts`'s `migrations` array gains the new migration.
+  **Corrected per Codex's audit, which found this bullet contradicted `design.md` §7 and the task
+  list**: `src/postgres/errors.ts` gains **no new SQLSTATE translations** for this module —
+  `design.md` §7 explains why: dedup and sequence allocation are both upsert-based (never a raw
+  `INSERT` that could collide), and `CheckpointNotFoundError`/`ChunkMissingError`/
+  `ChunkIntegrityError`/`ManifestCorruptError` are all raised directly from `PgCheckpointStore`'s
+  own application-level checks, not translated from a database constraint violation the way
+  TemporalKV's exclusion constraint is.
 - **Risk**: this module's correctness bar is GC safety (Law C2a, `Formal/STORAGE_ALGEBRA.md` §2)
   — a chunk reclaimed while a live manifest still references it is silent, permanent data loss
   discovered only later, as a `ChunkMissingError` on an unrelated `load()` call far away in time

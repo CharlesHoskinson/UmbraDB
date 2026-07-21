@@ -134,6 +134,37 @@ position gap impossible on any normal path, so a gap can only mean out-of-band c
   the structural failure
 - **AND** SHALL NOT return a `CheckpointRecord` with the gap silently concatenated over
 
+### Requirement: load rejects a manifest whose recorded chunk-hash sequence was tampered with, even when every chunk individually verifies
+
+`PgCheckpointStore.load` SHALL recompute the manifest's content hash from the resolved,
+position-ordered chunk-hash sequence and SHALL reject with `ManifestCorruptError` when it does
+not match the checkpoint's stored `manifestHash` — independent of, and in addition to, per-chunk
+integrity verification and the dense-position check, since a hash-list substitution can pass both
+of those while still not matching what `save` actually wrote.
+
+#### Scenario: A manifest whose chunk-hash sequence was substituted is rejected even though every referenced chunk verifies and positions are dense
+- **WHEN** a manifest's recorded chunk-hash sequence is altered out-of-band to reference a
+  different chunk than `save` originally wrote, at a position where the replacement chunk is
+  itself present and individually valid (its own content still hashes to its own recorded hash),
+  with no gap introduced in the position range
+- **THEN** `load` SHALL reject with `ManifestCorruptError`
+- **AND** SHALL NOT return a `CheckpointRecord` reconstructed from the substituted sequence
+
+### Requirement: load and history read a consistent snapshot immune to a concurrently-committing prune
+
+`PgCheckpointStore.load`'s manifest resolution and chunk fetch, and `PgCheckpointStore.history`'s
+page query and each summary's metadata aggregation, SHALL each observe one mutually consistent
+snapshot, such that a `prune` call committing between either method's constituent statements
+SHALL NOT produce a torn result (e.g. a manifest visible but its chunks already gone, or a summary
+whose aggregated metadata reflects a different instant than the page listing it).
+
+#### Scenario: A prune committing mid-load does not truncate or empty an in-flight load's result
+- **WHEN** a `prune` call that would remove a checkpoint's manifest (and cascade its chunk
+  references) commits after `load` has begun resolving that same checkpoint but before `load`
+  has finished fetching its chunks
+- **THEN** `load` SHALL return that checkpoint's complete, correct data as it existed before the
+  `prune`, rather than an empty or truncated payload, and rather than an unrelated error
+
 ### Requirement: load and history distinguish "no checkpoint" from "checkpoint exists elsewhere"
 
 `PgCheckpointStore.load` SHALL reject with `CheckpointNotFoundError` when no checkpoint exists for
@@ -184,13 +215,20 @@ duplicate.
   strictly older than the first page's oldest entry
 - **AND** no sequence number SHALL appear in both pages
 
-### Requirement: prune rejects a retainCount below 1 before any deletion runs
+### Requirement: prune rejects a retainCount that is not a positive integer, before any deletion runs
 
-`PgCheckpointStore.prune` SHALL reject with `ValidationError` when `retainCount < 1`, and SHALL
-NOT delete any manifest or chunk as a side effect of a rejected call.
+`PgCheckpointStore.prune` SHALL reject with `ValidationError` unless `retainCount` is a finite
+integer greater than or equal to 1, and SHALL NOT delete any manifest or chunk as a side effect of
+a rejected call.
 
 #### Scenario: retainCount of zero is rejected with no effect
 - **WHEN** `prune` is called with `retainCount = 0`
+- **THEN** the call SHALL reject with `ValidationError`
+- **AND** no row in `ckpt_manifests` or `ckpt_chunks` SHALL be deleted as a result
+
+#### Scenario: A non-integer or non-finite retainCount is rejected with no effect
+- **WHEN** `prune` is called with `retainCount` equal to `NaN`, `Infinity`, or a non-integer
+  value such as `1.5`
 - **THEN** the call SHALL reject with `ValidationError`
 - **AND** no row in `ckpt_manifests` or `ckpt_chunks` SHALL be deleted as a result
 

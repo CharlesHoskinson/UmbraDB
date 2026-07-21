@@ -70,7 +70,11 @@ Sprint 1/2's own review cadence.
   position-ordered chunk-hash bytes, computed once at `save()` time. **Acceptance:** a test saves
   identical `data` twice as two separate checkpoints and confirms both manifests report the same
   `manifestHash` in their `CheckpointSummary` (same chunk sequence ⇒ same manifest hash,
-  independent of `seq`).
+  independent of `seq`). **Added per Codex's audit — the above alone doesn't distinguish a
+  correct order-sensitive implementation from a constant hash, a sorted-hash-set hash, or a hash
+  over raw payload bytes:** a second test compares two payloads producing the identical multiset
+  of chunk hashes but in different order (e.g. swap two equal-size, distinct-content chunks) and
+  confirms their `manifestHash` values differ, per the spec's order-sensitivity requirement.
 - [ ] 1.5 **`save` options-validation test** (`design.md` §1 step 1, the spec's ValidationError
   requirement): call `save` with `opts.chunkSize` above `SaveCheckpointOptionsSchema`'s 16 MiB
   bound and confirm it rejects with `ValidationError` before any work — the same standard
@@ -81,24 +85,49 @@ Sprint 1/2's own review cadence.
 
 ## 2. Read path
 
-- [ ] 2.1 Implement `PgCheckpointStore.load` (`design.md` §4): manifest resolution (latest or by
-  `sequence`), ordered chunk fetch, full rehash-and-verify of every chunk, concatenation.
+- [ ] 2.1 Implement `PgCheckpointStore.load` (`design.md` §4), wrapping its manifest-resolve and
+  chunk-fetch statements in one `withTransaction(fn, { isolation: "repeatable read" })` call
+  (`design.md` §8) — manifest resolution (latest or by `sequence`), ordered chunk fetch, full
+  rehash-and-verify of every chunk, concatenation, manifest-hash recomputation and comparison.
   **Acceptance:** a round-trip test (`save` then `load`) returns byte-identical `data` for at
   least one multi-chunk payload (not just a payload smaller than one chunk, which wouldn't
   exercise concatenation order at all); a test that mutates a stored chunk's bytes directly (test-
   only helper, bypassing `save`) confirms `load` throws `ChunkIntegrityError` with the correct
-  `chunkHash`/`expectedHash`; a test that deletes a referenced chunk row directly confirms `load`
-  throws `ChunkMissingError`, not a generic null-reference failure.
-- [ ] 2.2 Implement `PgCheckpointStore.history` (`design.md` §5): newest-first, `limit`/`before`
-  cursor paging. **Acceptance:** a test saves N checkpoints and pages through `history` with a
+  `chunkHash`/`expectedHash`. **Corrected per Codex's audit — a plain `DELETE FROM ckpt_chunks` on
+  a still-referenced row is not reachable, since `chunk_hash`'s FK (unlike `manifest_id`'s, §2.1)
+  has no delete action and raises SQLSTATE 23503 before `load` ever runs:** the `ChunkMissingError`
+  test instead brackets the corrupting delete with `ALTER TABLE ckpt_manifest_chunks DISABLE
+  TRIGGER ALL` / `... ENABLE TRIGGER ALL` (FK enforcement is itself trigger-based in Postgres, so
+  this is the actual mechanism for constructing an otherwise database-enforced-impossible fixture,
+  not a workaround) to remove a referenced `ckpt_chunks` row while its junction row still points at
+  it, then confirms `load` throws `ChunkMissingError` carrying `mc.chunk_hash`'s value — not a
+  generic null-reference failure and not an uncaught 23503. **Added per Codex's audit — a
+  concurrency test:** using two raw `postgres.js` connections to control statement/commit timing
+  directly (the interleaving needs finer granularity than the adapter's own methods expose), begin
+  a `load` call, and — after its manifest-resolve statement but before its chunk-fetch statement —
+  commit, on the second connection, a `prune` that would otherwise cascade-delete this exact
+  manifest's junction rows; confirm the in-flight `load` still returns the pre-prune payload
+  correctly (its REPEATABLE READ snapshot insulates it, `design.md` §4/§8), not a
+  truncated/empty result and not an uncaught error.
+- [ ] 2.2 Implement `PgCheckpointStore.history` (`design.md` §5), wrapping the page query and each
+  summary's metadata aggregation in one `withTransaction(fn, { isolation: "repeatable read" })`
+  call (`design.md` §8): newest-first, `limit`/`before` cursor paging. **Acceptance:** a test saves
+  N checkpoints and pages through `history` with a
   `limit` smaller than N, confirming the `before` cursor from one page correctly continues into
   the next with no duplicate and no gap; a test confirms `history` is scoped per
   `(walletId, networkId)` — a second wallet's checkpoints never appear in the first's history;
   a test confirms `history` for a pair with zero checkpoints resolves `[]`, not an error (the
   spec's "lookup vs. load" distinction); a test confirms each returned `CheckpointSummary`
   carries the save-time `label` round-tripped (and no label when none was given — never an empty
-  string), `byteLength` equal to the original `data.byteLength`, the correct `chunkCount`, and a
-  populated `createdAt` `Date` (the spec's summary-metadata requirement).
+  string), `byteLength` equal to the original `data.byteLength` (coerced from the aggregate
+  query's driver-returned `bigint`, `design.md` §5, not left as `bigint`), the correct
+  `chunkCount` (same coercion), a populated `createdAt` `Date`, and a hex-string `manifestHash`
+  (coerced from `bytea`, `design.md` §5) — not a raw `Buffer` (the spec's summary-metadata
+  requirement, and Codex's audit finding on the bigint/hex boundary conversions). **Added per
+  Codex's audit — a concurrency test:** analogous to 2.1's, confirming a `prune` committing
+  between the page query and a page entry's own aggregate query does not produce a
+  `byteLength`/`chunkCount` for that entry that reflects a different instant than the page listing
+  it.
 - [ ] 2.3 `CheckpointNotFoundError` coverage: a test calls `load` for a `(walletId, networkId)`
   with zero checkpoints, and separately for a valid wallet+network but a `sequence` that was
   never written, confirming both reject with `CheckpointNotFoundError` carrying the right
@@ -116,17 +145,29 @@ Sprint 1/2's own review cadence.
   the signal while the internal transaction is in flight rejects with `AbortError`, leaves no
   manifest/junction/chunk row visible, and consumes no sequence number (the next save receives
   the aborted call's number — overlaps deliberately with 1.2's rollback-gaplessness check, from
-  the abort path specifically). **Acceptance:** every assertion above is made explicitly; the
-  mid-transaction abort case verifies row absence and sequence reuse via direct SQL, not just
-  the rejection type.
+  the abort path specifically). **Added per Codex's audit, which found no task exercised design.md
+  §8's parallel claim for `prune`:** separately, for `prune`, abort the signal while its internal
+  transaction is in flight (after the manifest-prune statement has executed internally but before
+  the transaction commits) and confirm, via direct SQL, that neither the targeted manifests nor
+  any chunk were actually removed — `design.md` §8 states `prune` forwards the signal to
+  `withTransaction` identically to `save`, and this is the first task to actually check that claim
+  for `prune` rather than only for `save`. **Acceptance:** every assertion above is made
+  explicitly; both the `save` and `prune` mid-transaction abort cases verify row
+  absence/non-removal (and, for `save`, sequence reuse) via direct SQL, not just the rejection
+  type.
 
 ## 3. GC (`prune`)
 
 - [ ] 3.1 Implement `PgCheckpointStore.prune` (`design.md` §3): manifest-prune then
-  chunk-reclaim, both inside one transaction, `retainCount < 1` rejected with `ValidationError`
-  before either statement runs. **Acceptance:** a test with `retainCount = 0` confirms
-  `ValidationError` and confirms neither manifests nor chunks changed (no partial effect from the
-  rejected call); a test prunes a manifest that has junction rows and confirms the manifest
+  chunk-reclaim, both inside one transaction, `retainCount` rejected with `ValidationError`
+  before either statement runs unless it is a finite integer `>= 1`
+  (`Number.isInteger(retainCount) && retainCount >= 1`, `design.md` §3). **Acceptance:** a test
+  with `retainCount = 0` confirms `ValidationError` and confirms neither manifests nor chunks
+  changed (no partial effect from the rejected call); **added per Codex's audit, which found the
+  original bare `< 1` check admits values that would otherwise reach `OFFSET` and fail as a raw
+  driver error:** further tests with `retainCount` equal to `NaN`, `Infinity`, and a non-integer
+  such as `1.5` each confirm the same `ValidationError` rejection with no partial effect; a test
+  prunes a manifest that has junction rows and confirms the manifest
   delete succeeds (no SQLSTATE 23503) with its junction rows cascade-deleted in the same pass
   (`design.md` §2.1's `ON DELETE CASCADE` — the exact failure the original no-delete-action FK
   guaranteed); review confirms the `withTransaction` call passes no `isolation` override
@@ -136,21 +177,42 @@ Sprint 1/2's own review cadence.
   checkpoints for one `(w, net)`, `prune(retainCount = k)`, confirm exactly the `k` newest survive
   and the oldest `N - k` are gone — for at least one case where `k = 1` (the edge the original
   off-by-one bug specifically got wrong).
-- [ ] 3.3 **Grace-window / TOCTOU test** (`design/design.md` §3's dedup-refresh rationale):
-  arrange for a chunk to lose its last manifest reference (via `prune`) and, in the same
-  `prune` pass, be re-referenced by a brand-new `save` whose transaction is still in-flight when
-  the reclaim `DELETE` runs — confirm the chunk is NOT reclaimed (the `created_at` refresh from
-  1.3 plus the grace window together prevent this). A simpler, still-real version acceptable if
-  true concurrent-transaction interleaving is impractical to arrange in a test: confirm a chunk
-  created less than the grace window ago is never reclaimed even when currently unreferenced,
-  and reappears in a later `prune` call's `reclaimedChunks` once the window has elapsed (may
-  require a test-only clock/interval override — record which approach was used).
+- [ ] 3.3 **Grace-window / TOCTOU test, deterministic** (`design/design.md` §3's dedup-refresh
+  rationale; `design.md` §3's own comment on the mechanism). **Tightened per Codex's audit, which
+  found the originally-permitted "simpler version" doesn't exercise the actual race, and that
+  task 3.4's `Promise.all` fuzzing doesn't reliably reproduce it either** — this test MUST
+  deterministically construct the mechanism, not rely on scheduler timing: backdate a chunk's
+  `created_at` (via direct SQL) to past the grace window while it is still referenced by a live
+  manifest; on one raw `postgres.js` connection, begin a transaction and run that chunk's
+  `INSERT ... ON CONFLICT ... DO UPDATE` upsert as part of re-referencing it from a new `save`
+  (refreshing `created_at`, acquiring the row's lock), but do NOT commit yet; on a second raw
+  connection, concurrently run `prune`'s reclaim `DELETE` targeting that same chunk after its
+  other manifest reference has been pruned away — under READ COMMITTED it sees the still-stale
+  (pre-refresh) `created_at`, attempts to lock the row for deletion, and blocks on the first
+  connection's held lock; commit the first connection's transaction; confirm the second
+  connection's `DELETE` then completes WITHOUT deleting the chunk (Postgres re-evaluates the row
+  via EvalPlanQual after the lock releases and sees the now-refreshed `created_at`, no longer
+  matching the grace-window predicate) and that the chunk survives and remains loadable. As a
+  separate, simpler supplementary test (not a substitute for the above): confirm a chunk created
+  less than the grace window ago is never reclaimed while unreferenced, and is reclaimed by a
+  later `prune` once the window has elapsed (a test-only backdated `created_at` is acceptable here
+  too, to avoid a real-time sleep).
 - [ ] 3.4 **Law C2a safety test, adversarial**: interleave `save` and `prune` calls (concurrently,
   via `Promise.all`, across multiple `(w, net)` pairs sharing common chunk content) for many
   iterations and confirm no `load()` call — for any checkpoint that `history()` still lists as
   surviving — ever throws `ChunkMissingError`. This is the sprint's hardest correctness bar
   (proposal.md's own risk note); a failure here is a real GC-safety bug, not a flaky test to
   retry past.
+
+- [ ] 3.5 **`manifest_hash` tamper coverage** (`design.md` §4's new verification step — added
+  because Codex's audit found `load` never recomputed `manifest_hash` at all in the original
+  draft). Via a test-only helper, after a normal `save`, swap one junction row's `chunk_hash` for
+  a *different*, independently-valid chunk hash (individually present and correctly hashed in
+  `ckpt_chunks`, dense position range preserved), so every per-chunk integrity check and the
+  position-density check both pass, then call `load`. **Acceptance:** the call rejects with
+  `ManifestCorruptError` specifically because the recomputed `manifest_hash` no longer matches the
+  stored value — proving this check fires on a substitution that the pre-existing per-chunk and
+  position checks cannot catch on their own (the spec's tamper-detection requirement).
 
 ## 4. Property tests (`Formal/STORAGE_ALGEBRA.md` §5)
 
