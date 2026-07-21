@@ -452,23 +452,35 @@ rather than assuming Sprint 2's interface doc described the implementation compl
 explicit that it is "a pre-check-only contract: an abort that fires AFTER `fn()` has been
 dispatched has no effect on that in-flight call" — unlike `acquireLease`/`withLease`, which build
 genuine mid-wait cancellation via a dedicated `raceAgainstAbort` helper (real `Query.cancel()`,
-because a lock wait can block indefinitely), `withTransaction` has no equivalent. There is no
-`Query` handle `PgCheckpointStore` could call `.cancel()` on either way — `withTransaction`'s
-callback boundary only exposes the transaction-scoped `sql`/`TransactionHandle`, never the
-individual in-flight `Query` objects `raceAgainstAbort` needs.
+because a lock wait can block indefinitely), `withTransaction` itself has no equivalent.
 
-**Consequently, this design makes no claim beyond what `withTransaction` actually delivers**: for
-`save`, `load`, `history`, and `prune` alike, `opts.signal` is checked once, before the call's
-`withTransaction` invocation begins — an already-aborted signal rejects with `AbortError` and
-issues no statement, exactly as stated above — but a signal that aborts *after* the call has
-begun has **no defined effect**: the call proceeds to its natural completion (success, or its own
-unrelated failure) regardless of the later abort, and does not itself reject with `AbortError`
-just because the signal fired. This is an accepted limitation inherited directly from Sprint 2's
-real, already-audit-cleared `withTransaction` contract, not a Sprint 3 design choice — closing it
-would mean either Sprint 2 growing its own mid-flight transaction cancellation (a Sprint 2 API
-change, out of this sprint's scope) or `PgCheckpointStore` building a `raceAgainstAbort`-equivalent
-of its own, which the callback-boundary limitation above rules out without a materially different
-composition than "call `withTransaction`."
+**Correcting an overstated rationale from this section's immediately preceding revision (found by
+Codex GPT-5.6 Sol's confirmation pass): it is NOT true that `PgCheckpointStore` has no `Query`
+handle to cancel.** `resolveTransaction(handle)` (§8 above) returns the transaction-scoped `ISql`
+itself — the same live connection `withTransaction`'s callback runs on — and every tagged-template
+call `PgCheckpointStore` issues against it (the chunk upsert, manifest insert, junction inserts,
+the manifest-resolve/chunk-fetch selects) is itself a real, individually-cancellable
+`PendingQuery`, exactly the kind of object `raceAgainstAbort` races against elsewhere in this
+project. `PgCheckpointStore` *could* build its own `raceAgainstAbort`-equivalent around its own
+individually-issued queries, entirely independent of whether `withTransaction` itself ever grows
+that capability — the callback boundary was never the obstacle.
+
+**Given that correction, this section's actual position is a scope decision, not an architectural
+impossibility:** this sprint does not build that mechanism. `save`/`prune`'s statements
+(chunk upsert, sequence claim, manifest/junction inserts, the two-step GC pass) and
+`load`/`history`'s reads are all expected to be fast, bounded operations under this project's
+single-writer, dev-local deployment — nothing here blocks indefinitely the way a contended
+advisory lock (`acquireLease`) or an open server-side cursor (`listKeys`) can, which is precisely
+why those two earned dedicated cancellation and ordinary reads/writes elsewhere in this codebase
+(e.g. `PgTemporalKV.get`/`put`) did not. `opts.signal` is therefore checked once, before the
+call's `withTransaction` invocation begins — an already-aborted signal rejects with `AbortError`
+and issues no statement, as stated above — but a signal that aborts *after* the call has begun
+has **no defined effect**: the call proceeds to its natural completion (success, or its own
+unrelated failure) regardless of the later abort. This is an explicit, revisitable scope decision
+for this sprint, not a limitation forced on it by Sprint 2 or by the driver — revisit if a real
+requirement for mid-flight `CheckpointStore` cancellation appears (the same "revisit only if a
+real requirement appears" posture `src/interfaces/transaction-lease.ts`'s own revision note
+already takes for lease TTL/fencing).
 
 **Reconciliation, resolved:** Sprint 2 merged to `main` at `3db3c8d` with a 2-round audit cycle
 already complete. `TransactionLeaseLayer`'s method signatures, `TransactionHandle`'s shape, and
