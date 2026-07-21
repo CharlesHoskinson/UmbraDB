@@ -52,6 +52,26 @@ the full design history and [`ROADMAP.md`](ROADMAP.md) for what's next.
 - [`Formal/`](Formal/) — formal specification work in progress: precise
   type signatures and algebraic laws intended for eventual mechanized proof.
 
+## Formal verification
+
+Lean M1 is complete for the abstract per-key TemporalKV history model. The
+kernel-checked slice covers successful version assignment and append behavior,
+failed-write preservation, strict timestamp-invariant preservation, basic
+version/time lookup characterizations, accepted-write replay, and agreement
+between version and timestamp addressing.
+
+Retention and unavailable-history semantics, interval/T5 laws, keyed
+transactions, SQL refinement, leases, garbage collection, and liveness remain
+deferred to M2–M5. The small API smoke module checks imports and selected
+library theorem contracts; it does not prove those later store models.
+
+```powershell
+Set-Location Formal/Lean
+lake update
+lake build
+powershell -ExecutionPolicy Bypass -File scripts/check-trust.ps1
+```
+
 ## Interfaces
 
 ```

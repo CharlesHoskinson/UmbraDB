@@ -1,10 +1,10 @@
-# Storage Algebra Lean Formalization — Research Draft
+# Storage Algebra Lean Formalization — Approved M1 Design
 
-- **Status:** research complete enough for a design decision; not yet an
-  approved formal specification
+- **Status:** decision package approved for M1 implementation on 2026-07-20;
+  later milestones remain subject to their stated proof and refinement gates
 - **Branch:** `formal/storage-algebra-lean`
 - **Repository baseline:** `148d17fd9b957136798e98ed5986e865b281fd4f`
-- **Candidate Lean stack:** Lean 4 / mathlib `v4.32.0`
+- **Lean stack:** Lean 4 / mathlib `v4.32.0`
 - **Primary recommendation:** formalize an executable, history-first abstract
   state machine, then prove the named laws as derived theorems and treat the
   PostgreSQL adapter as a separate refinement boundary
@@ -78,7 +78,7 @@ document and current code/spec relationships are included in the committed
 | CheckpointStore | Public interface and design only. | Formalize the intended abstract structure first and feed schema defects back into design. |
 | Watermarks | Public interface only. | The pure overwrite model can be formalized independently. |
 | Transaction/Lease | Public interface plus a remote Sprint 2 proposal explicitly marked not audit-cleared. | Separate lock-holder safety from callback safety and do not certify the proposal by association. |
-| Lean | No project, definitions, or proofs. | Pin a stable toolchain only after the model decision below is accepted. |
+| Lean | M1 project, executable Layer A model, and first theorem tranche complete with no declaration placeholders. | Keep later storage models and PostgreSQL refinement outside the M1 claim boundary. |
 
 The top-level README and ROADMAP have also drifted: the README still describes
 the PostgreSQL implementation as absent, and the ROADMAP still treats formal
@@ -252,7 +252,8 @@ fencing protocol.
 
 ## 5. Recommended candidate model
 
-This section is a candidate for approval, not yet the frozen specification.
+This model is frozen for M1. Later milestones may extend it only through the
+explicit retention, keyed-store, and refinement boundaries below.
 
 ### 5.1 Layer A: per-key temporal history
 
@@ -433,7 +434,7 @@ Veil is useful precedent, but its current project is pinned to an older Lean
 release. The first UmbraDB slice should copy the transition/invariant method,
 not add Veil as a dependency.
 
-### 6.1 Proposed module layout after approval
+### 6.1 Approved M1 module layout
 
 ```text
 Formal/Lean/
@@ -479,8 +480,10 @@ history model.
 12. `runAttempts_append`
 13. `runTransaction_first_error_rolls_back`
 
-These should precede retention, SQL refinement, C2b liveness, and callback-level
-lease safety.
+M1 completes items 1–9. Items 10–11 belong to the deferred M2 interval/T5
+tranche; items 12–13 are also not part of the completed theorem claim. All of
+these precede retention, SQL refinement, C2b liveness, and callback-level lease
+safety.
 
 ## 7. Formalization strategies considered
 
@@ -523,16 +526,32 @@ Additional issues to resolve before claiming refinement:
 
 ## 9. Trust and refinement boundary
 
-### Proved in Lean
+### Completed M1 claims
 
-- Determinism and invariant preservation of each abstract transition.
-- T1/T2 over the executable temporal `attempt`.
-- T3/T4 lookup equivalences over complete, well-formed history.
-- T5 interval disjointness and adjacency/gap-freedom.
-- C1 finite-set algebra and compatible-map laws.
-- C2a for one atomic abstract GC step.
-- W1 observational overwrite/idempotence.
-- Database-holder L1 over the lease transition system.
+- The executable Layer A history model assigns the next one-based version and
+  appends the accepted event.
+- Abstract version conflicts and clock failures preserve history; the conflict
+  result is characterized by the executable expectation mismatch.
+- Every abstract `attempt` preserves strict timestamp well-formedness.
+- Positive version lookup is characterized by its zero-based history index,
+  and time lookup is characterized by the last event in the ordered prefix at
+  or before the query.
+- An all-applied `runAttempts` trace replays writes in order, and an in-bounds
+  version lookup agrees with lookup at that entry's timestamp.
+
+The API smoke module also compiles selected standalone mathlib contracts. Those
+smoke declarations are not completed retention, interval/T5, checkpoint,
+watermark, GC, lease, liveness, keyed-transaction, or SQL-refinement models.
+
+### Deferred M2–M5 proof work
+
+- M2: retention/unavailable-history semantics, full temporal replay, and
+  interval/T5 disjointness and gap-freedom.
+- M3: modeled watermark and checkpoint laws, compatible chunk-map laws, and
+  one-step GC safety.
+- M4: lease-holder trace safety and any liveness theorem under explicit
+  fairness, cancellation, and failure assumptions.
+- M5: keyed transaction and PostgreSQL adapter refinement evidence.
 
 ### Named external obligations
 
@@ -622,7 +641,7 @@ challenge. The research run did not attempt to bypass it and used an accessible
 primary paper copy instead. The matrix endpoints above were fetched and their
 relevant content markers checked with Scrapling.
 
-## 12. Proposed milestones
+## 12. Milestone status
 
 ### M0 — freeze semantics
 
@@ -631,32 +650,32 @@ relevant content markers checked with Scrapling.
   retention, C1 compatibility, C2 liveness assumptions, and L1 scope agree.
 - Mark stale status tables explicitly.
 
-### M1 — no-`sorry` TemporalKV vertical slice
+### M1 — no-`sorry` TemporalKV vertical slice (completed)
 
 - Pin Lean/mathlib `v4.32.0`.
 - Implement Layer A and its well-formedness invariant.
 - Prove preservation, T1, T2, lookup basics, and one T4 theorem.
 - Add `lake build` and axiom/sorry checks to CI.
 
-### M2 — complete temporal laws
+### M2 — complete temporal laws (deferred)
 
 - Prove T3 using ordered prefixes.
 - Derive T5 intervals and prove disjointness/gap-freedom.
 - Generate test vectors or an executable oracle for TypeScript property tests.
 
-### M3 — simple stores
+### M3 — simple stores (deferred)
 
 - Prove W1.
 - Prove C1 for hash sets and compatible maps.
 - Prove C2a for one-hop manifest reachability.
 
-### M4 — leases and liveness
+### M4 — leases and liveness (deferred)
 
 - Prove database-holder L1 along finite traces.
 - Design fencing/cancellation before attempting callback-level L1.
 - Add C2b only after fairness and failure semantics are explicit.
 
-### M5 — refinement evidence
+### M5 — refinement evidence (deferred)
 
 - State an adapter refinement relation.
 - Strengthen integration/property tests to cover the obligations in Sections 8
@@ -664,7 +683,7 @@ relevant content markers checked with Scrapling.
 - Consider deeper SQL semantics only where tests and named assumptions are not
   sufficient for the desired assurance level.
 
-## 13. Decisions required before Lean implementation
+## 13. Approved implementation decisions
 
 The recommended decision package is:
 
@@ -689,6 +708,6 @@ The recommended decision package is:
    loss/cancellation or fencing design.
 10. **Toolchain:** Lean/mathlib `v4.32.0`, no `sorry`, and no hidden global axioms.
 
-Approval of this package authorizes the M1 project scaffold and first proof
-slice. Until then, this branch remains a research/proposal branch rather than a
-purportedly verified model of unsettled semantics.
+This package authorizes the M1 project scaffold and first proof slice. The
+branch remains explicit about which later semantics are still refinement or
+liveness obligations rather than purportedly verified facts.
