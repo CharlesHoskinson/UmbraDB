@@ -2,6 +2,8 @@ import Mathlib.Util.AssertNoSorry
 import UmbraDBFormalTest.APISmoke
 import UmbraDBFormalTest.TemporalKV.Model
 import UmbraDBFormalTest.TemporalKV.Laws
+import UmbraDBFormalTest.TemporalKV.Retention.Model
+import UmbraDBFormalTest.TemporalKV.Retention.Laws
 
 /-!
 # UmbraDB proof-trust audit

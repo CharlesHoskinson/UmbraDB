@@ -58,14 +58,17 @@ Lean M1 is complete for the abstract per-key TemporalKV history model. The
 kernel-checked slice covers successful version assignment and append behavior,
 failed-write preservation, strict timestamp-invariant preservation, basic
 version/time lookup characterizations, accepted-write replay, and agreement
-between version and timestamp addressing. The first M2 tranche derives bounded
-half-open validity intervals plus the live tail from that history and proves
-pairwise disjointness and structural gap-freedom.
+between version and timestamp addressing. M2 derives bounded half-open validity
+intervals plus the live tail, proves pairwise disjointness and exact horizon
+coverage, and adds executable prefix retention. Retention-aware time and exact
+version lookup distinguish absence from unavailable history, preserve original
+versions and the live event, and agree with the complete M1 history throughout
+the certified retained horizon.
 
-Retention and unavailable-history semantics, store-level T3, keyed transactions,
-SQL refinement, leases, garbage collection, and liveness remain deferred to
-later M2–M5 work. The T5 results concern the abstract history projection; SQL
-constraints and trigger discipline remain external refinement obligations.
+Keyed-store lifting, SQL retention/refinement, runtime selector validation,
+leases, garbage collection, and liveness remain deferred to later work. The
+T3/T5 results concern the abstract per-key history; SQL constraints, pruning
+atomicity, and trigger discipline remain external refinement obligations.
 The small API smoke module checks imports and selected library theorem
 contracts; it does not prove those later store models.
 The default Lake build compiles those contracts and an elaborated-environment

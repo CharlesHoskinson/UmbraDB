@@ -540,18 +540,27 @@ Additional issues to resolve before claiming refinement:
   version lookup agrees with lookup at that entry's timestamp.
 - A nonempty history projects to bounded half-open validity intervals followed
   by the live half-infinite tail. Consecutive intervals reuse their boundary,
-  and a well-formed history yields pairwise-disjoint projected intervals.
+  a well-formed history yields pairwise-disjoint projected intervals, and the
+  interval union covers exactly the horizon from the first write onward.
+- Executable prefix retention keeps a complete history or a nonempty retained
+  suffix with a positive pruned count. The two availability-floor coordinates
+  are derived from that suffix, and positive-version selectors cannot express
+  version zero.
+- Retention-aware time and exact-version lookup characterize unavailable
+  queries, preserve original versions and the live event, and agree with M1
+  lookup at and above the retained floor.
 
 The API smoke module also compiles selected standalone mathlib contracts. Those
-smoke declarations are not completed retention, checkpoint, watermark, GC,
-lease, liveness, keyed-transaction, or SQL-refinement models. The T5 theorems
-are supplied by the TemporalKV model and law modules, not by the smoke test.
+smoke declarations are not checkpoint, watermark, GC, lease, liveness,
+keyed-transaction, or SQL-refinement models. The retention and T5 theorems are
+supplied by the TemporalKV source and law modules, not by the smoke test.
 
 ### Deferred M2–M5 proof work
 
-- M2: interval/T5 disjointness and gap-freedom are complete for the abstract
-  per-key projection; retention/unavailable-history semantics and full
-  store-level temporal replay remain deferred.
+- M2: interval/T5 disjointness and exact horizon coverage, executable prefix
+  retention, unavailable-history classification, and retention-transparent
+  per-key T3 are complete. Keyed-store lifting, oracle serialization, and SQL
+  retention/refinement remain deferred.
 - M3: modeled watermark and checkpoint laws, compatible chunk-map laws, and
   one-step GC safety.
 - M4: lease-holder trace safety and any liveness theorem under explicit
@@ -667,9 +676,13 @@ relevant content markers checked with Scrapling.
 
 - Derive bounded historical intervals plus the live tail and prove T5
   disjointness/gap-freedom. **Completed.**
-- Strengthen M1's per-key ordered-prefix lookup characterization into the full
-  store-level T3 temporal-selection law. **Deferred.**
-- Generate test vectors or an executable oracle for TypeScript property tests.
+- Prove extensional T5 coverage over the exact nonempty history horizon.
+  **Completed.**
+- Add canonical prefix retention, separate absence/unavailability outcomes, and
+  retention-transparent per-key T3 for time and exact-version selectors.
+  **Completed.**
+- Lift the per-key laws to a keyed transactional state and generate a checked
+  executable oracle for TypeScript property tests. **Deferred.**
 
 ### M3 — simple stores (deferred)
 

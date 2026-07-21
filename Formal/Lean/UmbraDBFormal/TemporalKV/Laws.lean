@@ -167,13 +167,36 @@ theorem getAtVersion_eq_index (history : History Value Time) (version : Version)
   | zero => exact (hversion rfl).elim
   | succ version => rfl
 
-private theorem wellFormed_tail [LT Time] {first : Event Value Time}
+/-- Removing the first event preserves timestamp well-formedness. -/
+theorem wellFormed_tail [LT Time] {first : Event Value Time}
     {rest : History Value Time} (hwf : WellFormed (first :: rest)) : WellFormed rest := by
   cases rest with
   | nil =>
       change True
       trivial
   | cons second rest => exact hwf.right
+
+/-- Projecting validity intervals preserves the number of events. -/
+@[simp] theorem validityIntervals_length (history : History Value Time) :
+    (validityIntervals history).length = history.length := by
+  induction history with
+  | nil => rfl
+  | cons first rest ih =>
+      cases rest with
+      | nil => rfl
+      | cons second rest =>
+          simp only [validityIntervals, List.length_cons]
+          exact congrArg Nat.succ ih
+
+/-- Removing an oldest prefix preserves timestamp well-formedness. -/
+theorem wellFormed_drop [LinearOrder Time] (history : History Value Time) (count : Nat)
+    (hwf : WellFormed history) : WellFormed (history.drop count) := by
+  induction count generalizing history with
+  | zero => simpa using hwf
+  | succ count ih =>
+      cases history with
+      | nil => trivial
+      | cons first rest => exact ih rest (wellFormed_tail hwf)
 
 /-- Consecutive projected intervals reuse exactly the same boundary, so the validity chain has no
 gaps by construction. -/
@@ -249,6 +272,33 @@ theorem intervals_pairwise_disjoint [LinearOrder Time]
               validityInterval_validFrom_le_of_mem hinterval
             exact (not_lt_of_ge (hstart.trans hlower)) hfirst.2
           · exact ih (wellFormed_tail hwf)
+
+/-- The projected intervals of a nonempty well-formed history cover exactly the history horizon
+from the first write onward. This is the extensional form of T5 gap-freedom. -/
+theorem validityIntervals_cover_iff [LinearOrder Time]
+    (first : Event Value Time) (rest : History Value Time)
+    (hwf : WellFormed (first :: rest)) (point : Time) :
+    (∃ interval ∈ validityIntervals (first :: rest), point ∈ interval.asSet) ↔
+      first.writtenAt ≤ point := by
+  induction rest generalizing first with
+  | nil =>
+      simp [validityIntervals, ValidityInterval.asSet]
+  | cons second rest ih =>
+      have hpair : first.writtenAt < second.writtenAt := by
+        simpa only [WellFormed] using hwf.left
+      have htail : WellFormed (second :: rest) := wellFormed_tail hwf
+      rw [validityIntervals]
+      simp only [List.mem_cons, exists_eq_or_imp]
+      rw [ih second htail]
+      simp only [ValidityInterval.asSet, Set.mem_Ico]
+      constructor
+      · rintro (⟨hfirst, _⟩ | hsecond)
+        · exact hfirst
+        · exact hpair.le.trans hsecond
+      · intro hfirst
+        by_cases hbefore : point < second.writtenAt
+        · exact Or.inl ⟨hfirst, hbefore⟩
+        · exact Or.inr (le_of_not_gt hbefore)
 
 private def expectedAtTime [LinearOrder Time] (query : Time) (version : Version)
     (candidate : Option (VersionedEntry Value Time)) (history : History Value Time) :
@@ -366,7 +416,8 @@ theorem accepted_replay_eq_prefix [LinearOrder Time] (history : History Value Ti
               obtain ⟨entry, hentry⟩ := htrace.1
               cases hentry
 
-private theorem wellFormed_head_lt_getElem? [LinearOrder Time]
+/-- In a well-formed history the head timestamp precedes every event in its tail. -/
+theorem wellFormed_head_lt_getElem? [LinearOrder Time]
     {first : Event Value Time} {rest : History Value Time} {index : Nat}
     {event : Event Value Time} (hwf : WellFormed (first :: rest))
     (hget : rest[index]? = some event) : first.writtenAt < event.writtenAt := by
