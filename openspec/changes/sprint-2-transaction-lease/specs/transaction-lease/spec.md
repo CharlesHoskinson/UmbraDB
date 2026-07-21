@@ -178,8 +178,13 @@ before rejecting, so an aborted caller never leaks a held lease.
 ### Requirement: releaseLease rejects a lease that is not currently held
 
 IF `releaseLease` is called with a `Lease` whose token does not correspond to a currently-held
-lease (already released, or its connection already closed), THEN the system SHALL reject with
-`LeaseNotHeldError` rather than silently no-op.
+lease (already released), THEN the system SHALL reject with `LeaseNotHeldError` rather than
+silently no-op. **Corrected by review**: this Requirement previously also listed "or its
+connection already closed" as a `LeaseNotHeldError` case — that directly contradicted the
+Connection-loss Requirement above, which requires that SAME case to surface `LeaseFaultError`
+(`faultKind: "connection-lost"`) instead. A lease whose connection died was still genuinely held
+right up until it died; `LeaseNotHeldError` is reserved for a token this layer has no record of
+holding at all (already released, or fabricated).
 
 #### Scenario: Releasing an already-released lease throws LeaseNotHeldError
 - **WHEN** `releaseLease(lease)` is called twice in sequence on the same `lease` object

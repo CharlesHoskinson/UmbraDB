@@ -89,15 +89,18 @@ export class LeaseTimeoutError extends TransactionLeaseError {
   }
 }
 
-/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the lease was already released or
- *  its connection already closed — releasing twice is routine under normal cleanup paths (e.g.
- *  a `finally` block racing an already-completed release), not a bug, but the caller is still
- *  told so via a distinct, catchable error rather than a silent no-op. With TTL/stealing
- *  removed, this is the only way a release can fail to find its lease. */
+/** Thrown by {@link TransactionLeaseLayer.releaseLease} when the given `Lease` object was
+ *  already released — releasing twice is routine under normal cleanup paths (e.g. a `finally`
+ *  block racing an already-completed release), not a bug, but the caller is still told so via a
+ *  distinct, catchable error rather than a silent no-op. **Corrected by a Sprint 2 review**: this
+ *  previously also claimed "or its connection already closed," which does not hold — a lease
+ *  whose connection has died surfaces {@link LeaseFaultError} (`faultKind: "connection-lost"`)
+ *  on release instead, since the lease genuinely WAS held, just not releasable cleanly; this
+ *  error is specifically for a lease this layer no longer has any record of holding at all. */
 export class LeaseNotHeldError extends TransactionLeaseError {
   readonly code = "LEASE_NOT_HELD" as const;
   constructor(readonly key: string) {
-    super(`lease "${key}" was not held (already released, or its connection closed)`);
+    super(`lease "${key}" was not held (already released)`);
   }
 }
 
@@ -143,10 +146,18 @@ export type TransactionRollbackCause =
 // Options — Zod-first (data fields in the schema; live handles intersected on)
 // ---------------------------------------------------------------------------
 
+/** Postgres's `statement_timeout` (and other millisecond-valued integer GUCs) is stored as a
+ *  32-bit signed `int4` — a value above this, though a syntactically valid positive integer,
+ *  makes the underlying `SET`/`SET LOCAL` statement fail at the server. **Added by a
+ *  cross-vendor Sprint 2 audit**: the schemas below originally accepted any positive integer,
+ *  so an out-of-range `timeoutMs` would pass validation here and then fail confusingly deep
+ *  inside the driver instead of with a clear `ValidationError` at the call site. */
+const POSTGRES_INT4_MAX = 2_147_483_647;
+
 export const TransactionOptionsSchema = z.object({
   isolation: z.enum(["read committed", "repeatable read", "serializable"]).optional(),
   /** Statement/transaction timeout; a timeout surfaces as {@link TransactionFaultError}. */
-  timeoutMs: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().max(POSTGRES_INT4_MAX).optional(),
 });
 export type TransactionOptions = z.infer<typeof TransactionOptionsSchema> & {
   /** Cancellation is pre-check-only, matching every other method in this storage layer
@@ -163,7 +174,7 @@ export const LeaseAcquireOptionsSchema = z.object({
    *  `acquireLease`/`withLease`, `null` from `tryAcquireLease`. Omit to wait indefinitely
    *  (`acquireLease`) or to fail fast with no wait at all (`tryAcquireLease` — see its own
    *  doc). */
-  timeoutMs: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().max(POSTGRES_INT4_MAX).optional(),
 });
 export type LeaseAcquireOptions = z.infer<typeof LeaseAcquireOptionsSchema> & {
   /** Cancellation: abort while waiting rejects with `AbortError`; if the lock was already
@@ -236,9 +247,9 @@ export interface TransactionLeaseLayer {
 
   /**
    * Releases a previously acquired lease.
-   * @throws {LeaseNotHeldError} if the lease was already released or its connection already
-   *   closed.
-   * @throws {LeaseFaultError} on connection loss.
+   * @throws {LeaseNotHeldError} if the lease was already released.
+   * @throws {LeaseFaultError} (`faultKind: "connection-lost"`) if the lease's held connection
+   *   has died — the lease genuinely was held, so this is distinct from `LeaseNotHeldError`.
    */
   releaseLease(lease: Lease): Promise<void>;
 

@@ -84,12 +84,21 @@ async withTransaction<T>(
 }
 ```
 
-`opts.isolation` maps to `sql.begin(isolationString, callback)` — `postgres.js`'s two-argument
-`begin` overload. Verified directly against the installed source
-(`node_modules/postgres/src/index.js`'s `begin(options, fn)`): it builds the statement as
-`'begin ' + options.replace(/[^a-z ]/ig, '')` and runs it via `sql.unsafe(...)`, i.e. a
-string-concatenated, character-class-sanitized raw statement — NOT a bound parameter. This
-matters for the fix below, since it's the same technique that fix has to use.
+`opts.isolation` maps to `sql.begin(options, callback)` — `postgres.js`'s two-argument `begin`
+overload. Verified directly against the installed source (`node_modules/postgres/src/index.js`'s
+`begin(options, fn)`): it builds the statement as `'begin ' + options.replace(/[^a-z ]/ig, '')`
+and runs it via `sql.unsafe(...)`, i.e. a string-concatenated, character-class-sanitized raw
+statement — NOT a bound parameter. This matters for the fix below, since it's the same technique
+that fix has to use.
+
+**`options` must be the FULL clause `isolation level <mode>`, not the bare enum value — a real
+bug found only by actually implementing and testing this, corrected here after this design.md's
+own earlier draft was found to be incomplete.** Postgres's real `BEGIN` grammar requires the
+complete `ISOLATION LEVEL <mode>` clause (e.g. `BEGIN ISOLATION LEVEL REPEATABLE READ`); `BEGIN
+REPEATABLE READ` alone (the bare `TransactionOptionsSchema` enum value, which is what this
+section originally said to pass directly) is a syntax error. The call must therefore be
+`` this.sql.begin(`isolation level ${validated.isolation}`, txCallback) ``, not
+`` this.sql.begin(validated.isolation, txCallback) ``.
 
 **`opts.timeoutMs` — corrected by review, which found the original plan used a SQL construct
 that cannot work at all.** The original draft set `statement_timeout` via
@@ -133,13 +142,41 @@ NOT always a transaction-timeout in every context `translatePostgresError` is us
       `transaction exceeded its ${validated.timeoutMs}ms timeout`, "timeout", err,
     );
   }
+  // Added by a cross-vendor Sprint 2 audit, missing from the original draft: this interface's
+  // own JSDoc documents "@throws TransactionFaultError on connection loss," but without this
+  // check the shared translatePostgresError below maps a connection-failure code to the
+  // UNRELATED shared ConnectionError class instead, so a caller catching TransactionFaultError
+  // specifically (as the interface tells them to) would miss it.
+  if (isConnectionFailure(err)) {
+    throw new TransactionFaultError("connection lost during transaction", "connection-lost", err);
+  }
   throw translatePostgresError(err); // maps serialization failures, deadlocks, etc. (§5)
 }
 ```
 
 `isStatementTimeout` is the same helper §3 defines for the lease-acquisition case — moved to a
 shared location (`src/postgres/errors.ts`) since both call sites now need it, rather than
-duplicated.
+duplicated. `isConnectionFailure` is a second, smaller helper in the same file, exported
+specifically so this catch block (which sees arbitrary errors, not just ones from this module's
+own SQL calls) can check for a genuine connection failure without routing through the full
+`translatePostgresError` switch.
+
+**A related, more fundamental bug in the shared `isPgDriverError` check `translatePostgresError`
+itself relies on, found by the same audit**: this catch block sees whatever `fn` (arbitrary
+caller code) throws, not just errors from this module's own SQL calls — unlike every other
+existing call site of `translatePostgresError`. The pre-Sprint-2 `isPgDriverError` check (`err
+instanceof Error && typeof err.code === "string"`) was written for those narrower call sites and
+is too loose here: an arbitrary application error that happens to carry its own `.code` string
+(a Node built-in like `ENOENT`, or a caller's own business-error convention) would be
+misclassified as a driver error and, for any code not in this file's specific enumerations,
+silently relabeled `UnrecognizedPostgresError` by the `default` branch — directly violating this
+interface's own documented contract ("any other error thrown by `fn` propagates unchanged").
+Fixed in `src/postgres/errors.ts` by requiring EITHER a `.severity` string field (which every
+genuine Postgres wire-protocol error carries, confirmed against real driver error dumps
+throughout this project's test output, e.g. `{severity: 'ERROR', code: 'UB001', ...}`) OR
+membership in the existing, closed `CONNECTION_FAILURE_CODES` set (for Node-level connection
+failures, which never reach the wire protocol and so never carry `.severity`). This benefits
+every existing caller of `translatePostgresError`, not just this sprint's new one.
 
 **Nested/recursive `withTransaction` calls are explicitly out of scope, not silently broken —
 found by adversarial review, which asked what happens if `fn` itself calls `withTransaction`
@@ -343,6 +380,17 @@ against the installed source in Sprint 1's own fix history).
 ```typescript
 async function raceAgainstAbort<T>(query: Promise<T> & { cancel(): unknown }, signal?: AbortSignal): Promise<T> {
   if (!signal) return query;
+  // Added after TWO independent Sprint 2 reviews (Opus and Codex) found the same bug: no entry
+  // check for an ALREADY-aborted signal. addEventListener("abort", ...) never fires for an abort
+  // that already happened -- callers of this function pre-check `signal.aborted` at their OWN
+  // entry, but real `await` gaps exist between that pre-check and this call (`sql.reserve()`,
+  // `SET statement_timeout`), during which the signal can abort and then be silently lost: with
+  // no timeoutMs, a contended acquireLease would then block FOREVER (a permanent hang, plus a
+  // leaked pinned connection).
+  if (signal.aborted) {
+    query.cancel();
+    return Promise.reject(abortError(signal));
+  }
   let onAbort: () => void;
   const aborted = new Promise<never>((_resolve, reject) => {
     onAbort = () => { query.cancel(); reject(abortError(signal)); };
@@ -355,6 +403,70 @@ async function raceAgainstAbort<T>(query: Promise<T> & { cancel(): unknown }, si
   }
 }
 ```
+
+**A second race window, found by the same reviews: even with the entry check above, `pg_advisory_lock`
+granting the lock and the signal aborting can settle at essentially the same instant** — `Promise.race`
+only reports whichever settles first; it does not also notice a genuinely simultaneous abort. Both
+`acquireLease` and `tryAcquireLease` therefore re-check `signal?.aborted` immediately after
+`raceAgainstAbort` resolves successfully (i.e. the lock was granted), and treat a true value the
+same as if the query itself had thrown `AbortError` — routing into the same catch block so the
+lock this session just acquired is still released via the existing defensive `pg_advisory_unlock`
+(§3(d) above), not leaked.
+
+**A third gap, found by the same reviews and NOT closed by `raceAgainstAbort` at all: `sql.reserve()`
+itself has no timeout/abort/nonblocking awareness.** Both methods `await this.sql.reserve()` BEFORE
+any of the abort/timeout machinery above even starts, so against an exhausted connection pool,
+`acquireLease`/`tryAcquireLease` could block past their configured `timeoutMs`, ignore an abort
+entirely, or (for `tryAcquireLease` with no `timeoutMs`) fail to return `null` promptly — all
+while the caller reasonably believes those guarantees already apply. Fix: a `reserveBounded(sql,
+timeoutMs, signal)` helper that races `sql.reserve()` itself against the same kind of
+timeout/abort machinery, with one added subtlety a naive race would get wrong — if this gives up
+(timeout or abort wins) before the underlying `reserve()` call actually settles, and it resolves
+anyway afterward, the now-orphaned connection must be released immediately rather than leaked:
+
+```typescript
+const RESERVE_TIMED_OUT = Symbol("reserve-timed-out");
+
+function reserveBounded(
+  sql: UmbraDBSql, timeoutMs: number | undefined, signal: AbortSignal | undefined,
+): Promise<ReservedSql> {
+  if (timeoutMs === undefined && !signal) return sql.reserve();
+
+  let gaveUp = false; // set ONLY inside the bail branches below -- never means "not yet settled"
+  const reservePromise = sql.reserve();
+  reservePromise.then((reserved) => { if (gaveUp) reserved.release(); }).catch(() => {});
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const bail = new Promise<never>((_resolve, reject) => {
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => { gaveUp = true; reject(RESERVE_TIMED_OUT); }, timeoutMs);
+    }
+    if (signal) {
+      if (signal.aborted) { gaveUp = true; reject(abortError(signal)); return; }
+      onAbort = () => { gaveUp = true; reject(abortError(signal)); };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
+
+  return Promise.race([reservePromise, bail]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+  });
+}
+```
+
+`acquireLease`/`tryAcquireLease` call `reserveBounded(this.sql, validated?.timeoutMs, signal)`
+instead of the plain `this.sql.reserve().catch(...)` shown in §3's code sample above, and catch
+the `RESERVE_TIMED_OUT` sentinel the same way each method already handles a lock-phase timeout
+(`LeaseTimeoutError` for `acquireLease`, `null` for `tryAcquireLease`). **One sub-case is a
+disclosed limitation, not fully solved**: `tryAcquireLease` with no `timeoutMs` is now
+abort-aware during the reservation wait, but if the connection pool itself has zero free
+connections, this still genuinely waits for one rather than returning `null` instantly —
+`pg_try_advisory_lock`'s native non-blocking behavior only ever applied to the ADVISORY LOCK,
+and there is no synchronous, non-blocking way to probe an inherently-blocking connection-pool
+acquisition. This project's single-writer deployment model does not expect callers to treat the
+shared connection pool as a per-call contended resource the way the lease itself is.
 
 `isStatementTimeout(err)` checks SQLSTATE `57014` (`query_canceled` — the code Postgres uses for
 a statement cancelled by `statement_timeout`, confirmed against Postgres's own SQLSTATE
@@ -399,7 +511,10 @@ FINAL step changed: report the captured failure instead of discarding it.
 
 `withLease` is the acquire→run→always-release combinator already documented in the interface;
 implemented directly in terms of the three methods above with a `try/finally`, release failures
-caught and logged (not thrown) per the interface's own documented contract.
+swallowed (not thrown) per the interface's own documented contract — **corrected by review**:
+an earlier draft of this sentence said "logged," which was never actually implementable (this
+project has no logging infrastructure); the doc, the interface JSDoc, the spec Requirement, and
+the implementation comment were all corrected to say "swallowed" instead.
 
 ## 4. Wiring `PgTemporalKV`'s `opts.tx`
 
@@ -454,8 +569,9 @@ private async putImpl<T extends JsonValue>(
 ```
 
 `getImpl`/`getAtImpl` take the identical treatment — a leading `sql: ISql` parameter, and every
-`this.sql` reference in their existing bodies (one in `getImpl`, two in `getAtImpl`) becomes that
-parameter. `this.schema` (the schema name, used for identifier interpolation like
+`this.sql` reference in their existing bodies (TWO in `getImpl`, SIX in `getAtImpl` — see the
+exact counts above; an earlier draft of this sentence repeated the since-corrected undercount)
+becomes that parameter. `this.schema` (the schema name, used for identifier interpolation like
 `${sql(this.schema)}`) is unaffected — it stays a `this.` reference in all cases, since the
 resolved transaction connection still operates against the SAME schema this adapter was
 constructed for; only the CONNECTION the query is issued against changes, never the schema.

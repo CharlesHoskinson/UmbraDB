@@ -19,7 +19,7 @@ import {
 } from "../interfaces/transaction-lease.js";
 import { abortError, withAbort } from "./abort.js";
 import type { UmbraDBSql } from "./client.js";
-import { isStatementTimeout, translatePostgresError } from "./errors.js";
+import { isConnectionFailure, isStatementTimeout, translatePostgresError } from "./errors.js";
 
 /**
  * The transaction-handle registry (openspec/changes/sprint-2-transaction-lease/design.md §2) —
@@ -90,6 +90,19 @@ function validateLeaseAcquireOptions(opts: LeaseAcquireOptions | undefined): Lea
  */
 function raceAgainstAbort<T>(query: Promise<T> & { cancel(): unknown }, signal: AbortSignal | undefined): Promise<T> {
   if (!signal) return query;
+  // Found by two independent Sprint 2 reviews (Opus and Codex, same bug): this had no entry
+  // check for an ALREADY-aborted signal -- addEventListener("abort", ...) never fires for an
+  // abort that already happened, since the DOM/Node AbortSignal spec does not replay past
+  // events to new listeners. Every caller of this function already pre-checks `signal.aborted`
+  // at its OWN entry, but there are real `await` gaps between that pre-check and this call
+  // (`this.sql.reserve()`, the `SET statement_timeout` statement) during which the signal can
+  // abort -- and without this check, that abort is then silently lost: the only remaining
+  // promise in the race is the query itself, so a contended, no-timeout `acquireLease` would
+  // block forever (a permanent hang, plus the connection stays pinned/leaked).
+  if (signal.aborted) {
+    query.cancel();
+    return Promise.reject(abortError(signal));
+  }
   let onAbort: () => void;
   const aborted = new Promise<never>((_resolve, reject) => {
     onAbort = () => {
@@ -100,6 +113,59 @@ function raceAgainstAbort<T>(query: Promise<T> & { cancel(): unknown }, signal: 
   });
   return Promise.race([query, aborted]).finally(() => {
     signal.removeEventListener("abort", onAbort);
+  });
+}
+
+/**
+ * Bounds `sql.reserve()` itself against `opts.timeoutMs`/`opts.signal` — found missing by a
+ * cross-vendor Sprint 2 audit: neither bounded the reservation wait, only the advisory-lock wait
+ * that begins AFTER a connection is already in hand, so a caller against an exhausted connection
+ * pool could block past their configured `timeoutMs`, or have an abort silently ignored, before
+ * ever reaching the lock-acquisition logic that DOES respect them. If this gives up (timeout or
+ * abort wins the race) before the underlying `reserve()` call itself settles, and that call
+ * later resolves anyway, the now-orphaned connection is released immediately rather than leaked
+ * — `gaveUp` is set ONLY inside the timeout/abort branches below, specifically so the normal
+ * "reserve() genuinely won the race" path is never mistaken for an abandoned one.
+ */
+const RESERVE_TIMED_OUT = Symbol("reserve-timed-out");
+
+function reserveBounded(
+  sql: UmbraDBSql, timeoutMs: number | undefined, signal: AbortSignal | undefined,
+): Promise<ReservedSql> {
+  if (timeoutMs === undefined && !signal) return sql.reserve();
+
+  let gaveUp = false;
+  const reservePromise = sql.reserve();
+  reservePromise.then((reserved) => {
+    if (gaveUp) reserved.release();
+  }).catch(() => {});
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const bail = new Promise<never>((_resolve, reject) => {
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        gaveUp = true;
+        reject(RESERVE_TIMED_OUT);
+      }, timeoutMs);
+    }
+    if (signal) {
+      if (signal.aborted) {
+        gaveUp = true;
+        reject(abortError(signal));
+        return;
+      }
+      onAbort = () => {
+        gaveUp = true;
+        reject(abortError(signal));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
+
+  return Promise.race([reservePromise, bail]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
   });
 }
 
@@ -189,6 +255,14 @@ export class PgTransactionLeaseLayer implements TransactionLeaseLayer {
           `transaction exceeded its ${validated.timeoutMs}ms timeout`, "timeout", err,
         );
       }
+      // Found by a cross-vendor Sprint 2 audit: this interface's own JSDoc documents
+      // "@throws TransactionFaultError on connection loss..." but this catch previously fell
+      // straight through to the shared translatePostgresError, which maps a connection-failure
+      // code to the UNRELATED shared ConnectionError class instead -- a caller following the
+      // documented contract and catching TransactionFaultError specifically would miss it.
+      if (isConnectionFailure(err)) {
+        throw new TransactionFaultError("connection lost during transaction", "connection-lost", err);
+      }
       throw translatePostgresError(err); // maps serialization failures (40001), deadlocks (40P01)
     }
   }
@@ -197,16 +271,28 @@ export class PgTransactionLeaseLayer implements TransactionLeaseLayer {
     const validated = validateLeaseAcquireOptions(opts);
     const signal = validated?.signal;
     if (signal?.aborted) throw abortError(signal);
-    const reserved = await this.sql.reserve().catch((err: unknown) => {
-      throw new LeaseFaultError("failed to reserve a connection", "reserve-failed", err);
-    });
     const hadTimeout = validated?.timeoutMs !== undefined;
+    let reserved: ReservedSql;
+    try {
+      reserved = await reserveBounded(this.sql, validated?.timeoutMs, signal);
+    } catch (err) {
+      if (err === RESERVE_TIMED_OUT) throw new LeaseTimeoutError(key, validated!.timeoutMs!);
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      throw new LeaseFaultError("failed to reserve a connection", "reserve-failed", err);
+    }
     try {
       if (hadTimeout) {
         await reserved.unsafe(`set statement_timeout = ${validated!.timeoutMs}`);
       }
       const query = reserved`select pg_advisory_lock(${LEASE_ADVISORY_LOCK_CLASS}, hashtext(${key}))`;
       await raceAgainstAbort(query, signal);
+      // Found by a cross-vendor Sprint 2 audit: without this re-check, a query-win/abort race
+      // (the lock query settles at essentially the same instant the signal aborts) could take
+      // the success path below despite the caller having aborted, since Promise.race only
+      // reports whichever settled first -- it does not also notice a SIMULTANEOUS abort. Throw
+      // into the same catch block below so the lock this session just acquired is still
+      // released, not leaked.
+      if (signal?.aborted) throw abortError(signal);
     } catch (err) {
       // Defensive, unconditional, harmless if this session never actually held it (Postgres's
       // pg_advisory_unlock returns false, not an error, in that case) -- closes the race where
@@ -230,10 +316,22 @@ export class PgTransactionLeaseLayer implements TransactionLeaseLayer {
     const validated = validateLeaseAcquireOptions(opts);
     const signal = validated?.signal;
     if (signal?.aborted) throw abortError(signal);
-    const reserved = await this.sql.reserve().catch((err: unknown) => {
-      throw new LeaseFaultError("failed to reserve a connection", "reserve-failed", err);
-    });
     const hadTimeout = validated?.timeoutMs !== undefined;
+    let reserved: ReservedSql;
+    try {
+      // NOTE (disclosed, not fixed): with no timeoutMs, this still bounds the reservation wait
+      // against an abort (closing that gap), but NOT against the connection pool itself being
+      // exhausted -- if the pool has zero free connections, this genuinely waits for one before
+      // even reaching pg_try_advisory_lock's real non-blocking check. "Non-blocking" here refers
+      // specifically to the ADVISORY LOCK, matching this interface's own documented scope; the
+      // connection pool is a shared, generally-available resource this project's single-writer
+      // deployment model does not expect callers to probe for exhaustion.
+      reserved = await reserveBounded(this.sql, validated?.timeoutMs, signal);
+    } catch (err) {
+      if (err === RESERVE_TIMED_OUT) return null; // matches the lock-phase timeout fork below
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      throw new LeaseFaultError("failed to reserve a connection", "reserve-failed", err);
+    }
     try {
       if (!hadTimeout) {
         // pg_try_advisory_lock is native non-blocking -- returns immediately, nothing to time
@@ -260,6 +358,8 @@ export class PgTransactionLeaseLayer implements TransactionLeaseLayer {
           throw err;
         }
       }
+      // Same query-win/abort-race re-check as acquireLease -- see that method's own comment.
+      if (signal?.aborted) throw abortError(signal);
     } catch (err) {
       await reserved`select pg_advisory_unlock(${LEASE_ADVISORY_LOCK_CLASS}, hashtext(${key}))`.catch(() => {});
       await resetStatementTimeout(reserved, hadTimeout);

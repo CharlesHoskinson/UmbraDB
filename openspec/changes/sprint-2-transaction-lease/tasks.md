@@ -172,3 +172,35 @@ auditors approve, or their findings are fixed and re-reviewed.
   supersession note (see the separate `design/tasks.md` cleanup tracked
   outside this change) so the roadmap doesn't drift from what's actually
   been built.
+- [x] 3.3 Second review round (Opus + Codex GPT-5.6 + Fable 5, run in
+  parallel — the panel-cycle style, resumed after 3.1's single-pass
+  experiment, since this round found real bugs a single pass had missed).
+  Found and fixed: **Blocker-adjacent** `raceAgainstAbort` had no entry
+  check for an already-aborted `signal` (two independent reviewers found
+  this) — an abort landing in the real `await` gaps before it was called
+  (`sql.reserve()`, `SET statement_timeout`) was silently lost, hanging a
+  no-timeout `acquireLease` forever against a contended key and leaking
+  the pinned connection; **High** a query-win/abort race at the exact
+  instant `pg_advisory_lock` grants could take the success path despite
+  the caller having aborted (added a post-grant re-check); **High**
+  `sql.reserve()` itself had no timeout/abort/nonblocking awareness at
+  all, only the advisory-lock wait after a connection was already in hand
+  (added `reserveBounded`, with orphaned-connection cleanup if the
+  bail-branch wins after `reserve()` already resolved); **High**
+  `isPgDriverError` classified ANY `Error` with a string `.code` as a
+  driver error, so an arbitrary application error thrown by `fn` (a Node
+  built-in, a caller's own business-error convention) would be
+  misclassified and, for an unenumerated code, silently relabeled
+  `UnrecognizedPostgresError` — violating `withTransaction`'s own
+  documented "propagates unchanged" contract (fixed by additionally
+  requiring `.severity`, which every genuine Postgres wire-protocol error
+  carries); **Medium** `withTransaction`'s connection-loss path
+  contradicted its own interface doc (`ConnectionError` instead of
+  `TransactionFaultError`); **Medium** `timeoutMs` schemas accepted values
+  above Postgres's `int4` max; **Low** `LeaseNotHeldError`'s doc (three
+  places) and a `spec.md` Requirement still claimed "or its connection
+  already closed," directly contradicting the connection-loss Requirement
+  fixed in 3.1; **Low** several doc/code-count staleness spots in
+  `design.md` and `design/design-interfaces.md` (a historical doc,
+  annotated rather than rewritten). All fixes covered by new or
+  strengthened tests; full suite green (83/83) after this round.
