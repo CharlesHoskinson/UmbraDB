@@ -13,12 +13,16 @@ CLAUDE.md) → **Fable 5 aggregates** findings into blocking/non-blocking → **
 **verify gate** (`npm test` on rootless Docker, `tsc`, `openspec validate --strict`,
 `graphify update`) → **commit on the sprint's feature branch** → **push the feature branch to origin**.
 
-**BRANCH DISCIPLINE (owner directive):** every sprint lives on its own feature branch. Sprints that
-build on each other STACK (sprint-8 branches off sprint-7, etc.). **Do NOT merge anything to `main`**
-until the full sprint ordering AND the complete test story are proven green end-to-end across the
-whole stack. Feature branches are pushed to origin for visibility; `main` stays untouched until the
-owner blesses the merge sequence (or the entire validated stack is ready to merge in order). No
-force-push, no history rewrite, no branch deletion.
+**BRANCH DISCIPLINE (owner directive — rolling merge for good hygiene):** every sprint lives on its own
+feature branch, pushed to origin. **Merge sprint N's branch to `main` once BOTH hold:** (a) N is
+FINISHED — implemented, full audit chain cleared with no open blocker, and verify gate fully green; AND
+(b) N+1 is PLANNED — its design/spec authored and confirmed by the correctness-audit gate. The
+"N+1 planned" precondition is deliberate: authoring N+1's design can still surface something that should
+change N, so N stays on its branch until N+1's design is settled, then merges. After merging N, branch
+N+1 off the freshly-updated `main`. `main` advances one finished-and-superseded-by-a-plan sprint at a
+time — never stack the whole run unmerged, never merge a sprint whose successor isn't yet designed.
+Merge via a real merge commit (no fast-forward-only rewrite), no force-push, no history rewrite, no
+branch deletion. A red gate or an open blocking finding ⇒ no merge, full stop.
 
 Codex Sol invocation (verified working): default model `gpt-5.6-sol`,
 `codex exec -c model_reasoning_effort=high --output-schema <schema> -o <out> "<cold audit prompt>"`.
