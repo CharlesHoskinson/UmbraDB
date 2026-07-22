@@ -1,6 +1,7 @@
 import type { ISql, JSONValue } from "postgres";
-import { ValidationError } from "../interfaces/storage-errors.js";
+import { SerializationFailedError, ValidationError } from "../interfaces/storage-errors.js";
 import {
+  THS_RESERVED_KEY_PREFIX,
   TransactionHistoryEntrySchema,
   type EntryContent,
   type EntryLifecycle,
@@ -26,12 +27,21 @@ const TX_HISTORY_ADVISORY_LOCK_CLASS = 4;
 // bigint/Date-safe JSONB encoding for the opaque `sections` payload
 // ---------------------------------------------------------------------------
 
-/** Tag keys deliberately unusual (`__umbradb_*`) so a real caller's own JSON data is extremely
- *  unlikely to collide with them by accident — a documented convention, not a fully-closed
- *  schema (mirrors this project's other documented-not-enforced conventions, e.g.
- *  `temporal-kv.ts`'s large-integer decimal-string convention). */
-const BIGINT_TAG = "__umbradb_ths_bigint";
-const DATE_TAG = "__umbradb_ths_date";
+/** Tag keys built from the SAME reserved prefix {@link THS_RESERVED_KEY_PREFIX} the boundary
+ *  schema (`src/interfaces/transaction-history-storage.ts`) rejects any caller key under — one
+ *  literal source of truth, not two independently-typed strings that could drift apart. **Fixed
+ *  after a cross-vendor audit found this namespace was previously only a documented convention,
+ *  never actually enforced**: decode below treats ANY single-key object with one of these tags as
+ *  a tagged value, so a caller's own `sections`/content data literally containing such a key used
+ *  to be silently mis-decoded (a plain object read back as a `bigint`/`Date`) or, for a
+ *  non-numeric tagged value, crash with a raw, untranslated `SyntaxError`/`RangeError` — the row
+ *  became permanently unreadable. The boundary schema now makes this namespace private to this
+ *  storage layer at write time, so the collision can no longer originate from a caller; the
+ *  defensive decode below (see {@link isTagObject}, {@link parseStoredBigint}, {@link
+ *  parseStoredDate}) remains as belt-and-suspenders for stored data corrupted by other means
+ *  (direct DB tampering, a future migration bug). */
+const BIGINT_TAG = `${THS_RESERVED_KEY_PREFIX}bigint`;
+const DATE_TAG = `${THS_RESERVED_KEY_PREFIX}date`;
 
 type JsonEncoded = string | number | boolean | null | JsonEncoded[] | { [key: string]: JsonEncoded };
 
@@ -45,16 +55,47 @@ function encodeContent(v: EntryContent): JsonEncoded {
   return v;
 }
 
+/** Requires the tagged value itself be a `string` (not just that the single key matches) before
+ *  treating an object as a tag — found necessary by the same audit: without this, a stored
+ *  `{[BIGINT_TAG]: {}}` (an object, not a string) would still be classified as a tag object and
+ *  reach `BigInt()`/`new Date()` with a non-string argument, a distinct crash this narrower guard
+ *  rules out one step earlier. */
 function isTagObject(v: unknown, tag: string): v is { [k: string]: string } {
   return v !== null && typeof v === "object" && !Array.isArray(v)
-    && Object.keys(v).length === 1 && tag in (v as object);
+    && Object.keys(v).length === 1 && tag in (v as object)
+    && typeof (v as Record<string, unknown>)[tag] === "string";
+}
+
+/** Translates `BigInt(...)`'s raw `SyntaxError` on a non-numeric string into `SerializationFailedError`
+ *  — used both by the tag-decode below and by {@link rowToEntry}'s own field-specific `fees`
+ *  decode, so corrupted stored data (from any source) is translated to the shared `StorageError`
+ *  hierarchy rather than escaping any of the six public methods as a raw, untranslated error. */
+function parseStoredBigint(raw: string, context: string): bigint {
+  try {
+    return BigInt(raw);
+  } catch (err) {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: ${context} is not a valid bigint literal: ${JSON.stringify(raw)}`, err,
+    );
+  }
+}
+
+/** As {@link parseStoredBigint}, for the `Date` tag/field -- `new Date(...)` never THROWS on a
+ *  malformed string (it silently produces an `Invalid Date`), so this checks `getTime()` itself
+ *  rather than relying on a try/catch to notice anything. */
+function parseStoredDate(raw: string, context: string): Date {
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) {
+    throw new SerializationFailedError(`PgTransactionHistoryStorage: ${context} is not a valid ISO date string: ${JSON.stringify(raw)}`);
+  }
+  return d;
 }
 
 function decodeContent(v: JsonEncoded): EntryContent {
   if (Array.isArray(v)) return v.map(decodeContent);
   if (v !== null && typeof v === "object") {
-    if (isTagObject(v, BIGINT_TAG)) return BigInt(v[BIGINT_TAG]!);
-    if (isTagObject(v, DATE_TAG)) return new Date(v[DATE_TAG]!);
+    if (isTagObject(v, BIGINT_TAG)) return parseStoredBigint(v[BIGINT_TAG]!, `stored ${BIGINT_TAG} value`);
+    if (isTagObject(v, DATE_TAG)) return parseStoredDate(v[DATE_TAG]!, `stored ${DATE_TAG} value`);
     return Object.fromEntries(Object.entries(v).map(([k, val]) => [k, decodeContent(val as JsonEncoded)]));
   }
   return v;
@@ -120,8 +161,8 @@ function rowToEntry(row: TxHistoryRow): TransactionHistoryEntry {
     identifiers: row.identifiers,
     ...(stored.protocolVersion !== undefined ? { protocolVersion: stored.protocolVersion } : {}),
     ...(stored.status !== undefined ? { status: stored.status } : {}),
-    ...(stored.timestamp !== undefined ? { timestamp: new Date(stored.timestamp) } : {}),
-    ...(stored.fees !== undefined ? { fees: stored.fees === null ? null : BigInt(stored.fees) } : {}),
+    ...(stored.timestamp !== undefined ? { timestamp: parseStoredDate(stored.timestamp, "stored entry.timestamp") } : {}),
+    ...(stored.fees !== undefined ? { fees: stored.fees === null ? null : parseStoredBigint(stored.fees, "stored entry.fees") } : {}),
     lifecycle: stored.lifecycle,
     sections: decodeSections(stored.sections),
   };
@@ -149,6 +190,14 @@ function capitalize(s: string): string {
  *
  * The `schema` constructor parameter defaults to `sql.umbradbSchema`, matching every other
  * adapter's own established pattern (`PgTemporalKV`, `PgWatermarks`).
+ *
+ * **`walletId` is checked at construction, not just typed as `string`.** Every query keys off
+ * `this.walletId`, including the advisory-lock hash key ({@link writeRows}'s
+ * `pg_advisory_xact_lock`) — a `null`/`undefined`/empty value slipping through (e.g. a caller
+ * bypassing TypeScript, or an accidentally-empty config value) would silently produce a
+ * degenerate lock key and a degenerate `WHERE wallet_id = ...` filter instead of failing loudly,
+ * voiding the concurrency guarantee {@link writeRows}'s own doc describes. Found by the audit
+ * panel (F6): fail fast in the constructor instead.
  */
 export class PgTransactionHistoryStorage implements TransactionHistoryStorage {
   constructor(
@@ -156,7 +205,14 @@ export class PgTransactionHistoryStorage implements TransactionHistoryStorage {
     private readonly walletId: string,
     private readonly mergeFn: MergeEntriesFn,
     private readonly schema: string = sql.umbradbSchema,
-  ) {}
+  ) {
+    if (typeof walletId !== "string" || walletId.length === 0) {
+      throw new ValidationError(
+        "PgTransactionHistoryStorage: walletId must be a non-empty string",
+        [{ path: "walletId", message: "missing/empty walletId would silently produce a NULL advisory-lock key and void the concurrency lock" }],
+      );
+    }
+  }
 
   async getAll(opts?: { tx?: TransactionHandle; signal?: AbortSignal }): Promise<readonly TransactionHistoryEntry[]> {
     const sql = opts?.tx !== undefined ? resolveTransaction(opts.tx) : this.sql;

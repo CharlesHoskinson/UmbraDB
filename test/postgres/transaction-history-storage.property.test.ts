@@ -1,6 +1,11 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import type { TransactionHistoryEntry } from "../../src/interfaces/transaction-history-storage.js";
+import { ValidationError } from "../../src/interfaces/storage-errors.js";
+import { hasPostgresUnsafeText } from "../../src/interfaces/temporal-kv.js";
+import {
+  THS_RESERVED_KEY_PREFIX,
+  type EntryContent, type TransactionHistoryEntry,
+} from "../../src/interfaces/transaction-history-storage.js";
 import { PgTransactionHistoryStorage } from "../../src/postgres/transaction-history-storage.js";
 import { InMemoryTransactionHistoryStorage } from "./in-memory-transaction-history-storage.js";
 import { referenceMergeEntries } from "./reference-merge.js";
@@ -32,30 +37,99 @@ interface Command {
   hash: string;
   identifiers: string[];
   sectionKey: string;
-  sectionValue: number;
+  sectionValue: EntryContent;
 }
+
+/**
+ * F3 (the property-test oracle gap that let the F1 reserved-tag-collision BLOCK finding slip
+ * through review): `sectionValue` previously only ever produced `fc.integer`, so the Pg-vs-in-
+ * memory oracle never actually exercised `PgTransactionHistoryStorage`'s bigint/Date JSONB
+ * encode/decode surface (`encodeContent`/`decodeContent`) at all, let alone the reserved-tag
+ * collision case. Broadened to also generate `bigint`, `Date`, shallow nested objects, and --
+ * importantly -- objects shaped like the reserved tag sentinel or containing a PostgreSQL-unsafe
+ * key, so this oracle now actually proves both backends accept/reject each generated value
+ * IDENTICALLY (see `replay`/`applyCommand` below), not just that "well-formed" commands agree.
+ */
+const GOOD_LEAF_KEYS = ["note", "amount", "detail"] as const;
+
+const goodLeaf: fc.Arbitrary<EntryContent> = fc.oneof(
+  fc.integer({ min: -1000, max: 1000 }),
+  fc.string({ maxLength: 12 }).filter((s) => !hasPostgresUnsafeText(s)),
+  fc.boolean(),
+  fc.constant(null),
+  fc.bigInt({ min: -(10n ** 18n), max: 10n ** 18n }),
+  fc.date({ min: new Date("2000-01-01T00:00:00.000Z"), max: new Date("2035-01-01T00:00:00.000Z"), noInvalidDate: true }),
+);
+
+const goodNestedObject: fc.Arbitrary<EntryContent> = fc.dictionary(
+  fc.constantFrom(...GOOD_LEAF_KEYS), goodLeaf, { maxKeys: 3 },
+);
+
+/** Deliberately boundary-INVALID section values: a key shaped like this storage layer's own
+ *  reserved bigint/Date tag sentinel (`THS_RESERVED_KEY_PREFIX`), and PostgreSQL-unsafe keys (a
+ *  NUL byte, a lone UTF-16 surrogate) -- both MUST be rejected identically by
+ *  `PgTransactionHistoryStorage` and `InMemoryTransactionHistoryStorage`, since both validate
+ *  against the exact same shared `TransactionHistoryEntrySchema` (F1 / the related Codex MEDIUM
+ *  finding on PG-unsafe keys). Built with `String.fromCharCode` rather than a literal escape so
+ *  the NUL/surrogate character is unambiguously a real code unit, not a stray escape sequence. */
+const badKeyValue: fc.Arbitrary<EntryContent> = fc.oneof(
+  fc.constant({ [`${THS_RESERVED_KEY_PREFIX}bigint`]: "not-a-real-tag" }),
+  fc.constant({ [`${THS_RESERVED_KEY_PREFIX}date`]: "not-a-real-tag" }),
+  fc.constant({ [`bad${String.fromCharCode(0)}key`]: 1 }),
+  fc.constant({ [`bad${String.fromCharCode(0xD800)}key`]: 1 }),
+);
+
+const sectionValue: fc.Arbitrary<EntryContent> = fc.oneof(
+  { weight: 5, arbitrary: goodLeaf },
+  { weight: 2, arbitrary: goodNestedObject },
+  { weight: 1, arbitrary: badKeyValue },
+);
 
 const arbitraryCommand: fc.Arbitrary<Command> = fc.record({
   kind: fc.constantFrom(...LIFECYCLE_KINDS),
   hash: fc.constantFrom(...HASH_POOL),
   identifiers: fc.uniqueArray(fc.constantFrom(...IDENTIFIER_POOL), { minLength: 0, maxLength: 3 }),
   sectionKey: fc.constantFrom(...SECTION_KEY_POOL),
-  sectionValue: fc.integer({ min: 0, max: 1000 }),
+  sectionValue,
 });
 
-async function replay(
-  storage: { gotPending: PgTransactionHistoryStorage["gotPending"]; gotFinalized: PgTransactionHistoryStorage["gotFinalized"]; gotRejected: PgTransactionHistoryStorage["gotRejected"] },
-  commands: readonly Command[],
-): Promise<void> {
-  for (const cmd of commands) {
-    const entry = {
-      hash: cmd.hash,
-      identifiers: cmd.identifiers,
-      sections: { [cmd.sectionKey]: cmd.sectionValue },
-    };
+interface ReplayableStorage {
+  gotPending: (entry: Omit<TransactionHistoryEntry, "lifecycle">) => Promise<void>;
+  gotFinalized: (entry: Omit<TransactionHistoryEntry, "lifecycle">) => Promise<void>;
+  gotRejected: (entry: Omit<TransactionHistoryEntry, "lifecycle">) => Promise<void>;
+}
+
+/** Applies one command to `storage`, reporting whether it was accepted or rejected at the
+ *  boundary -- a boundary `ValidationError` is an expected, comparable outcome (both backends
+ *  must produce it identically for the same generated command, per F3's broadened generator);
+ *  any other error is a genuine test failure and rethrown. */
+async function applyCommand(storage: ReplayableStorage, cmd: Command): Promise<"applied" | "rejected"> {
+  const entry = {
+    hash: cmd.hash,
+    identifiers: cmd.identifiers,
+    sections: { [cmd.sectionKey]: cmd.sectionValue },
+  };
+  try {
     if (cmd.kind === "pending") await storage.gotPending(entry);
     else if (cmd.kind === "finalized") await storage.gotFinalized(entry);
     else await storage.gotRejected(entry);
+    return "applied";
+  } catch (err) {
+    if (err instanceof ValidationError) return "rejected";
+    throw err;
+  }
+}
+
+/** Replays `commands` onto BOTH backends in lockstep (rather than each backend's own full pass
+ *  independently), asserting each command is accepted/rejected IDENTICALLY by both -- this is
+ *  what actually proves the in-memory reference and `PgTransactionHistoryStorage` agree on
+ *  boundary validation (F3), not just that their post-hoc stored state matches for commands that
+ *  happened to already be valid. */
+async function replay(pg: ReplayableStorage, mem: ReplayableStorage, commands: readonly Command[]): Promise<void> {
+  for (const cmd of commands) {
+    const pgOutcome = await applyCommand(pg, cmd);
+    const memOutcome = await applyCommand(mem, cmd);
+    expect(memOutcome).toBe(pgOutcome);
   }
 }
 
@@ -81,8 +155,7 @@ describe("Transaction history storage properties (openspec/changes/sprint-7-tran
           const pg = new PgTransactionHistoryStorage(getSql(), walletId, referenceMergeEntries, TEST_SCHEMA);
           const mem = new InMemoryTransactionHistoryStorage(referenceMergeEntries);
 
-          await replay(pg, commands);
-          await replay(mem, commands);
+          await replay(pg, mem, commands);
 
           const pgAll = await pg.getAll();
           const memAll = await mem.getAll();

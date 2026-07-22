@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { ConnectionError, ValidationError } from "../../src/interfaces/storage-errors.js";
-import type {
-  EntryContent, MergeEntriesFn, TransactionHistoryEntry,
+import {
+  THS_RESERVED_KEY_PREFIX,
+  type EntryContent, type MergeEntriesFn, type TransactionHistoryEntry,
 } from "../../src/interfaces/transaction-history-storage.js";
 import { TransactionHandleInvalidError, type TransactionHandle } from "../../src/interfaces/transaction-lease.js";
-import type { UmbraDBSql } from "../../src/postgres/client.js";
+import { createClient, type UmbraDBSql } from "../../src/postgres/client.js";
 import { PgTransactionHistoryStorage } from "../../src/postgres/transaction-history-storage.js";
 import { PgTransactionLeaseLayer } from "../../src/postgres/transaction-lease.js";
 import { referenceMergeEntries } from "./reference-merge.js";
@@ -192,6 +192,24 @@ describe("PgTransactionHistoryStorage", () => {
       await s.gotRejected(entry("rej1", ["p", "q"]));
       expect(await s.get("pending3")).toBeUndefined();
     });
+
+    // Codex low finding: direct tests for the "empty set is vacuously a subset of anything" guard
+    // (`writeRows`'s own doc comment) -- an empty identifier set must never be treated as a subset
+    // of (or superset containing) anything for pending-clear purposes, on EITHER side of the
+    // comparison. Removing either guard in `writeRows` should fail one of these.
+    it("a finalized entry with EMPTY identifiers does not clear an unrelated pending entry", async () => {
+      const s = store();
+      await s.gotPending(entry("pending-vac1", ["z"]));
+      await s.gotFinalized(entry("final-vac1", [])); // empty identifiers -- not vacuously "a superset of everything"
+      expect(await s.get("pending-vac1")).toBeDefined();
+    });
+
+    it("a pending entry with EMPTY identifiers is not cleared when an unrelated entry finalizes with non-empty identifiers", async () => {
+      const s = store();
+      await s.gotPending(entry("pending-vac2", [])); // empty identifiers
+      await s.gotFinalized(entry("final-vac2", ["x", "y"])); // non-empty -- {} is vacuously "a subset" of this
+      expect(await s.get("pending-vac2")).toBeDefined();
+    });
   });
 
   describe("bigint/Date round-trip", () => {
@@ -252,19 +270,19 @@ describe("PgTransactionHistoryStorage", () => {
 
   describe("connection-failure translation", () => {
     it("all six methods reject with ConnectionError, not a raw driver error", async () => {
-      // Built directly (not via `createClient`, which exposes no `connect_timeout` option) so
-      // this test fails fast against the dead port rather than waiting out this environment's
-      // much slower default connect timeout -- the same root cause behind this project's known
-      // pre-existing, environment-dependent connection-timing test failures elsewhere (migrate/
-      // temporal-kv/transaction-lease/watermarks), which this test deliberately avoids reproducing.
-      // `Object.defineProperty(..., "umbradbSchema", ...)` mirrors `createClient`'s own attachment
-      // of that property exactly (`client.ts`), so this is still a genuine `UmbraDBSql`.
-      const rawSql = postgres("postgres://nouser:nopass@127.0.0.1:1/nonexistent", {
-        max: 1,
-        connect_timeout: 2,
+      // Built via `createClient` itself (F4: this branch ADDED `connectTimeout`, so the previous
+      // comment claiming it "exposes no connect_timeout option" was stale/false) with an explicit
+      // small `connectTimeout` so this test fails fast against the dead port rather than waiting
+      // out this environment's much slower default connect timeout -- the same root cause behind
+      // this project's known pre-existing, environment-dependent connection-timing test failures
+      // elsewhere (migrate/temporal-kv/transaction-lease/watermarks), which this test deliberately
+      // avoids reproducing. Mirrors `watermarks.test.ts`/`migrate.test.ts`'s own identical pattern.
+      const deadSql = createClient({
+        connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
+        schema: TEST_SCHEMA,
+        maxConnections: 1,
+        connectTimeout: 2,
       });
-      Object.defineProperty(rawSql, "umbradbSchema", { value: TEST_SCHEMA, enumerable: false });
-      const deadSql = rawSql as unknown as UmbraDBSql;
       try {
         const s = new PgTransactionHistoryStorage(deadSql, "wallet-dead", referenceMergeEntries, TEST_SCHEMA);
         await expect(s.getAll()).rejects.toBeInstanceOf(ConnectionError);
@@ -392,6 +410,78 @@ describe("PgTransactionHistoryStorage", () => {
     it("rejects an entry whose sections contain a NUL byte", async () => {
       const s = store();
       await expect(s.gotFinalized(entry("bad1", ["a"], { note: "x\u0000y" }))).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  // F1 (BLOCK finding): the reserved-tag sentinel namespace must be rejected at the Zod boundary,
+  // so a caller's own data can never collide with `PgTransactionHistoryStorage`'s internal
+  // bigint/Date JSONB tagging scheme (`src/postgres/transaction-history-storage.ts`).
+  describe("F1: reserved tag-key namespace / PostgreSQL-unsafe object keys are rejected at the boundary", () => {
+    it("rejects a caller value shaped like the reserved bigint tag object", async () => {
+      const s = store();
+      await expect(
+        s.gotFinalized(entry("bad-tag1", ["a"], { note: { [`${THS_RESERVED_KEY_PREFIX}bigint`]: "123" } })),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("rejects a caller value shaped like the reserved date tag object", async () => {
+      const s = store();
+      await expect(
+        s.gotFinalized(entry("bad-tag2", ["a"], { note: { [`${THS_RESERVED_KEY_PREFIX}date`]: "2024-01-01T00:00:00.000Z" } })),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("rejects a reserved-prefixed key even as a top-level section name", async () => {
+      const s = store();
+      await expect(
+        s.gotFinalized(entry("bad-tag3", ["a"], { [`${THS_RESERVED_KEY_PREFIX}bigint`]: "123" })),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("rejects an object key (not just a string leaf) containing a NUL byte", () => {
+      const badKey = String.fromCharCode(98, 97, 100, 0, 107, 101, 121); // "bad key"
+      const s = store();
+      return expect(
+        s.gotFinalized(entry("bad-key1", ["a"], { note: { [badKey]: 1 } })),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("rejects an object key containing an unpaired UTF-16 surrogate", () => {
+      const badKey = `bad${String.fromCharCode(0xD800)}key`; // an unpaired (lone) high surrogate
+      const s = store();
+      return expect(
+        s.gotFinalized(entry("bad-key2", ["a"], { note: { [badKey]: 1 } })),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("a genuine bigint/Date leaf still round-trips after the reserved-namespace fix", async () => {
+      const s = store();
+      const ts = new Date("2025-05-05T05:05:05.000Z");
+      await s.gotFinalized({
+        hash: "still-works1",
+        identifiers: ["a"],
+        fees: 42n,
+        timestamp: ts,
+        sections: { shielded: { amount: 7n, when: ts, note: "ordinary key names are unaffected" } },
+      });
+      const got = await s.get("still-works1");
+      expect(got!.fees).toBe(42n);
+      expect(got!.timestamp!.getTime()).toBe(ts.getTime());
+      const shielded = got!.sections.shielded as Record<string, unknown>;
+      expect(shielded.amount).toBe(7n);
+      expect((shielded.when as Date).getTime()).toBe(ts.getTime());
+    });
+  });
+
+  // F6 (audit panel): walletId is checked at construction, not just typed as `string`.
+  describe("F6: walletId runtime guard", () => {
+    it("throws ValidationError for an empty-string walletId", () => {
+      expect(() => store("")).toThrow(ValidationError);
+    });
+
+    it("throws ValidationError for a non-string walletId (bypassing the type system)", () => {
+      const badWalletId = null as unknown as string;
+      expect(() => store(badWalletId)).toThrow(ValidationError);
     });
   });
 });

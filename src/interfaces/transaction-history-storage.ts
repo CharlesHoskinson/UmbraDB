@@ -40,12 +40,46 @@ const SafeStringSchema = z.string().refine((s) => !hasPostgresUnsafeText(s), {
   message: `string ${POSTGRES_SAFE_TEXT_MESSAGE}`,
 });
 
+/**
+ * Reserved key-prefix for `PgTransactionHistoryStorage`'s own internal bigint/Date JSONB tagging
+ * scheme (`src/postgres/transaction-history-storage.ts`'s `encodeContent`/`decodeContent`, which
+ * tags encoded values as single-key objects `{[THS_RESERVED_KEY_PREFIX + "bigint"]: "<decimal>"}`
+ * / `{[THS_RESERVED_KEY_PREFIX + "date"]: "<iso>"}`). **Found by a cross-vendor audit (BLOCK
+ * finding): this namespace was previously only a documented convention, not enforced** — a
+ * caller's own `sections`/content data could contain a same-shaped key by coincidence (or by a
+ * hostile/buggy peer), which decode would then silently misinterpret as a tagged bigint/Date
+ * (wrong data, no error) or crash on a raw, untranslated `SyntaxError`/`RangeError` (permanently
+ * un-readable row). Fix: reserve this prefix at the Zod boundary below (`EntryContentSchema`'s
+ * object-key check) — an object key starting with it, at ANY nesting depth within `EntryContent`
+ * or as a `sections` top-level key, is rejected with `ValidationError` before it can ever reach
+ * storage, making the collision structurally impossible from a caller rather than merely unlikely.
+ */
+export const THS_RESERVED_KEY_PREFIX = "__umbradb_ths_";
+
+/** Object-key schema shared by every `Record`-shaped position in {@link EntryContent}/`sections`
+ *  (the recursive content record, and `sections`' own top-level key set). Rejects two distinct
+ *  things a caller-supplied key must never be: (1) PostgreSQL-unsafe text — a NUL byte or an
+ *  unpaired UTF-16 surrogate, which JSONB cannot store at all (mirrors `temporal-kv.ts`'s
+ *  existing recursive NUL/surrogate check, extended here to KEYS, not just string leaves —
+ *  the Codex MEDIUM finding paired with the BLOCK above); (2) anything starting with {@link
+ *  THS_RESERVED_KEY_PREFIX}, this storage layer's own private tagging namespace. */
+const SafeObjectKeySchema = z.string()
+  .refine((k) => !hasPostgresUnsafeText(k), {
+    message: `object key ${POSTGRES_SAFE_TEXT_MESSAGE}`,
+  })
+  .refine((k) => !k.startsWith(THS_RESERVED_KEY_PREFIX), {
+    message: `object key must not start with the reserved prefix "${THS_RESERVED_KEY_PREFIX}" (reserved for PgTransactionHistoryStorage's own internal bigint/Date tagging scheme)`,
+  });
+
 /** A recursive, JSON-shaped value that ALSO admits `bigint`/`Date` leaves anywhere in the tree —
  *  the opaque per-caller payload each wallet section (shielded/unshielded/dust) carries. Callers
  *  agree on shape per section name; `PgTransactionHistoryStorage` never inspects it beyond
  *  validating this shape and (de)serializing it losslessly through Postgres JSONB (`design.md`
  *  §2 — the section-merge logic itself lives entirely in the caller-supplied {@link
- *  MergeEntriesFn}, never in this storage layer). */
+ *  MergeEntriesFn}, never in this storage layer). **Object keys anywhere in this tree must not
+ *  start with {@link THS_RESERVED_KEY_PREFIX}** — that namespace is reserved for this storage
+ *  layer's own internal bigint/Date JSONB tagging scheme; a caller's key colliding with it is
+ *  rejected by {@link EntryContentSchema} with `ValidationError`, not silently accepted. */
 export type EntryContent =
   | string | number | boolean | null | bigint | Date
   | EntryContent[]
@@ -59,7 +93,7 @@ export const EntryContentSchema: z.ZodType<EntryContent> = z.lazy(() => z.union(
   z.bigint(),
   z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }),
   z.array(EntryContentSchema),
-  z.record(z.string(), EntryContentSchema),
+  z.record(SafeObjectKeySchema, EntryContentSchema),
 ]));
 
 // ---------------------------------------------------------------------------
@@ -116,7 +150,8 @@ const IdentifierSchema = z.string().min(1).refine((s) => !hasPostgresUnsafeText(
  * entry carries; `sections` is this project's own name for the opaque per-wallet-type
  * "extension" data (shielded/unshielded/dust), passed through unmodified. `timestamp` (a real
  * `Date`) and `fees` (a real `bigint | null`) are exactly the fields the "getAll returns live
- * bigint/Date" requirement is about.
+ * bigint/Date" requirement is about. No key anywhere in `sections` (including its own top-level
+ * section names) may start with {@link THS_RESERVED_KEY_PREFIX} — see that constant's doc.
  */
 export interface TransactionHistoryEntry {
   readonly hash: string;
@@ -137,7 +172,7 @@ export const TransactionHistoryEntrySchema = z.object({
   timestamp: z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }).optional(),
   fees: z.union([z.bigint(), z.null()]).optional(),
   lifecycle: EntryLifecycleSchema,
-  sections: z.record(z.string(), EntryContentSchema),
+  sections: z.record(SafeObjectKeySchema, EntryContentSchema),
 });
 
 /**
