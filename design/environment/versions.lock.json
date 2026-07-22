@@ -60,5 +60,14 @@
     "preprod_tnight_received": "1000 (confirmed on-chain, tx 00ea17cf...a20bea, status SUCCESS)",
     "faucet_url": "https://midnight-tmnight-preprod.nethermind.dev/",
     "our_unshielded_address": "mn_addr_preprod14plwqf5qymh879pskxyharf86plfj288ccvklaa74nqsha5f2p3szaxvvc"
+  },
+  "sprint_8_wallet_envelope_adapter": {
+    "_comment": "L2 finding (sprint-8-wallet-envelope-live-sync): the adapter's schema needs a real, typed @midnightntwrk/wallet-sdk-abstractions + effect at build/test time. Pinned as real package.json devDependencies (npm registry) -- deliberately the ONLY new devDependencies this sprint adds; the heavier native-binding SDK packages the live/cold-boot tier drives (wallet-sdk-hd, wallet-sdk-unshielded-wallet, @midnight-ntwrk/ledger-v8) are NOT installed here -- they are resolved by absolute path from the sibling midnight-wallet checkout's own node_modules at test:live runtime only (test/integration/live-fixtures/midnight-wallet-sdk-loader.ts). The required Pg-only conformance gate needs neither.",
+    "devDependency_pins": {
+      "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-canary.20260716150734-e744d99 (npm, public registry.npmjs.org -- this exact canary tag's git suffix `e744d99` matches midnight_repos.midnight-wallet's pinned sha `e744d994` above, so the adapter's schema is built against the SAME commit the live/cold-boot tiers drive)",
+      "effect": "^3.19.19 (matches @midnightntwrk/wallet-sdk-abstractions' own dependency range)"
+    },
+    "live_tier_sdk_resolution": "test/integration/live-fixtures/midnight-wallet-sdk-loader.ts dynamically imports hd/unshielded-wallet/abstractions dist + @midnight-ntwrk/ledger-v8's node entry by absolute file:// path from MIDNIGHT_WALLET_REPO (default ~/repos/midnight-wallet); every import() call there uses a computed (non-literal) specifier so tsc treats it as Promise<any> and typechecks cleanly without those packages ever being installed in this repo.",
+    "live_run_confirmed": "2026-07-22: both test:live tests passed against public preprod -- preprod-db-sync observed faucet tx b194e71d4d22ed09846cd88aab67c6bb4eec69ea6df5aead3bdb22bfe3493341 (identifiers include 00ea17cf14c2aa1b6bf867d247cb2b8e3ff016444e086451de7aa4e70062a20bea) as a UmbraDB row via PgTransactionHistoryStorage.getAll(); cold-boot-recovery observed the restored wallet's initial progress.appliedId = 505701n (nonzero, proving resume from the snapshot cursor, not genesis)."
   }
 }

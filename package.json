@@ -8,15 +8,19 @@
     "typecheck": "tsc --noEmit",
     "docs:storage": "typedoc",
     "docs:storage:check": "typedoc --emit none --treatWarningsAsErrors",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:conformance": "vitest run",
+    "test:live": "UMBRADB_LIVE_PREPROD=1 vitest run test/integration/preprod-db-sync.integration.test.ts test/integration/cold-boot-recovery.integration.test.ts"
   },
   "dependencies": {
     "postgres": "^3.4.9",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-canary.20260716150734-e744d99",
     "@testcontainers/postgresql": "^12.0.4",
     "@types/node": "^26.1.1",
+    "effect": "^3.19.19",
     "fast-check": "^4.9.0",
     "typedoc": "^0.28.0",
     "typescript": "^5.9.0",
