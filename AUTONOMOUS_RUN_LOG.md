@@ -375,3 +375,49 @@ circuit statement (completeness up to N only; tail is live) and is now driving b
   pointer), the SEED-BINDING requirement, the Q1/Q2 verdicts (esp. if chain_getBlock closes the gap ->
   v1 becomes far stronger), the tightened over-claim language, and the slim Increment-0 v1. Then re-gate
   -> openspec change with the testing strategy.
+
+## 2026-07-22 — Sprint 8 COMPLETE and MERGED (autonomous AFK run)
+
+Sprint 8 (WalletState envelope + Pg-backed wallet tx-history adapter + live preprod DB-sync/cold-boot)
+was implemented, audited, fixed, re-audited to PASS, and MERGED to main.
+
+- **Merge:** `d17945e` (--no-ff), main pushed to origin. Branch `sprint-8-wallet-envelope-live-sync`
+  head `a06be8c` on GitHub. Verify gate on merged main: typecheck clean, `npm test` 281 pass / 2
+  env-gated live skips. (main worktree needed `npm ci` after merge to pick up the new devDeps.)
+- **Final merge gate = a real live preprod sync (passed):** funding tx
+  `b194e71d4d22ed09846cd88aab67c6bb4eec69ea6df5aead3bdb22bfe3493341` materialized via
+  `adapter.getAll()` as a reconstructed finalized SDK lifecycle (`finalizedBlock.height=1763274`);
+  cold-boot resumed from the envelope snapshot at `appliedId=505701n`. Public preprod endpoints +
+  local proof-server (6300); wallet seed at `~/.midnight-preprod-wallet.seed`.
+- **Audit trail:** 4-role panel (Opus domain=PASS / adversarial=BLOCK / release-coverage=BLOCK +
+  Codex GPT-5.6 Sol=BLOCK) -> Fable aggregate -> Sonnet fix (blockers F1/F2/F3 + must-fix batch) ->
+  adversarial-Opus re-audit=PASS + Codex re-audit. Two further residual rounds from Codex cross-vendor:
+  (r1) prototype-key fail-closed status maps + doc/record accuracy + loud parity skip; (r2)
+  prototype-safe extension keys (Object.create(null) + __proto__/constructor/prototype boundary
+  rejection) + write-side stash validation (symmetric with read) + safe status error messages. Final
+  Codex verdict: PASS. Commits: 684bade 09398a2 4bd5d84 42a1a19 a06be8c.
+- **Key cross-vendor catches:** (1) the Sprint-7 merge seam claimed the real SDK `mergeWalletEntries`
+  was injectable, but it TypeErrors on undefined-first-write and takes a different entry shape -> fixed
+  (first-write verbatim; UmbraDB-shaped merge; real-SDK runtime-diff parity test after building the
+  facade dist). (2) `__lifecycleDetail` sat in the caller-writable namespace (re-opening Sprint 7s
+  fixed collision class) -> reserved-prefix + fail-closed guards at write and read. (3) the
+  reconstruction surface was only fixture-tested -> live + gate tests now route through `adapter.getAll()`.
+
+## Sprint 9 (overflow) — PLANNED + gate-CONFIRMED (implementation NOT started)
+
+- Branch `sprint-9-cleanup-perf-connection` (off main), pushed. openspec change, 3 EARS specs:
+  `storage-client-hygiene`, `performance-observability`, `connection-robustness`. `openspec validate
+  --all --strict` = 8/8. Correctness gate (Opus) = CONFIRM (change dir `GATE.md`), satisfying the
+  "N+1 planned" precondition for the Sprint 8 merge.
+- Folded-in deferrals incl. Sprint 8 audit items D8-1..D8-4 (`DEFERRALS-FROM-SPRINT-8.md`): serialize()
+  emit-shape decision, __lifecycleDetail boundary defense-in-depth, live SDK-loader/seed hardening,
+  cold-boot conflicting-history nightly test.
+- Adjudicated open questions (adopt in impl): retry allow-list EXCLUDES lease-acquire + in-opts.tx ops
+  (whole-operation retry granularity); finality-tip check applies to the C1 anchor path, NOT the
+  unshielded per-address cursor (multi-endpoint tx-set cross-check there); benchmark non-vacuity
+  self-test is the real gate; GC junction-table migration deferred to its own audited change.
+- **Per the "plan out sprint 9" instruction, Sprint 9 is PLANNED ONLY; implementation awaits go-ahead.**
+
+## Also on GitHub
+- Recovery feature: branch `feature/verifiable-snapshot` (full EARS/openspec design + research).
+- Filed upstream: midnight-wallet#584 (sync-freshness hardening).
