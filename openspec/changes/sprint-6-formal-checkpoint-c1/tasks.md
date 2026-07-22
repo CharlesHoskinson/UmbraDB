@@ -61,7 +61,7 @@ specified persona review passes or all findings are fixed and re-reviewed.
   witness; route all modules through production/test/trust umbrellas.
   - **Acceptance:** `lake env lean UmbraDBFormalTest/Checkpoint/ChunkMap.lean` and
     `lake build --wfail` exit 0; conflicting same-hash values exhibit order dependence.
-- [ ] 2.5 Obtain preliminary pre-integration verdicts from all three proof personas and commit the
+- [x] 2.5 Obtain preliminary pre-integration verdicts from all three proof personas and commit the
   proof tranche; these reports do not satisfy the policy-mandated post-integration audit in 3.5.
   - **Acceptance:** three read-only preliminary reports return `PASS`; `git status --short` is
     clean after a commit containing every Checkpoint source/test file and umbrella import.
