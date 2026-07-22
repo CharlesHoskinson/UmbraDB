@@ -263,4 +263,115 @@ the env log.
   a discriminated union w/ `status` discriminator, not a bare enum; reader/writer split; write methods
   take entry-minus-lifecycle; fees:bigint + timestamp:Date are the round-trip-critical fields; subset-clear
   confirmed) so its in-repo mirror matches and Sprint 8's adapter wires up cleanly.
-- (further entries appended as phases complete)
+- **IMPLEMENTED** (Sonnet 5, commit 23e13f3): interface + migration 004 + PgTransactionHistoryStorage
+  (row-lock atomic merge w/ pg_advisory_xact_lock covering the phantom-row race — a real gap the
+  implementer caught in design.md's pseudocode) + 27 unit + 2 property tests. Typecheck clean.
+- **ENV FIX** (commit 71ef9bf): bounded `connectTimeout` (default 10s) in createClient + `connectTimeout:2`
+  in the 3 dead-endpoint tests + bounded poll in temporal-kv server-side-cancel. Full suite now
+  **184/184 GREEN** (was 180-181/184 with env-flaky failures). Root cause: WSL2 hangs on dead ports →
+  postgres.js 30s connect_timeout vs 5s test timeout.
+- **AUDIT GATE (running):** 3 Opus auditors (domain-correctness, adversarial, release/coverage) + Codex
+  gpt-5.6-sol cold audit.
+- **Codex gpt-5.6-sol verdict: BLOCK** (2 blocking, 3 non-blocking; typecheck + `git diff --check` passed;
+  it audited statically — read-only sandbox blocked Vitest temp dirs, but the suite is already green here):
+  - [HIGH, blocking] `transaction-history-storage.ts` — **sentinel-collision**: `decodeContent` treats
+    ANY object shaped `{__umbradb_ths_bigint: ...}` / `{__umbradb_ths_date: ...}` as an encoded primitive,
+    so caller data legitimately containing that shape (at any nesting depth) is silently corrupted on read
+    (`{metadata:{__umbradb_ths_bigint:"123"}}` → `{metadata:123n}`); malformed tag values can make reads
+    throw. Also affects serialize(). REAL bug the tests missed.
+  - [MEDIUM, blocking] `transaction-history-storage.ts` interface — `z.record(z.string(),...)` accepts
+    PG-unsafe object keys (NUL byte / lone UTF-16 surrogate), which pass the Zod boundary then fail at
+    JSONB instead of round-tripping; should mirror temporal-kv's recursive key-safety check.
+  - [LOW] advisory-lock key `hashtext(walletId||':'||hash)` has delimiter ambiguity + 32-bit collision →
+    over-serializes unrelated rows (correctness-safe, perf only).
+  - [LOW] no DIRECT test for either empty-set vacuous-subset guard (removing a guard would pass the suite).
+  - [LOW] concurrent-first-write property test doesn't force the critical interleaving (could pass without
+    the lock if the scheduler serializes).
+- **Opus panel verdicts:** domain-correctness → PASS (all 9 EARS reqs implemented+tested; empirically
+  confirmed GIN `<@` acceleration + the phantom-row advisory-lock design; rated the sentinel issue a nit).
+  release/coverage → PASS (deterministic 184/184 ×2 runs; TypeDoc + openspec-validate clean; env-fix
+  verified sound). adversarial → **BLOCK**, reproduced F1 end-to-end.
+- **AGGREGATION → BLOCK** (orchestrator, verdict unambiguous: 2 independent BLOCKs on the same defect):
+  - **F1 (CRITICAL, blocking):** JSONB reserved-tag collision. A schema-VALID write of opaque section
+    content containing a single-key `{__umbradb_ths_bigint: ...}`/`{__umbradb_ths_date: ...}` object is
+    either silently mis-decoded (plain object → bigint/Date) or, with a non-numeric value, throws a raw
+    untranslated `SyntaxError` inside `getAll`/`serialize`/merge that **permanently bricks the wallet's
+    history reads**. Found independently by Codex (high) + adversarial Opus (critical, reproduced). Domain
+    Opus's "nit" overruled — it didn't run the adversarial repro. Slipped because the property oracle only
+    generated integer section values (adversarial F3).
+  - **PG-unsafe keys (MEDIUM, blocking, Codex):** NUL/lone-surrogate object keys pass the Zod boundary
+    then fail at JSONB instead of round-tripping; must reject at the boundary (mirror temporal-kv).
+  - Non-blocking (fix same pass): connectTimeout 10s default is an arbitrary prod behavior change (revert
+    default, keep option); broaden the property generator (F3); stale test comment (F4); direct
+    vacuous-subset tests; runtime non-empty `walletId` guard (F6). Verified SOUND (not fixing): the
+    concurrency invariant / advisory-lock keying / class-4 non-collision, SQL injection, opts.tx/signal,
+    subset-clear empty-guards, NaN/Infinity rejection.
+  - **Fix dispatched** (Sonnet a3093def) with the full consolidated scope; re-verify green + targeted
+    re-audit before Sprint 7 is declared finished.
+
+## Root-of-trust design — KEY PRINCIPLE: proof freezes a finalized-checkpoint horizon (owner refinement)
+
+The ZK/attestation proof's purpose is to certify the persisted snapshot is correct **for its declared
+time horizon** — "snapshot S is the correct, complete wallet state as of FINALIZED block N" — NOT as of
+the tip. Because the chain is append-only and finality means no rollback of blocks ≤ N, a proof anchored
+to a finalized N is **permanently valid** for horizon N (the past can't change). On restore: verify the
+proof, then catch up [N, tip] LIVE via sync + the ADS (brief 06) — the proof eliminates RE-REPLAY of
+[birthday, N], not the live tail. Each proven finalized checkpoint is a **cryptographically-certified
+"birthday"** — a floor below which the wallet never rescans again (strictly stronger than Zcash's
+*trusted* birthday). Anchor N to a finalized block (Substrate GRANDPA; `chain_getFinalizedHead`), bind
+to R_N, and make "finality gadget does not revert ≤ N" an explicit trust assumption. This narrows the
+circuit statement (completeness up to N only; tail is live) and is now driving brief 07's design.
+
+## Sprint 7 fix + re-audit (continued)
+- Fix pass 1 (Sonnet, commit 96339c5): closed F1 (reserved-namespace boundary rejection + defensive
+  decode), broadened property oracle, reverted connectTimeout default, walletId guard, vacuous-subset
+  tests. 194/194 green, typecheck clean.
+- **Codex gpt-5.6-sol RE-AUDIT of the fix: F1 CONFIRMED CLOSED** (boundary rejects reserved/PG-unsafe
+  keys recursively incl. section names; no caller/merge bypass; BigInt/Date failures translate) — but
+  found 3 deeper DEFENSIVE-DECODE gaps on the READ path (BLOCK): (1) malformed STORED envelope (null
+  entry/sections) throws raw TypeError through all six methods before validation; (2) permissive decode
+  normalizes non-canonical tags (BigInt("0x10")->16n, invalid dates) instead of rejecting; (3)
+  pathological ~1000-deep caller object overflows the recursive key-check into a raw RangeError instead
+  of ValidationError. Real hardening gaps (mostly require out-of-band corruption; #3 reachable by a
+  caller; #1 possibly reachable on a normal empty-sections write — fix agent to verify).
+- **Fix pass 2 dispatched** (Sonnet ab34f991): strict canonical decode + defensive stored-envelope
+  validation (any structural malformation -> SerializationFailedError, no raw error escapes) + depth
+  bound on the key-check + deterministic read-path-corruption tests. Re-verify green, then re-audit.
+
+## Design council convened (verifiable-snapshot feature, branch feature/verifiable-snapshot)
+- ALL 11 research briefs complete + committed to the design branch (00 plan + 01-11).
+- **Synthesis lead (Opus a837d347) running:** rolling all 11 briefs into ONE coherent design doc
+  (design/verifiable-snapshot-design.md) with the layered architecture, the L3/finality/completeness/
+  privacy decisions + recommendations, the SDK+indexer PR specs + Compact/circuit sketches, a phasing
+  table (v1-now vs needs-node-change vs research-grade), residual trust, and the post-impl testing
+  strategy. Next: council review (Codex Sol + Opus + Fable) under the correctness-audit gate.
+
+## Design council verdicts (verifiable-snapshot) + revision plan
+- **Sprint 7 DONE**: read-path hardening committed (3c1d4d1); npm test 206/206; F1 confirmed closed by
+  re-audit + 3 deeper defensive-decode gaps fixed. Holds on its branch until Sprint 8 is planned.
+- **Correctness-audit gate: CONFIRM** (every load-bearing claim verified vs Midnight source: collapse
+  invariant merkle_tree.rs:921, 3 live finality RPCs, indexer node-cross-check bail). Missed the two
+  Codex findings below.
+- **Fable feasibility: buildable + honest, but v1 over-scoped.** Independently BACKED the owner
+  forward-sync insight (the on-chain pointer proves detectability NOT harm; an older genuine checkpoint
+  is a safe base, tail catch-up re-converges). Recommends the HYBRID (offline correctness cert + slim
+  consensus pointer for freshness only) and a much leaner v1 (Increment 0 = UmbraDB-side wrapper: stamp
+  anchor at save, on restore GCM-decrypt -> L0 on-chain root comparison vs k>=2 indexers -> stock
+  restore(); zero upstream approvals). Defer BFT-CRDT + unshielded MB-tree + brief-07 cert to v1.1.
+- **Codex gpt-5.6-sol: BLOCK** with 2 sharp findings the others missed: (1) state_getReadProof
+  authenticates only pallet_midnight::StateKey (a content-address), NOT R_N directly -> unauthenticated
+  hop; (2) chain_getBlock is ALREADY LIVE and returns the block body, so a wallet could verify the
+  extrinsics root vs the finalized header and authenticate ciphertexts/nullifiers CLIENT-SIDE -> may
+  close the delivery/spend completeness gap with NO node change (contradicts the design residual).
+  Also independently CONFIRMED D1 = recency, not correctness (backs the forward-sync insight).
+- **Owner refinement (new): seed-binding.** The attestation MUST bind to a secret recoverable on a
+  total cold start from ONLY the 24-word BIP39 phrase (signature by a seed-derived sk_attest, OR a ZK
+  proof-of-preimage of H(seed)). This is the identity-recovery layer that makes restore-from-untrusted-DB
+  safe (only the phrase holder can claim/decrypt/verify their snapshot).
+- **Adjudication agent (Opus) running:** definitively verify Q1 (is R_N authenticated from a finalized
+  header + how), Q2 (does chain_getBlock close the delivery gap client-side today), and Q3 (design the
+  seed-binding: signature vs ZK-preimage + the exact cold-start recovery flow).
+- **Design revision (synthesis pass 2) next**, incorporating: the HYBRID (offline proof + slim freshness
+  pointer), the SEED-BINDING requirement, the Q1/Q2 verdicts (esp. if chain_getBlock closes the gap ->
+  v1 becomes far stronger), the tightened over-claim language, and the slim Increment-0 v1. Then re-gate
+  -> openspec change with the testing strategy.
