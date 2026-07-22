@@ -38,6 +38,43 @@ import { CHAIN_ARCHIVE_HEIGHT_PARTITION_SIZE, CHAIN_ARCHIVE_PRECREATED_PARTITION
  *      from a DEFAULT partition that still holds FK-referenced rows is rejected). No schema
  *      change was needed for this fix — see the design doc for the corrected runbook.
  *
+ * **v4 revision (round-3 design-council re-audit; Fable 5 and GPT-5.6 Sol both independently
+ * reproduced real failures against real Postgres 17; see the design doc's "Revision history —
+ * v4" note for the full writeup):**
+ *   1. The §4.6 DETACH-based rollover runbook was fundamentally broken as written -- reproduced
+ *      and fixed all four concrete failure modes (retained FK constraints on detached children
+ *      blocking the parent detach; duplicate_table from reusing a still-live detached name; a
+ *      write-race window where a live write could land in the gap before the new bounded
+ *      partition was attached; DETACH ... CONCURRENTLY unconditionally rejected whenever a
+ *      DEFAULT partition exists). No schema change -- see the design doc §4.6 for the
+ *      corrected, actually-run-end-to-end procedure.
+ *   2. `chain_blob_roles_guard_removal_trigger` (new): a `BEFORE DELETE OR UPDATE OF blob_hash,
+ *      role` trigger on `chain_blob_roles` itself closes the delete-side gap the v3 comment
+ *      block above explicitly (and wrongly) said didn't need closing -- a role could be deleted
+ *      out from under a live reference with no error. Paired with `FOR SHARE`/`FOR UPDATE` row
+ *      locking on both the insert side (`chain_archive_assert_blob_role`) and this new
+ *      delete-side guard to close the concurrent-deletion race, empirically confirmed safe
+ *      under both interleavings with two real concurrent Postgres sessions.
+ *   3. `blocks_finalized_monotonic_trigger` (new): a `BEFORE UPDATE OF finalized` trigger
+ *      rejecting `OLD.finalized = true AND NEW.finalized = false` -- the v3 CHECK only tied
+ *      `finalized`/`is_canonical` together at each individual write, not across writes, so
+ *      nothing stopped un-finalizing a previously-finalized row, which cannot happen under real
+ *      GRANDPA semantics.
+ *   4. `verifier_key_observations`'s `UNIQUE NULLS NOT DISTINCT` key gained `tag` (closing a
+ *      real data-loss bug: two legitimate different-entry-point observations of the same VK
+ *      collided and one was lost) and dropped `first_seen_height` (which let the same logical
+ *      identity be re-inserted under contradictory "first-seen" values -- it is now a mutable
+ *      fact maintained via `ON CONFLICT ... DO UPDATE SET first_seen_height =
+ *      LEAST(...)`, not a key column). The now-redundant `verifier_key_observations_by_vk_hash`
+ *      index was dropped -- confirmed via EXPLAIN that the corrected UNIQUE constraint's own
+ *      backing index (leading column `vk_hash`) already serves that lookup.
+ *   5. `test/postgres/chain-archive-migrate.test.ts` gained real negative coverage: rejecting a
+ *      reference to a nonexistent blob role across `blocks`/`transactions`/
+ *      `bridge_observations`/`verifier_key_observations` (not just `transactions`); deleting a
+ *      role out from under an active reference (rejected); un-finalizing a previously-finalized
+ *      block (rejected); two legitimate different-tag VK observations coexisting plus a true
+ *      duplicate being rejected.
+ *
  * This migration is applied to its **own** schema (conventionally `chain_archive`, but the
  * schema name is passed in by the caller exactly like every other migration in this repo) via
  * `chainArchiveMigrations` (`./index.ts`), NOT via `tier1WalletMigrations` — chain-scoped
@@ -124,12 +161,22 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   // behavior — row triggers on a partitioned table are cloned onto existing and future
   // partitions, not something that must be redeclared per-partition).
   //
-  // This is an insert/update-time invariant, not a delete-time one: nothing in this schema ever
-  // deletes a `chain_blob_roles` row (consistent with the rest of this design's insert-only
-  // model, §6), so there is no corresponding trigger guarding against a role being removed out
-  // from under an existing reference — that gap doesn't exist today because no code path
-  // creates it.
+  // v4 audit fix — this WAS an insert/update-time invariant only, with no corresponding
+  // delete-time guard (both round-3 reviewers flagged this as a real gap, one called it a hard
+  // BLOCK): nothing prevented inserting a `chain_blob_roles` row, inserting a referencing row
+  // (passing the check above), then `DELETE FROM chain_blob_roles` out from under it, leaving
+  // the referencing row pointing at a now-unclassified blob with no error anywhere.
+  // `chain_blob_roles_guard_removal_trigger`, defined further below (after every
+  // blob-referencing table exists for it to check against), closes this — see its own comment
+  // for the full mechanism and the concurrency argument the `FOR SHARE` addition above exists
+  // to support.
   // ---------------------------------------------------------------------------------------
+  // v4 audit fix — `FOR SHARE` added to this EXISTS check (both round-3 reviewers flagged the
+  // unlocked read as racing a concurrent `chain_blob_roles` deletion). Taking a shared row lock
+  // on the specific `(blob_hash, role)` row here means a concurrent DELETE/UPDATE on that exact
+  // row (guarded below by `chain_blob_roles_guard_removal_trigger`) is forced to wait for this
+  // transaction to commit or roll back before it can proceed — see that trigger's own comment
+  // for the full concurrency argument and the empirical two-session proof.
   await sql`
     CREATE FUNCTION ${sql(schema)}.chain_archive_assert_blob_role(
       p_blob_hash bytea, p_role text, p_table text, p_column text
@@ -141,6 +188,7 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       IF NOT EXISTS (
         SELECT 1 FROM ${sql(schema)}.chain_blob_roles
         WHERE blob_hash = p_blob_hash AND role = p_role
+        FOR SHARE
       ) THEN
         RAISE EXCEPTION 'blob % referenced by %.% has no chain_blob_roles row for role %'
           , encode(p_blob_hash, 'hex'), p_table, p_column, p_role
@@ -252,6 +300,47 @@ export async function up(sql: ISql, schema: string): Promise<void> {
     CREATE TRIGGER blocks_blob_roles_trigger
       BEFORE INSERT OR UPDATE OF header_blob_hash, body_blob_hash ON ${sql(schema)}.blocks
       FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.blocks_check_blob_roles()
+  `;
+
+  // ---------------------------------------------------------------------------------------
+  // v4 audit fix — `finalized` monotonicity is not actually enforced (new round-3 finding,
+  // both reviewers). The `CHECK (NOT finalized OR is_canonical)` added in v3 only ties the two
+  // flags together AT THE MOMENT of each write — nothing stopped `UPDATE blocks SET
+  // finalized = false, is_canonical = false, status = 'orphaned'` on a row that was previously
+  // finalized, which cannot happen under real GRANDPA finality semantics (a finalized block
+  // never becomes un-finalized; GRANDPA finality is monotonic by construction). Fixed with a
+  // `BEFORE UPDATE OF finalized` trigger that compares OLD/NEW and rejects exactly the illegal
+  // transition (`OLD.finalized = true AND NEW.finalized = false`), while leaving every legal
+  // transition untouched: not-finalized -> finalized (normal), not-finalized -> not-finalized
+  // with is_canonical flipped by a reorg (normal), and finalized -> finalized no-ops.
+  //
+  // **Empirically verified against a real Postgres 17 instance:** (1) the trigger is correctly
+  // cloned from the partitioned parent onto every child partition (confirmed via `pg_trigger`,
+  // same PG11+ propagation behavior already relied on for the blob-role triggers above);
+  // (2) `UPDATE ... SET finalized = false, is_canonical = false, status = 'orphaned'` on a row
+  // with `finalized = true` is correctly rejected; (3) an unrelated-column update on that same
+  // finalized row (e.g. re-asserting `is_canonical = true`) still succeeds; (4) a fresh
+  // `is_canonical = true, finalized = false` row can still legally flip to
+  // `is_canonical = false` on a reorg (finalized was never true, so the guard doesn't apply);
+  // (5) a fresh `finalized = false` row can still legally transition to `finalized = true`.
+  // ---------------------------------------------------------------------------------------
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.blocks_enforce_finalized_monotonic() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      IF OLD.finalized AND NOT NEW.finalized THEN
+        RAISE EXCEPTION
+          'cannot un-finalize block %/% (height %): finalized is monotonic under GRANDPA finality semantics'
+          , NEW.net, encode(NEW.block_hash, 'hex'), NEW.height
+          USING ERRCODE = '23514'; -- check_violation, matching the CHECK this trigger extends
+      END IF;
+      RETURN NEW;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER blocks_finalized_monotonic_trigger
+      BEFORE UPDATE OF finalized ON ${sql(schema)}.blocks
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.blocks_enforce_finalized_monotonic()
   `;
 
   // ---------------------------------------------------------------------------------------
@@ -442,14 +531,43 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       first_seen_height bigint      NOT NULL CHECK (first_seen_height >= 0),
       synced_at         timestamptz NOT NULL DEFAULT now(),
       CHECK ((scope = 'contract') = (contract_address IS NOT NULL)),
-      UNIQUE NULLS NOT DISTINCT (vk_hash, net, scope, contract_address, first_seen_height)
+      -- v4 audit fix (both round-3 reviewers converged on this): tag is now part of the
+      -- uniqueness key, and first_seen_height has been REMOVED from it.
+      --   - The design doc's own text says the same VK bytes can legitimately appear under
+      --     different entry points within one contract, and that tag is what's meant to
+      --     distinguish this case -- but tag was never actually in the v3 UNIQUE key, so two
+      --     distinct legitimate entry-point observations of the same
+      --     (vk_hash, net, scope, contract_address) collided and one silently lost the race.
+      --     Adding tag here fixes that directly.
+      --   - first_seen_height being IN the v3 key meant the same logical identity could be
+      --     inserted repeatedly with different claimed first_seen_height values, producing
+      --     multiple contradictory "first-seen" rows for what should be one observation
+      --     context. It is not identity, it's a mutable fact about that identity (the
+      --     earliest height this context has been seen at so far) -- callers must maintain it
+      --     via INSERT ... ON CONFLICT (vk_hash, net, scope, contract_address, tag) DO UPDATE
+      --     SET first_seen_height = LEAST(verifier_key_observations.first_seen_height,
+      --     EXCLUDED.first_seen_height), not a plain INSERT.
+      -- Empirically verified against a real Postgres 17 instance: two different-tag
+      -- observations of the same (vk_hash, net, scope, contract_address) now both persist as
+      -- distinct rows; the ON CONFLICT/LEAST upsert pattern above correctly collapses repeated
+      -- sightings of the same (vk_hash, net, scope, contract_address, tag) context into one row
+      -- holding the minimum (earliest) first_seen_height seen across all of them; and a plain
+      -- (non-upsert) INSERT of a true duplicate context is still correctly rejected with
+      -- unique_violation.
+      UNIQUE NULLS NOT DISTINCT (vk_hash, net, scope, contract_address, tag)
     )
   `;
 
-  await sql`
-    CREATE INDEX verifier_key_observations_by_vk_hash
-      ON ${sql(schema)}.verifier_key_observations (vk_hash)
-  `;
+  // v4 audit fix: `verifier_key_observations_by_vk_hash` (a plain `ON (vk_hash)` index) is
+  // DROPPED here — it is now a redundant strict left-prefix of the UNIQUE constraint's own
+  // backing index (`(vk_hash, net, scope, contract_address, tag)`, `vk_hash` leading).
+  // **Confirmed, not assumed**, against a real Postgres 17 instance: `EXPLAIN (COSTS OFF)
+  // SELECT * FROM verifier_key_observations WHERE vk_hash = $1` uses a Bitmap Index Scan on the
+  // UNIQUE constraint's own backing index with no separate `by_vk_hash` index present at all —
+  // the same reasoning already applied to dropping `transactions_by_block` in v3 (§4.3).
+  // `verifier_key_observations_by_contract` is kept: `contract_address` is NOT the UNIQUE
+  // index's leading column, so a contract-only lookup is a genuinely distinct access pattern
+  // that index cannot serve.
   await sql`
     CREATE INDEX verifier_key_observations_by_contract
       ON ${sql(schema)}.verifier_key_observations (contract_address) WHERE contract_address IS NOT NULL
@@ -469,6 +587,114 @@ export async function up(sql: ISql, schema: string): Promise<void> {
     CREATE TRIGGER verifier_key_observations_blob_roles_trigger
       BEFORE INSERT OR UPDATE OF vk_hash ON ${sql(schema)}.verifier_key_observations
       FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.verifier_key_observations_check_blob_roles()
+  `;
+
+  // ---------------------------------------------------------------------------------------
+  // chain_archive_assert_role_removable / chain_blob_roles_guard_removal_trigger — v4 audit
+  // fix, blob-role integrity's missing delete/update-side half (both round-3 reviewers, one
+  // called it a hard BLOCK). The v3 triggers above only fired on the REFERENCING table's
+  // INSERT/UPDATE, checking role existence at that moment only — nothing stopped: insert a
+  // `chain_blob_roles` row, insert a referencing row (passes the v3 check), then `DELETE FROM
+  // chain_blob_roles` — leaving the referencing row pointing at a now-unclassified blob with no
+  // error anywhere. Fixed with a `BEFORE DELETE OR UPDATE OF blob_hash, role` trigger directly
+  // on `chain_blob_roles` that rejects removing/repointing a role row still actively relied on
+  // by a live row in whichever table that role maps to. Defined here (after every
+  // blob-referencing table exists) rather than up near `chain_blob_roles` itself, since its
+  // body needs to query `blocks`/`transactions`/`bridge_observations`/
+  // `verifier_key_observations` by name.
+  //
+  // **Concurrency, thought through explicitly, not just reasoned about — tested with two real
+  // concurrent Postgres 17 sessions:** an unlocked `EXISTS` check here alone would still race a
+  // concurrent INSERT into a referencing table the same way the original bug did, just from the
+  // other direction. Closed with row-level locking on both sides of the same
+  // `chain_blob_roles` row:
+  //   - The referencing-table side (`chain_archive_assert_blob_role`, above) now takes
+  //     `FOR SHARE` on the specific `(blob_hash, role)` row it depends on, held for the
+  //     remainder of that INSERT/UPDATE's transaction.
+  //   - This function takes `FOR UPDATE` on that same row before deciding whether the removal
+  //     is safe.
+  // Postgres's real row-level lock semantics make both interleavings safe:
+  //   1. A referencing INSERT's `FOR SHARE` is granted first, and a concurrent DELETE on the
+  //      same `chain_blob_roles` row blocks (a DELETE needs an exclusive tuple lock) until the
+  //      INSERT's transaction ends. If it commits, the DELETE's guard re-evaluates against
+  //      committed state, finds the new live reference, and correctly rejects the removal. If it
+  //      rolls back, the DELETE proceeds normally.
+  //   2. A DELETE's `FOR UPDATE` (i.e. the delete itself) is granted first, and a concurrent
+  //      referencing INSERT's `FOR SHARE` on the same row blocks until the DELETE's transaction
+  //      ends. If the DELETE commits, the row is gone by the time the INSERT's blocked lock
+  //      request resumes, so `chain_archive_assert_blob_role`'s `EXISTS` correctly finds
+  //      nothing and rejects the INSERT. If the DELETE rolls back, the INSERT proceeds
+  //      normally.
+  // **Empirically confirmed** against a real Postgres 17 instance, both orderings, using two
+  // genuinely concurrent `psql` sessions (not simulated): (1) INSERT-holds-lock-first — a
+  // concurrent DELETE blocked for the INSERT transaction's full duration, then correctly failed
+  // once the INSERT committed; (2) DELETE-holds-lock-first — a concurrent referencing INSERT
+  // blocked for the DELETE transaction's full duration, then correctly failed once the DELETE
+  // committed (role gone). Both interleavings converge on the same safe outcome: it is
+  // impossible to end up with a referencing row pointing at a blob hash/role pair that has been
+  // removed from `chain_blob_roles`.
+  //
+  // `role = 'proof'` (and any future role value with no consuming column) has no branch below
+  // and is deliberately never blocked from removal — nothing in this schema references a blob
+  // by that role today, so there is nothing to protect; a future table that starts consuming
+  // that role would need its own branch added here, the same way each existing consumer does.
+  // ---------------------------------------------------------------------------------------
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.chain_archive_assert_role_removable(
+      p_blob_hash bytea, p_role text
+    ) RETURNS void LANGUAGE plpgsql AS $fn$
+    DECLARE
+      v_in_use boolean;
+    BEGIN
+      -- Lock this exact (blob_hash, role) row (if it still exists) so a concurrent
+      -- referencing INSERT/UPDATE's FOR SHARE acquisition (chain_archive_assert_blob_role,
+      -- above) is forced to serialize against this removal -- see the block comment above this
+      -- function for the full argument.
+      PERFORM 1 FROM ${sql(schema)}.chain_blob_roles
+        WHERE blob_hash = p_blob_hash AND role = p_role FOR UPDATE;
+
+      v_in_use := CASE p_role
+        WHEN 'block_header' THEN
+          EXISTS (SELECT 1 FROM ${sql(schema)}.blocks WHERE header_blob_hash = p_blob_hash)
+        WHEN 'block_body' THEN
+          EXISTS (SELECT 1 FROM ${sql(schema)}.blocks WHERE body_blob_hash = p_blob_hash)
+        WHEN 'tx_raw' THEN
+          EXISTS (SELECT 1 FROM ${sql(schema)}.transactions WHERE raw_blob_hash = p_blob_hash)
+        WHEN 'bridge_observation' THEN
+          EXISTS (SELECT 1 FROM ${sql(schema)}.bridge_observations WHERE raw_blob_hash = p_blob_hash)
+        WHEN 'verifier_key' THEN
+          EXISTS (SELECT 1 FROM ${sql(schema)}.verifier_key_observations WHERE vk_hash = p_blob_hash)
+        ELSE false
+      END;
+
+      IF v_in_use THEN
+        RAISE EXCEPTION
+          'cannot remove/change chain_blob_roles row (blob %, role %): still referenced by a live row'
+          , encode(p_blob_hash, 'hex'), p_role
+          USING ERRCODE = '23514';
+      END IF;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.chain_blob_roles_guard_removal() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      IF TG_OP = 'DELETE' THEN
+        PERFORM ${sql(schema)}.chain_archive_assert_role_removable(OLD.blob_hash, OLD.role);
+        RETURN OLD;
+      ELSE
+        IF NEW.blob_hash IS DISTINCT FROM OLD.blob_hash OR NEW.role IS DISTINCT FROM OLD.role THEN
+          PERFORM ${sql(schema)}.chain_archive_assert_role_removable(OLD.blob_hash, OLD.role);
+        END IF;
+        RETURN NEW;
+      END IF;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER chain_blob_roles_guard_removal_trigger
+      BEFORE DELETE OR UPDATE OF blob_hash, role ON ${sql(schema)}.chain_blob_roles
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.chain_blob_roles_guard_removal()
   `;
 
   // ---------------------------------------------------------------------------------------

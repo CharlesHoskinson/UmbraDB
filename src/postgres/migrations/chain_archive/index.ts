@@ -37,3 +37,10 @@ export const chainArchiveMigrations: Migration[] = [migration000, chainArchiveCo
 // `chain_blob_roles` completeness, and `verifier_keys` was replaced by
 // `verifier_key_observations` — see `001_chain_archive_core.ts`'s own header comment and the
 // design doc's "Revision history — v3" note for the full reasoning.
+//
+// v4 note: `chainArchiveCore` additionally now creates `chain_blob_roles_guard_removal_trigger`
+// (closes the delete/update-side blob-role gap), `blocks_finalized_monotonic_trigger` (rejects
+// un-finalizing a previously-finalized block), and `verifier_key_observations`'s uniqueness key
+// now includes `tag` (and no longer includes `first_seen_height`) — see
+// `001_chain_archive_core.ts`'s own header comment and the design doc's "Revision history — v4"
+// note for the full reasoning.
