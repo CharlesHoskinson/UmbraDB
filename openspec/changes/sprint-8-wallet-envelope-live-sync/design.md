@@ -165,10 +165,15 @@ Two mappings, and the choice is a genuine correctness-gate question this sprint 
 resolves blindly):
 
 - **(i) Preserve full lifecycle detail** — the adapter stashes `submittedAt`/`finalizedBlock`/
-  `rejectedAt`/`reason` into a dedicated key inside UmbraDB's opaque `sections` (a normal key such
-  as `"__lifecycleDetail"`, which is safe because it does **not** start with UmbraDB's reserved
-  `THS_RESERVED_KEY_PREFIX = "__umbradb_ths_"`, `src/interfaces/transaction-history-storage.ts:57`),
-  and reconstructs the SDK lifecycle on `getAll()`. This makes the adapter's `getAll()` yield
+  `rejectedAt`/`reason` into a dedicated key inside UmbraDB's opaque `sections`. **(F2 fix)** That
+  key is the adapter's OWN reserved key `UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY =
+  "__umbradb_adapter_lifecycle_detail"` under the reserved prefix `UMBRADB_ADAPTER_RESERVED_KEY_PREFIX
+  = "__umbradb_adapter_"`; the adapter REJECTS (typed `ValidationError`, before any DB write) any
+  incoming SDK section whose key shares that prefix, so a caller can never collide with or clobber the
+  stash — an earlier draft used a bare, unreserved `"__lifecycleDetail"` key that offered no such
+  protection (the panel's F2 blocker). On read, the stash is Zod-validated before use and a malformed
+  stash raises a typed per-hash `SerializationFailedError`, never a silently invalid SDK lifecycle.
+  The adapter reconstructs the SDK lifecycle on `getAll()`. This makes the adapter's `getAll()` yield
   entries that decode cleanly against the SDK's own Effect-Schema — required if any consumer
   re-parses them.
 - **(ii) Preserve only `status`** — accept that UmbraDB's authoritative record is `status` +
@@ -251,9 +256,12 @@ instead of `InMemoryTransactionHistoryStorage` (`:94`). The rest is unchanged an
 3. Wait for `availableCoins.length > 0` **then** `waitForSyncedState()` (`:121-122`) — a fresh
    wallet can report strictly-complete before the coin-bearing tx applies (`AUTONOMOUS_RUN_LOG.md:240-242`).
 4. Assert `balances[nativeToken] === 1_000_000_000n` (1000 tNIGHT, `:144`) **and** — the new
-   assertion this sprint adds — that `await pgStorage.getAll()` contains a UmbraDB row for tx
-   `b194e71d…493341` with the faucet identifier `00ea17cf…20bea`
-   (`AUTONOMOUS_RUN_LOG.md:230-231`). **This DB row is the "verify the DB syncs" proof.**
+   assertion this sprint adds — that `await adapter.getAll()` (the read routed through the adapter's
+   own reconstruction path, F3 fix, not a raw `PgTransactionHistoryStorage` instance) contains a
+   UmbraDB row for tx `b194e71d…493341` with the faucet identifier `00ea17cf…20bea`, reconstructed to
+   a real finalized SDK lifecycle (`finalizedBlock.height = 1763274`, confirmed live 2026-07-22).
+   **This DB row is the "verify the DB syncs" proof, and it exercises the adapter's reconstruction
+   surface end-to-end against a real on-chain entry.**
 
 UmbraDB's own code stays agnostic to how the data arrived (indexer WS): the adapter receives
 already-scanned entries via the SDK's `got*` calls, exactly as the boundary rule requires
@@ -275,11 +283,15 @@ The cold-boot test (nightly/labeled, recommendation §2 scenario 2) is the funct
 4. Destroy the wallet instance and the process.
 5. Fresh process: `PgWalletStateEnvelopeStore.load(walletId, "PreProd")` → decode + version-check →
    restore each non-`null` sub-wallet via its `deserializeState`/`.restore` (`V1Builder.ts`).
-6. `pgStorage.getAll()` for tx-history — **authoritative** (below).
+6. Tx-history is read back **through `adapterAfterRestart.getAll()`** (F3 fix) — the underlying
+   `PgTransactionHistoryStorage` remains **authoritative** (below); one deliberately-kept raw
+   `pgStorageAfterRestart.getAll()` pre-restore read proves row-presence-without-resync independent of
+   the adapter.
 7. Assert: (a) resume **without a full resync** (the restored unshielded wallet's progress cursor
    comes from its snapshot, `unshielded-wallet/src/v1/Serialization.ts:81-83`'s `appliedId`, so it
-   does not rescan from genesis); (b) **tx-history continuity** — the `b194e71d…` row is present
-   from `getAll()` after the cold boot, with no resync required to see it.
+   does not rescan from genesis — confirmed live `appliedId = 505701n`); (b) **tx-history continuity**
+   — the `b194e71d…` row is present from `adapterAfterRestart.getAll()` after the cold boot, with no
+   resync required to see it.
 
 **Authoritative-tx-history-on-restore rule (binding):** `PgTransactionHistoryStorage.getAll()` is
 the authoritative source of tx-history on restore — **not** the tx-history copy embedded inside a
@@ -359,9 +371,10 @@ it maps to (`specs/wallet-state-envelope/spec.md`).
 
 - **DB-sync materialization (integration).** §4: sync the funded unshielded wallet against public
   preprod with the adapter injected; assert `balances[nativeToken] === 1_000_000_000n` **and** the
-  `b194e71d…493341` row is present via `pgStorage.getAll()`. → *"a synced transaction materializes
-  as a Postgres row"* (event-driven), *"tx-history reads authoritative from the Pg store"*
-  (state-driven).
+  `b194e71d…493341` row is present via `adapter.getAll()` (F3: routed through the adapter's
+  reconstruction path, reconstructed to a real finalized SDK lifecycle). → *"a synced transaction
+  materializes as a Postgres row"* (event-driven), *"tx-history reads authoritative from the Pg
+  store"* (state-driven).
 
 ### 7.3 Cold-boot recovery (nightly/labeled) — `test:live`
 

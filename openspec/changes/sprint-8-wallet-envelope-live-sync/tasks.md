@@ -66,12 +66,15 @@ commit intentionally does NOT implement.
     `b194e71d4d22ed09846cd88aab67c6bb4eec69ea6df5aead3bdb22bfe3493341` (identifier
     `00ea17cf14c2aa1b6bf867d247cb2b8e3ff016444e086451de7aa4e70062a20bea`) as a UmbraDB row;
     `cold-boot-recovery` observed the restored wallet's initial `progress.appliedId = 505701n`
-    (nonzero — proof of resume from the snapshot cursor, not genesis). **Caveat:** that run predates
-    this commit's F3 fix (routing the DB-sync/cold-boot read side through the adapter's own
-    `getAll()` instead of a raw `PgTransactionHistoryStorage` instance) — the live/cold-boot test
-    FILES have since been edited (F3) and must typecheck/compile (verified: `npm run typecheck`
-    clean) but have NOT been re-run against real preprod with those edits in place. The orchestrator
-    re-running `npm run test:live` against real preprod is the pending confirmation this box notes.
+    (nonzero — proof of resume from the snapshot cursor, not genesis). **Re-run confirmed post-F3:**
+    after the F3 fix (routing the DB-sync/cold-boot read side through the adapter's own `getAll()`
+    instead of a raw `PgTransactionHistoryStorage` instance), the orchestrator re-ran
+    `npm run test:live` against public preprod on 2026-07-22 and BOTH tests passed with the new read
+    path: `preprod-db-sync` read the faucet tx via `adapter.getAll()` and reconstructed a real
+    finalized SDK lifecycle (`finalizedBlock.height = 1763274`, block hash
+    `980211074bd9ccaf02f43892cd5f0afc1e6b3bc70af78424ca97251267e09a61`); `cold-boot-recovery` resumed
+    at `appliedId = 505701n` with continuity read via `adapterAfterRestart.getAll()`. The reconstruction
+    path is therefore validated end-to-end against a real on-chain SDK entry, not schema fixtures alone.
 
 ## 2. Envelope module (Pg-only — required gate)
 
@@ -169,9 +172,9 @@ commit intentionally does NOT implement.
     backend; the DB row for `b194e71d…` is observed. **Confirmed 2026-07-22** (see 1.1's live-run
     evidence) against the PRE-F3 version of this test (raw `pgStorage.getAll()`). **F3 fix (this
     commit):** the read side now goes through `adapter.getAll()` instead, additionally asserting the
-    entry decodes against the real SDK schema with `finalizedBlock.height > 0` — typechecks/compiles
-    (verified) but has NOT been re-run live with this exact edit; pending the orchestrator's
-    `test:live` re-run.
+    entry decodes against the real SDK schema with `finalizedBlock.height > 0`. **Re-run confirmed
+    2026-07-22 post-F3:** passed against public preprod; `adapter.getAll()` reconstructed
+    `finalizedBlock.height = 1763274`.
 - [x] 5.2 Cold-boot recovery test (`design.md` §5): sync → `unshielded.serializeState()` → envelope
   → `save` → destroy wallet+process → fresh process → `load` → restore → `getAll()`; assert resume
   without full resync AND tx-history continuity off the Pg store.
@@ -181,8 +184,8 @@ commit intentionally does NOT implement.
     this test. **F3 fix (this commit):** the AFTER-resume continuity read now goes through
     `adapterAfterRestart.getAll()` (the pre-restore row-presence read at line ~138 is deliberately
     KEPT as the one raw `PgTransactionHistoryStorage` read, proving row-presence-without-resync
-    independent of the adapter) — typechecks/compiles (verified) but not yet re-run live with this
-    exact edit; pending the orchestrator's `test:live` re-run.
+    independent of the adapter). **Re-run confirmed 2026-07-22 post-F3:** passed against public
+    preprod; restored `appliedId = 505701n`, continuity read via `adapterAfterRestart.getAll()`.
 - [x] 5.3 Wire `test:live` in `package.json` as a nightly/labeled script, not a required merge gate.
   - **Acceptance:** `test:live` is excluded from the required PR gate and runs on the nightly/labeled
     trigger only.

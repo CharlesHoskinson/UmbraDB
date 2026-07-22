@@ -82,6 +82,24 @@ describe("PgWalletSdkTransactionHistoryAdapter (Pg-only, required gate)", () => 
       expect(() => mapUmbraStatusToSdk("notARealUmbraStatus" as unknown as "success"))
         .toThrow(SerializationFailedError);
     });
+
+    // F6 (Codex re-audit): the fail-closed guard must use an OWN-property check, not `!== undefined`.
+    // An inherited-prototype key resolves to a real Object.prototype member (a function, not
+    // undefined) and would otherwise be returned instead of rejected.
+    it.each(["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"])(
+      "F6: mapSdkStatusToUmbra rejects the inherited-prototype key %p rather than returning a prototype member",
+      (protoKey) => {
+        expect(() => mapSdkStatusToUmbra(protoKey as unknown as Sdk.TransactionHistoryStatus))
+          .toThrow(SerializationFailedError);
+      },
+    );
+    it.each(["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"])(
+      "F6: mapUmbraStatusToSdk rejects the inherited-prototype key %p rather than returning a prototype member",
+      (protoKey) => {
+        expect(() => mapUmbraStatusToSdk(protoKey as unknown as "success"))
+          .toThrow(SerializationFailedError);
+      },
+    );
   });
 
   describe("the adapter backs txHistoryStorage with Postgres (ubiquitous requirement)", () => {

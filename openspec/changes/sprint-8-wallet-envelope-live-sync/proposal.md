@@ -101,10 +101,11 @@ persistence contract.
 4. **Functional cold-boot recovery test** (integration test, nightly/labeled) — sync → serialize
    each sub-wallet state → envelope → `CheckpointStore.save` into Postgres → destroy the wallet +
    process → fresh process → `CheckpointStore.load` the envelope → restore each sub-wallet →
-   `PgTransactionHistoryStorage.getAll()` for tx-history → assert resume **without a full resync**
-   and **tx-history continuity** (the Pg store is authoritative for tx-history on restore, not the
-   blob's embedded copy). This is *functional* recovery; the trust-minimized verification is the
-   separate feature above. See `design.md` §5-§6.
+   `adapterAfterRestart.getAll()` for tx-history (F3: reads routed through the adapter's own
+   reconstruction path; the underlying `PgTransactionHistoryStorage` stays authoritative) → assert
+   resume **without a full resync** and **tx-history continuity** (the Pg store is authoritative for
+   tx-history on restore, not the blob's embedded copy). This is *functional* recovery; the
+   trust-minimized verification is the separate feature above. See `design.md` §5-§6.
 
 5. **Pg-only conformance** for the envelope module and the adapter seam
    (save/load/schema-version round-trip; scripted SDK-shaped `got*` traces through the adapter into

@@ -125,6 +125,22 @@ describe("F1(c) parity: referenceMergeEntries mirrors mergeWalletEntries' docume
     });
   });
 
+  // Visibility guard (Codex re-audit): the real-runtime-diff tier below is describe.skipIf-gated on
+  // the facade dist existing, so it silently no-ops in a fresh clone / CI. This always-running test
+  // makes that state LOUD in the output so a skipped diff is never mistaken for a passed diff. The
+  // source-cited rule-assertion tier above always runs and is the required-gate-safe baseline.
+  it("real-SDK runtime diff availability is reported (loud skip, not silent)", () => {
+    if (!facadeMergeAvailable()) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[reference-merge-parity] real-SDK runtime diff SKIPPED: facade/unshielded-wallet dist not "
+        + "present (fresh clone / CI). The rule-assertion tier above still ran (required-gate-safe "
+        + "baseline); the runtime diff runs only where the sibling midnight-wallet checkout is built.",
+      );
+    }
+    expect(typeof facadeMergeAvailable()).toBe("boolean");
+  });
+
   describe.skipIf(!facadeMergeAvailable())(
     "real runtime diff against the SDK's own mergeWalletEntries (preferred tier -- facade dist was built for this pass)",
     () => {

@@ -121,26 +121,29 @@ const UMBRA_TO_SDK_STATUS: Record<UmbraTransactionHistoryStatus, Sdk.Transaction
  *  reconstructed SDK entry instead of failing loudly at the boundary. Now THROWS a typed
  *  {@link SerializationFailedError} on an unmapped value in EITHER direction. */
 export function mapSdkStatusToUmbra(status: Sdk.TransactionHistoryStatus): UmbraTransactionHistoryStatus {
-  const mapped = SDK_TO_UMBRA_STATUS[status];
-  if (mapped === undefined) {
+  // Own-property check, NOT `mapped === undefined`: a status value like "constructor",
+  // "toString", or "__proto__" resolves to an INHERITED Object.prototype member (a function,
+  // not `undefined`), which would slip past a bare-index guard and be returned instead of
+  // rejected. hasOwnProperty rejects any key this map does not literally own. (Codex re-audit.)
+  if (!Object.prototype.hasOwnProperty.call(SDK_TO_UMBRA_STATUS, status)) {
     throw new SerializationFailedError(
       `PgWalletSdkTransactionHistoryAdapter: unmapped SDK TransactionHistoryStatus value `
       + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
     );
   }
-  return mapped;
+  return SDK_TO_UMBRA_STATUS[status];
 }
 
-/** Inverse of {@link mapSdkStatusToUmbra}. Same F6 fail-closed fix, mirrored. */
+/** Inverse of {@link mapSdkStatusToUmbra}. Same F6 fail-closed fix, mirrored, including the
+ *  own-property (not bare-`undefined`) guard against inherited-prototype keys. */
 export function mapUmbraStatusToSdk(status: UmbraTransactionHistoryStatus): Sdk.TransactionHistoryStatus {
-  const mapped = UMBRA_TO_SDK_STATUS[status];
-  if (mapped === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(UMBRA_TO_SDK_STATUS, status)) {
     throw new SerializationFailedError(
       `PgWalletSdkTransactionHistoryAdapter: unmapped UmbraDB TransactionHistoryStatus value `
       + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
     );
   }
-  return mapped;
+  return UMBRA_TO_SDK_STATUS[status];
 }
 
 /** The shape stashed under {@link UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY} in UmbraDB's own
