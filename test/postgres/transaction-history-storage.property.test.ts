@@ -167,6 +167,38 @@ describe("Transaction history storage properties (openspec/changes/sprint-7-tran
   }, 120_000);
 
   /**
+   * Codex re-audit finding: the property oracle's coverage of the reserved-tag/PG-unsafe-key
+   * collision shapes was only PROBABILISTIC -- `badKeyValue` is a low-weight arm of `sectionValue`
+   * or `fc.assert`'s `numRuns: 20`, so a given run is not guaranteed to ever generate any of those
+   * shapes at all. This test replaces chance with a FIXED, non-random command trace containing
+   * every collision/corruption shape this suite cares about, so it is exercised deterministically
+   * on every single run, not just probabilistically across many.
+   */
+  it("deterministic trace: every reserved-tag/PG-unsafe-key collision shape (plus a genuine bigint/Date leaf) is accepted/rejected IDENTICALLY by both backends on every run", async () => {
+    await truncateAll();
+    const walletId = freshWalletId();
+    const pg = new PgTransactionHistoryStorage(getSql(), walletId, referenceMergeEntries, TEST_SCHEMA);
+    const mem = new InMemoryTransactionHistoryStorage(referenceMergeEntries);
+
+    const commands: Command[] = [
+      { kind: "finalized", hash: "h1", identifiers: ["a"], sectionKey: "note", sectionValue: { [`${THS_RESERVED_KEY_PREFIX}bigint`]: "not-a-real-tag" } },
+      { kind: "finalized", hash: "h1", identifiers: ["a"], sectionKey: "note", sectionValue: { [`${THS_RESERVED_KEY_PREFIX}date`]: "not-a-real-tag" } },
+      { kind: "pending", hash: "h2", identifiers: ["b"], sectionKey: "note", sectionValue: { [`bad${String.fromCharCode(0)}key`]: 1 } },
+      { kind: "rejected", hash: "h3", identifiers: [], sectionKey: "note", sectionValue: { [`bad${String.fromCharCode(0xD800)}key`]: 1 } },
+      // A genuine bigint/Date leaf (not a collision) must still be ACCEPTED identically by both --
+      // this trace proves the collision shapes are rejected specifically, not that everything is.
+      { kind: "finalized", hash: "h4", identifiers: ["c"], sectionKey: "amount", sectionValue: 42n },
+      { kind: "finalized", hash: "h4", identifiers: ["c"], sectionKey: "when", sectionValue: new Date("2024-01-01T00:00:00.000Z") },
+    ];
+
+    await replay(pg, mem, commands);
+
+    const pgAll = await pg.getAll();
+    const memAll = await mem.getAll();
+    expect(normalize(pgAll)).toEqual(normalize(memAll));
+  });
+
+  /**
    * Concurrency invariant (`design.md` §3, `specs/transaction-history-storage/spec.md`'s
    * "shielded-only and dust-only concurrent write" scenario): two `gotFinalized` calls racing on
    * the SAME `(walletId, hash)` — one supplying only a `shielded` section, the other only a

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { ConnectionError, ValidationError } from "../../src/interfaces/storage-errors.js";
+import { ConnectionError, SerializationFailedError, ValidationError } from "../../src/interfaces/storage-errors.js";
 import {
   THS_RESERVED_KEY_PREFIX,
   type EntryContent, type MergeEntriesFn, type TransactionHistoryEntry,
@@ -470,6 +470,143 @@ describe("PgTransactionHistoryStorage", () => {
       const shielded = got!.sections.shielded as Record<string, unknown>;
       expect(shielded.amount).toBe(7n);
       expect((shielded.when as Date).getTime()).toBe(ts.getTime());
+    });
+  });
+
+  // Codex re-audit of commit 96339c5 (the F1 fix): the reserved-tag/PG-unsafe-key boundary
+  // rejection closed F1 for CALLER-supplied data, but three DEFENSIVE-DECODE gaps remained on
+  // the READ path for stored data corrupted by something other than a caller (direct DB
+  // tampering, a legacy schema version, a future migration bug). Every test below inserts a row
+  // DIRECTLY via raw SQL, bypassing PgTransactionHistoryStorage's own write path entirely --
+  // the only way to get a structurally malformed/non-canonical `entry` JSONB into the table at
+  // all, since `writeRows` always persists a schema-valid `encodeStoredEntry(...)` output
+  // (`sections` is a REQUIRED field of `TransactionHistoryEntrySchema`, and the merge result is
+  // re-validated immediately before persisting -- confirmed by the "normal write" test in the
+  // first sub-block below: this corruption is NOT reachable via any legitimate write).
+  describe("F-read (Codex re-audit of 96339c5): defensive decode / stored-data validation on the READ path", () => {
+    async function insertRawRow(entryJson: unknown, txHash: string, walletId = "wallet-corrupt"): Promise<void> {
+      const sql = getSql();
+      const literal = JSON.stringify(entryJson).replace(/'/g, "''");
+      await sql.unsafe(`
+        INSERT INTO ${TEST_SCHEMA}.transaction_history (wallet_id, tx_hash, entry, identifiers, lifecycle, updated_at)
+        VALUES ('${walletId}', '${txHash}', '${literal}'::jsonb, '{}', 'pending', now())
+      `);
+    }
+
+    describe("finding #1: malformed stored envelope (null/non-object entry or entry.sections)", () => {
+      it("a stored row with entry = JSON null rejects with SerializationFailedError from get/getAll/serialize, not a raw TypeError", async () => {
+        await insertRawRow(null, "null-entry");
+        const s = store("wallet-corrupt");
+        await expect(s.get("null-entry")).rejects.toBeInstanceOf(SerializationFailedError);
+        await expect(s.getAll()).rejects.toBeInstanceOf(SerializationFailedError);
+        await expect(s.serialize()).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("a stored row with entry.sections = null rejects with SerializationFailedError, not a raw TypeError", async () => {
+        await insertRawRow(
+          { hash: "null-sections", identifiers: [], lifecycle: { status: "pending" }, sections: null },
+          "null-sections",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("null-sections")).rejects.toBeInstanceOf(SerializationFailedError);
+        await expect(s.getAll()).rejects.toBeInstanceOf(SerializationFailedError);
+        await expect(s.serialize()).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("a stored row with entry.sections as a non-object (a bare string) rejects with SerializationFailedError", async () => {
+        await insertRawRow(
+          { hash: "string-sections", identifiers: [], lifecycle: { status: "pending" }, sections: "not-an-object" },
+          "string-sections",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("string-sections")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("a normal, legitimately-written entry with EMPTY sections still round-trips cleanly -- sections is a REQUIRED schema field, never legitimately absent, confirming the guard above targets corruption only, not the normal path", async () => {
+        const s = store();
+        await s.gotFinalized({ hash: "empty-sections-ok", identifiers: ["a"], sections: {} });
+        const got = await s.get("empty-sections-ok");
+        expect(got?.sections).toEqual({});
+        const all = await s.getAll();
+        expect(all.find((e) => e.hash === "empty-sections-ok")).toBeDefined();
+      });
+    });
+
+    describe("finding #2: permissive decode of non-canonical tag/field values", () => {
+      it("a stored bigint tag with a non-canonical hex value (0x10) rejects with SerializationFailedError instead of silently decoding to 16n", async () => {
+        await insertRawRow(
+          { hash: "tag-hex", identifiers: [], lifecycle: { status: "pending" }, sections: { note: { [`${THS_RESERVED_KEY_PREFIX}bigint`]: "0x10" } } },
+          "tag-hex",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("tag-hex")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("a stored bigint tag with an empty string rejects with SerializationFailedError instead of silently decoding to 0n", async () => {
+        await insertRawRow(
+          { hash: "tag-empty", identifiers: [], lifecycle: { status: "pending" }, sections: { note: { [`${THS_RESERVED_KEY_PREFIX}bigint`]: "" } } },
+          "tag-empty",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("tag-empty")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("a stored date tag with an invalid calendar date rejects with SerializationFailedError instead of silently normalizing to a different, valid date", async () => {
+        await insertRawRow(
+          {
+            hash: "tag-baddate", identifiers: [], lifecycle: { status: "pending" },
+            sections: { note: { [`${THS_RESERVED_KEY_PREFIX}date`]: "2024-02-30T00:00:00.000Z" } },
+          },
+          "tag-baddate",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("tag-baddate")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("the top-level fees field is decoded with the SAME canonical strictness as the sections tag (rejects a non-canonical hex value)", async () => {
+        await insertRawRow(
+          { hash: "fees-hex", identifiers: [], lifecycle: { status: "pending" }, fees: "0x10", sections: {} },
+          "fees-hex",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("fees-hex")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+
+      it("the top-level timestamp field is decoded with the SAME canonical strictness (must round-trip through toISOString() exactly, not just parse)", async () => {
+        await insertRawRow(
+          { hash: "ts-noncanonical", identifiers: [], lifecycle: { status: "pending" }, timestamp: "2024-01-01", sections: {} },
+          "ts-noncanonical",
+        );
+        const s = store("wallet-corrupt");
+        await expect(s.get("ts-noncanonical")).rejects.toBeInstanceOf(SerializationFailedError);
+      });
+    });
+  });
+
+  // Codex re-audit of commit 96339c5, finding #3: the recursive `EntryContentSchema`/`z.lazy`
+  // parse has no depth bound, so a pathologically deep caller `sections` value overflowed the JS
+  // call stack (a raw, untranslated RangeError) instead of rejecting cleanly. Fixed via a
+  // pre-check (`MAX_ENTRY_CONTENT_DEPTH` / `exceedsMaxDepth` in `src/interfaces/
+  // transaction-history-storage.ts`) that runs BEFORE Zod's own recursive parse ever begins.
+  describe("F3: pathological nesting depth is rejected cleanly, not as a raw RangeError", () => {
+    function makeDeeplyNested(depth: number): EntryContent {
+      let v: EntryContent = { leaf: 1 };
+      for (let i = 0; i < depth; i++) v = { nest: v };
+      return v;
+    }
+
+    it("a ~1000-deep caller sections value on a got* write rejects with ValidationError, not a raw RangeError", async () => {
+      const s = store();
+      const deep = makeDeeplyNested(1000);
+      await expect(s.gotFinalized(entry("deep1", ["a"], { note: deep }))).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("a moderately nested (well within the documented depth bound) sections value is accepted normally", async () => {
+      const s = store();
+      const shallow = makeDeeplyNested(10);
+      await expect(s.gotFinalized(entry("shallow1", ["a"], { note: shallow }))).resolves.toBeUndefined();
+      const got = await s.get("shallow1");
+      expect(got).toBeDefined();
     });
   });
 

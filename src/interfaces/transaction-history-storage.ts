@@ -71,6 +71,15 @@ const SafeObjectKeySchema = z.string()
     message: `object key must not start with the reserved prefix "${THS_RESERVED_KEY_PREFIX}" (reserved for PgTransactionHistoryStorage's own internal bigint/Date tagging scheme)`,
   });
 
+/** This rejection is intentional, not a bug: `THS_RESERVED_KEY_PREFIX` ("__umbradb_ths_") is a
+ *  namespace reserved for `PgTransactionHistoryStorage`'s own internal bigint/Date JSONB tagging
+ *  scheme (see that constant's own doc). A caller key such as `__umbradb_ths_metadata` -- even
+ *  one with no relation whatsoever to the actual `bigint`/`date` tags -- is rejected purely for
+ *  starting with the reserved prefix, at ANY nesting depth in `EntryContent` and as a top-level
+ *  `sections` key alike. This is deliberately broader than "reject only the two exact tag key
+ *  strings" so the namespace stays reserved for this storage layer's future use too, not just its
+ *  current one. */
+
 /** A recursive, JSON-shaped value that ALSO admits `bigint`/`Date` leaves anywhere in the tree —
  *  the opaque per-caller payload each wallet section (shielded/unshielded/dust) carries. Callers
  *  agree on shape per section name; `PgTransactionHistoryStorage` never inspects it beyond
@@ -95,6 +104,60 @@ export const EntryContentSchema: z.ZodType<EntryContent> = z.lazy(() => z.union(
   z.array(EntryContentSchema),
   z.record(SafeObjectKeySchema, EntryContentSchema),
 ]));
+
+// ---------------------------------------------------------------------------
+// Depth-bounding `sections` before Zod's own recursive (`z.lazy`) parse ever begins descending
+// into it — found necessary by a cross-vendor re-audit: Zod's recursive descent through nested
+// arrays/records adds JS call-stack frames per level with no depth limit of its own, so a
+// caller-supplied object nested ~1000 levels deep reliably exhausts the stack and throws a raw,
+// untranslated `RangeError: Maximum call stack size exceeded` out of any `got*` method instead of
+// a clean `ValidationError`.
+// ---------------------------------------------------------------------------
+
+/** Maximum nesting depth `sections` may contain before being rejected with a clean
+ *  `ValidationError`. Chosen well above any realistic wallet section's actual nesting (a handful
+ *  of levels at most, per {@link EntryContent}'s own doc) and far below where Zod's recursive
+ *  descent risks the stack (empirically confirmed to survive several thousand levels in a bare
+ *  script, and considerably fewer once real call-stack usage from the rest of the application is
+ *  already on the stack) — a caller genuinely needing deeper nesting than this is almost
+ *  certainly sending malformed/hostile data, not a legitimate wallet section. */
+export const MAX_ENTRY_CONTENT_DEPTH = 64;
+
+/** Iterative (NOT recursive) depth walk over a raw, not-yet-validated JS value — deliberately
+ *  implemented with an explicit stack rather than recursive function calls, so the guard itself
+ *  cannot exhibit the exact stack-overflow failure mode it exists to prevent. Returns `true` as
+ *  soon as any branch's nesting exceeds `maxDepth`, short-circuiting before visiting the rest of
+ *  the tree. */
+function exceedsMaxDepth(value: unknown, maxDepth: number): boolean {
+  const stack: Array<{ v: unknown; depth: number }> = [{ v: value, depth: 0 }];
+  while (stack.length > 0) {
+    const { v, depth } = stack.pop()!;
+    if (depth > maxDepth) return true;
+    if (Array.isArray(v)) {
+      for (const item of v) stack.push({ v: item, depth: depth + 1 });
+    } else if (v !== null && typeof v === "object") {
+      for (const val of Object.values(v)) stack.push({ v: val, depth: depth + 1 });
+    }
+  }
+  return false;
+}
+
+/** `sections`'s actual schema: the plain `z.record(SafeObjectKeySchema, EntryContentSchema)`
+ *  wrapped in a `z.preprocess` depth guard. The depth check MUST run inside `preprocess`'s
+ *  callback (which Zod runs BEFORE the wrapped schema parses at all) rather than as a `.refine`/
+ *  `.superRefine` added after it — a refinement added after the record schema would only run
+ *  once Zod's own recursive parse had already either succeeded or thrown, too late to prevent
+ *  the stack overflow it exists to guard against. */
+const EntrySectionsSchema = z.preprocess((value, ctx) => {
+  if (exceedsMaxDepth(value, MAX_ENTRY_CONTENT_DEPTH)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `sections nesting exceeds the maximum supported depth of ${MAX_ENTRY_CONTENT_DEPTH} levels`,
+    });
+    return z.NEVER;
+  }
+  return value;
+}, z.record(SafeObjectKeySchema, EntryContentSchema));
 
 // ---------------------------------------------------------------------------
 // Lifecycle — a discriminated union, not a bare enum (structural mirror of the real SDK).
@@ -172,7 +235,7 @@ export const TransactionHistoryEntrySchema = z.object({
   timestamp: z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }).optional(),
   fees: z.union([z.bigint(), z.null()]).optional(),
   lifecycle: EntryLifecycleSchema,
-  sections: z.record(SafeObjectKeySchema, EntryContentSchema),
+  sections: EntrySectionsSchema,
 });
 
 /**

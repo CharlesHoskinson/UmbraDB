@@ -1,5 +1,5 @@
 import type { ISql, JSONValue } from "postgres";
-import { SerializationFailedError, ValidationError } from "../interfaces/storage-errors.js";
+import { SerializationFailedError, StorageError, ValidationError } from "../interfaces/storage-errors.js";
 import {
   THS_RESERVED_KEY_PREFIX,
   TransactionHistoryEntrySchema,
@@ -66,27 +66,70 @@ function isTagObject(v: unknown, tag: string): v is { [k: string]: string } {
     && typeof (v as Record<string, unknown>)[tag] === "string";
 }
 
-/** Translates `BigInt(...)`'s raw `SyntaxError` on a non-numeric string into `SerializationFailedError`
- *  — used both by the tag-decode below and by {@link rowToEntry}'s own field-specific `fees`
- *  decode, so corrupted stored data (from any source) is translated to the shared `StorageError`
- *  hierarchy rather than escaping any of the six public methods as a raw, untranslated error. */
-function parseStoredBigint(raw: string, context: string): bigint {
+/** Canonical form of `BigInt.prototype.toString()`'s output -- what {@link encodeContent}/{@link
+ *  encodeStoredEntry} ALWAYS emit for a bigint value: an optional leading `-`, then either a bare
+ *  `0` or a nonzero digit followed by more digits (no leading zeros, no `+`, no `0x`/`0b`/`0o`
+ *  prefix, no whitespace, never empty). **Found by a cross-vendor re-audit of the F1 fix**:
+ *  `BigInt(...)` itself is far more permissive than its own `toString()` output --
+ *  `BigInt("") === 0n`, `BigInt("0x10") === 16n`, `BigInt(" 5 ") === 5n` -- so accepting anything
+ *  `BigInt(...)` merely tolerates (rather than requiring an exact match against this canonical
+ *  form) let a tampered/legacy/collided stored value silently decode to a DIFFERENT,
+ *  wrong-but-valid bigint instead of being rejected. {@link parseStoredBigint} requires an EXACT
+ *  match against this regex before ever calling `BigInt(...)`. */
+const CANONICAL_BIGINT_RE = /^-?(0|[1-9]\d*)$/;
+
+/** Validates a stored bigint tag/field value STRICTLY against {@link CANONICAL_BIGINT_RE} --
+ *  used both by the tag-decode below and by {@link rowToEntry}'s own field-specific `fees`
+ *  decode, so corrupted stored data (from any source, including a value of the wrong JSON type
+ *  entirely) is translated to `SerializationFailedError` rather than either escaping any of the
+ *  six public methods as a raw, untranslated error OR silently normalizing to a different,
+ *  wrong-but-valid bigint. */
+function parseStoredBigint(raw: unknown, context: string): bigint {
+  if (typeof raw !== "string" || !CANONICAL_BIGINT_RE.test(raw)) {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: ${context} is not a canonical bigint literal (expected the `
+      + `encoder's own decimal-string form, e.g. "-?\\d+" with no leading zeros/"0x"/whitespace/`
+      + `empty string): ${JSON.stringify(raw)}`,
+    );
+  }
   try {
     return BigInt(raw);
   } catch (err) {
+    // Unreachable given the regex above already guarantees a valid decimal-integer literal --
+    // kept as belt-and-suspenders so a future change to the regex (or to this function's own
+    // calling convention) still cannot let a raw SyntaxError escape.
     throw new SerializationFailedError(
       `PgTransactionHistoryStorage: ${context} is not a valid bigint literal: ${JSON.stringify(raw)}`, err,
     );
   }
 }
 
-/** As {@link parseStoredBigint}, for the `Date` tag/field -- `new Date(...)` never THROWS on a
- *  malformed string (it silently produces an `Invalid Date`), so this checks `getTime()` itself
- *  rather than relying on a try/catch to notice anything. */
-function parseStoredDate(raw: string, context: string): Date {
+/** As {@link parseStoredBigint}, for the `Date` tag/field. Requires BOTH a valid calendar date
+ *  (`new Date(...)` never THROWS on a malformed string -- it silently produces an `Invalid Date`,
+ *  so `getTime()` itself must be checked) AND an EXACT round-trip through `toISOString()` -- the
+ *  same canonical form {@link encodeContent}/{@link encodeStoredEntry} always emit. **Found by
+ *  the same re-audit**: native `Date` parsing is far more permissive than `toISOString()`'s own
+ *  output -- it accepts partial dates and non-UTC offsets, and SILENTLY NORMALIZES an invalid
+ *  calendar date (e.g. `"2024-02-30"`) to a different, valid one instead of rejecting it -- so
+ *  requiring the exact round-trip is what actually rejects a tampered/legacy/collided stored
+ *  value instead of accepting it as a different, wrong-but-valid `Date`. */
+function parseStoredDate(raw: unknown, context: string): Date {
+  if (typeof raw !== "string") {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: ${context} is not a string (found ${raw === null ? "null" : typeof raw}): ${JSON.stringify(raw)}`,
+    );
+  }
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) {
     throw new SerializationFailedError(`PgTransactionHistoryStorage: ${context} is not a valid ISO date string: ${JSON.stringify(raw)}`);
+  }
+  if (d.toISOString() !== raw) {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: ${context} is not in the canonical ISO-8601 form `
+      + `Date.prototype.toISOString() produces -- it parses but does not round-trip exactly `
+      + `(e.g. a non-canonical calendar date, a non-UTC offset, or missing/imprecise `
+      + `milliseconds): ${JSON.stringify(raw)}`,
+    );
   }
   return d;
 }
@@ -146,6 +189,39 @@ function encodeStoredEntry(entry: TransactionHistoryEntry): StoredEntryJson {
   };
 }
 
+/** Structural guard for the raw JSONB payload PostgreSQL handed back for the `entry` column, run
+ *  BEFORE any property access on it. The column itself is `jsonb NOT NULL`
+ *  (`migrations/004_transaction_history.ts`), but that constraint only forbids a SQL NULL in the
+ *  COLUMN -- it does NOT forbid the JSON VALUE stored there from being the JSON literal `null`,
+ *  or any other non-object shape (a bare string/number/array), if the row was ever written by
+ *  anything other than this module's own `writeRows` (direct DB tampering, a future migration
+ *  bug, a legacy schema version). **Every legitimate write can never produce either shape**:
+ *  `sections` is a REQUIRED, non-optional field of {@link TransactionHistoryEntrySchema} (never
+ *  spread in conditionally, unlike `protocolVersion`/`status`/`timestamp`/`fees`), and `writeRows`
+ *  re-validates the merge result against that same schema immediately before persisting it -- so
+ *  this guard rejecting a `null`/non-object `entry` or `entry.sections` never fires on the normal
+ *  write path; it exists purely as defense-in-depth for stored-data corruption from OUTSIDE this
+ *  module's own write path. **Found by a cross-vendor re-audit of the F1 fix**: without it,
+ *  `stored.protocolVersion`/`Object.entries(stored.sections)` etc. throw a raw, untranslated
+ *  `TypeError` out of every read method instead of a clean `SerializationFailedError`. */
+function assertStoredEntryShape(entry: unknown, txHash: string): asserts entry is StoredEntryJson {
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: stored entry for tx_hash ${JSON.stringify(txHash)} is not a JSON `
+      + `object (found ${entry === null ? "null" : Array.isArray(entry) ? "an array" : typeof entry})`,
+    );
+  }
+  const sections = (entry as Record<string, unknown>).sections;
+  if (sections === null || sections === undefined || typeof sections !== "object" || Array.isArray(sections)) {
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: stored entry.sections for tx_hash ${JSON.stringify(txHash)} is not `
+      + `a JSON object (found ${
+        sections === null ? "null" : sections === undefined ? "undefined" : Array.isArray(sections) ? "an array" : typeof sections
+      })`,
+    );
+  }
+}
+
 /** Reconstructs a {@link TransactionHistoryEntry} from a stored row, decoding `sections` (and the
  *  field-specific `timestamp`/`fees` encodings) back to real `Date`/`bigint` values, then
  *  re-validates the result against {@link TransactionHistoryEntrySchema} -- the same
@@ -154,8 +230,9 @@ function encodeStoredEntry(entry: TransactionHistoryEntry): StoredEntryJson {
  *  denormalized columns (always written in the same statement as `entry`, so never out of sync
  *  with it) rather than re-parsed out of the JSONB, matching `design.md` §1's own reasoning for
  *  why those columns exist. */
-function rowToEntry(row: TxHistoryRow): TransactionHistoryEntry {
+function decodeRow(row: TxHistoryRow): TransactionHistoryEntry {
   const stored = row.entry;
+  assertStoredEntryShape(stored, row.tx_hash);
   const candidate = {
     hash: row.tx_hash,
     identifiers: row.identifiers,
@@ -169,6 +246,30 @@ function rowToEntry(row: TxHistoryRow): TransactionHistoryEntry {
   const parsed = TransactionHistoryEntrySchema.safeParse(candidate);
   if (!parsed.success) throw ValidationError.fromZod("PgTransactionHistoryStorage row", parsed.error);
   return parsed.data;
+}
+
+/** Thin wrapper around {@link decodeRow} that guarantees a {@link StorageError} (never a raw,
+ *  untranslated error) escapes for ANY malformed/corrupted stored row -- **found necessary by a
+ *  cross-vendor re-audit of the F1 fix**: {@link assertStoredEntryShape} and the strict
+ *  {@link parseStoredBigint}/{@link parseStoredDate} decode already convert the specific
+ *  corruption shapes they know about into `SerializationFailedError`, but this catch-all is the
+ *  actual guarantee -- any OTHER not-yet-anticipated way a stored row could be malformed still
+ *  surfaces as a `SerializationFailedError` here rather than a raw `TypeError`/`RangeError`/etc.
+ *  escaping `get`/`getAll`/`serialize`/the `got*` merge-read path. An error that is already one of
+ *  this project's own `StorageError` subclasses (a `ValidationError` from the final Zod
+ *  re-validation, or a `SerializationFailedError` thrown by a helper above) passes through
+ *  unchanged -- only a genuinely raw error gets wrapped. */
+function rowToEntry(row: TxHistoryRow): TransactionHistoryEntry {
+  try {
+    return decodeRow(row);
+  } catch (err) {
+    if (err instanceof StorageError) throw err;
+    throw new SerializationFailedError(
+      `PgTransactionHistoryStorage: stored row for tx_hash ${JSON.stringify(row.tx_hash)} is corrupted `
+      + `and could not be decoded`,
+      err,
+    );
+  }
 }
 
 function capitalize(s: string): string {
