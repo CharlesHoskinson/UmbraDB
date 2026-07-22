@@ -50,6 +50,12 @@ export interface UmbraDBConnectionOptions {
    *  do NOT pass this key through as `undefined`, which silently forces a 1-connection pool
    *  (design.md §3 — a real postgres.js `k in o` presence-check bug, not folklore). */
   maxConnections?: number;
+  /** Connection (TCP handshake) timeout in seconds. Bounded so an unreachable DB fails fast with
+   *  a translated ConnectionError instead of hanging on postgres.js's 30s default. Matters where a
+   *  closed port does NOT promptly refuse (e.g. WSL2, where connecting to `127.0.0.1:<closed>`
+   *  hangs rather than returning ECONNREFUSED): there the 30s default outlives typical operation
+   *  and test timeouts, surfacing as an opaque timeout instead of a clean ConnectionError. Default 10. */
+  connectTimeout?: number;
 }
 
 /**
@@ -112,6 +118,7 @@ export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   }
   const options = {
     ...(opts.maxConnections !== undefined ? { max: opts.maxConnections } : {}),
+    connect_timeout: opts.connectTimeout ?? 10,
     connection: { search_path: schema },
     types: { bigint: postgres.BigInt },
   };

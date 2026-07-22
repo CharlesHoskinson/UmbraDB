@@ -193,6 +193,10 @@ describe("error translation (design.md §4a)", () => {
       connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
       schema: "unreachable_test",
       maxConnections: 1,
+      // Fail fast: unreachable endpoint; avoids the 30s default connect timeout hanging past the
+      // test timeout where a closed port does not promptly refuse (WSL2). Mirrors the raw
+      // postgres() call below, which already sets connect_timeout: 2 for the same reason.
+      connectTimeout: 2,
     });
     try {
       await expect(runMigrations(sql, { schema: "unreachable_test" })).rejects.toBeInstanceOf(ConnectionError);
