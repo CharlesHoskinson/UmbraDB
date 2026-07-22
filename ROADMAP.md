@@ -4,8 +4,9 @@ Tracked in detail per-module as `openspec/changes/sprint-N-<module>/` changes (p
 tasks/spec, EARS-format requirements, each reviewed by an Opus panel + Fable 5 consolidation and
 a Codex GPT-5.6 Sol audit before implementation) — Sprint 1 is archived under
 `openspec/changes/archive/`, while the completed and merged Sprint 2 Transaction/Lease, Sprint 3
-CheckpointStore, and Sprint 4 Watermarks records remain under `openspec/changes/` pending
-archival. The next work is the cross-cutting formal, testing, equivalence, and performance program.
+CheckpointStore, Sprint 4 Watermarks, Sprint 7 TransactionHistory, and Sprint 8 wallet-state
+envelope persistence records remain under `openspec/changes/` pending archival. The next work is
+the cross-cutting formal, testing, equivalence, and performance program.
 [`design/tasks.md`](design/tasks.md) is the
 ORIGINAL task breakdown from before this project split into its own repo and is now retired/superseded —
 see that file's own supersession note; it is kept only as a historical phase-number map, not a
@@ -159,7 +160,7 @@ A 1.0.0 tag requires all of:
 ## Non-goals
 
 - Not a general-purpose ORM or query builder — the interfaces are
-  intentionally narrow (four modules, not "do anything with Postgres").
+  intentionally narrow (five modules, not "do anything with Postgres").
 - Not a distributed or multi-node store. UmbraDB is designed for a single
   writer against a single Postgres instance; see
   `Formal/STORAGE_ALGEBRA.md` §6 for why a distributed-trust/Merkle layer

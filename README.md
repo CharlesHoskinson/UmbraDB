@@ -5,7 +5,7 @@ tooling, and anything else that needs durable, versioned, content-addressed stor
 running a heavyweight database service of its own.
 
 UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
-[`postgres.js`](https://github.com/porsager/postgres)) and provides four focused primitives:
+[`postgres.js`](https://github.com/porsager/postgres)) and provides five focused primitives:
 
 - **TemporalKV**: a versioned key-value store with point-in-time reads (`getAt`), for state
   that needs history.
@@ -16,6 +16,15 @@ UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
   snapshots (e.g. wallet sync state), with integrity verification and reachability-based garbage
   collection.
 - **Watermarks**: simple, unversioned sync-progress cursors with transactional composition.
+- **TransactionHistory**: per-wallet transaction history (`transaction_history`, GIN-indexed on
+  a denormalized `identifiers` array), mirroring the Midnight wallet SDK's
+  `TransactionHistoryStorage` interface with lifecycle-aware upsert/merge and identifier-subset
+  pending-clear.
+
+On top of these, `PgWalletStateEnvelopeStore` persists shielded/unshielded/dust wallet-sync
+snapshots as a single `CheckpointStore.save()` call. It's a capability, not a sixth primitive:
+it adds no table or migration of its own, reusing `CheckpointStore`'s existing chunk/manifest
+storage entirely.
 
 ## Why
 
@@ -98,9 +107,16 @@ caller-supplied handle, since a checkpoint save or prune is meant to be one atom
 on its own. An application can also call `withTransaction()`/`withLease()` directly, as the usage
 example below does, without going through a data module at all.
 
+The diagram above predates two later additions, both composing on top of what it already shows
+rather than adding new architectural layers: `TransactionHistory` (its own `transaction_history`
+table) resolves `opts.tx` through the same `Transaction/Lease` registry as `TemporalKV` and
+`Watermarks`; `PgWalletStateEnvelopeStore` sits entirely above `CheckpointStore`, calling its
+`save()`/`load()` as a regular caller would rather than touching Postgres directly, which is why
+it needs no table of its own and no new box in the picture.
+
 ## Status
 
-All four modules are implemented and merged:
+All five modules are implemented and merged:
 
 - **TemporalKV** (Sprint 1): `put`/`get`/`getAt`/`listKeys` against a `kv_current`/`kv_history`
   schema, with a `BEFORE UPDATE` trigger populating history and a same-transaction key-reuse
@@ -113,11 +129,23 @@ All four modules are implemented and merged:
   manifest/chunk garbage collection.
 - **Watermarks** (Sprint 4): transactional `set`/`get` sync cursors, with HOT-update-oriented
   storage settings and runtime guards for the opaque JSON progress value.
+- **TransactionHistory** (Sprint 7): `PgTransactionHistoryStorage`, a Postgres-backed
+  implementation of the Midnight wallet SDK's `TransactionHistoryStorage` interface
+  (structurally mirrored, never imported) against its own `transaction_history` table --
+  `gotPending`/`gotFinalized`/`gotRejected` upsert/merge, a GIN-indexed identifier-subset
+  pending-clear query, and `opts.tx` composition through the same `Transaction/Lease` registry
+  as `TemporalKV`/`Watermarks`.
+
+Also merged, on top of the five modules above rather than as a sixth: **wallet-state envelope
+persistence** (Sprint 8), `PgWalletStateEnvelopeStore` -- persists shielded/unshielded/dust
+wallet-sync snapshots as one atomic `CheckpointStore.save()` call per `(walletId, networkId)`.
+It adds no table or migration of its own; it's a thin wrapper over `CheckpointStore`'s existing
+`ckpt_*` storage.
 
 Every implemented module went through the same cycle before merge: draft an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) change in EARS format, put it through several
-independent review passes, fix what they find, and re-review until nothing new turns up. All four
-sprints went through multiple review rounds and turned up genuine bugs: a race
+independent review passes, fix what they find, and re-review until nothing new turns up. Every
+sprint went through multiple review rounds and turned up genuine bugs: a race
 in `CREATE EXTENSION` DDL serialization, a cursor-cancellation gap in `postgres.js`, a
 connection-reservation wait with no timeout or abort handling, among others. That's the whole
 point of running it this way instead of shipping on the first green test run.
@@ -241,8 +269,9 @@ await sql.end();
 - [`openspec/`](openspec/): the actual, current source of truth for anything implemented.
   `openspec/specs/` holds requirements for sprints that have been archived after merge (currently
   just TemporalKV); `openspec/changes/` holds work still in progress or completed changes awaiting
-  archival, currently including Transaction/Lease, CheckpointStore, and Watermarks with their historical
-  proposal → design → tasks → EARS-format spec records.
+  archival, currently including Transaction/Lease, CheckpointStore, Watermarks, TransactionHistory,
+  and wallet-state envelope persistence with their historical proposal → design → tasks →
+  EARS-format spec records.
 
 ## Layout
 
@@ -254,6 +283,8 @@ src/
     temporal-kv.ts         versioned key-value store (implemented)
     checkpoint-store.ts    content-addressed checkpoint persistence (implemented)
     watermarks.ts          sync-progress cursors (implemented)
+    transaction-history-storage.ts   per-wallet transaction history (implemented)
+    wallet-state-envelope.ts         WalletStateEnvelope codec (implemented)
   postgres/
     client.ts              connection factory (schema isolation, bigint typing)
     migrate.ts             schema-versioned migration runner
@@ -264,6 +295,8 @@ src/
     transaction-lease.ts   PgTransactionLeaseLayer + the cross-module handle registry
     checkpoint-store.ts    PgCheckpointStore + chunk integrity and garbage collection
     watermarks.ts          PgWatermarks transactional cursor storage
+    transaction-history-storage.ts   PgTransactionHistoryStorage
+    wallet-state-envelope.ts         PgWalletStateEnvelopeStore (wraps CheckpointStore, no own table)
 test/
   postgres/                unit + property-based tests, run against real Postgres
                            (Testcontainers), not mocked
