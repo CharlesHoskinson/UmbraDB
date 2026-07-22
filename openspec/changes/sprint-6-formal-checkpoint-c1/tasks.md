@@ -90,17 +90,17 @@ specified persona review passes or all findings are fixed and re-reviewed.
     matrix` code block of
     `docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md`; every command
     exits 0, including `npm ci` and all Node commands in a fresh detached worktree.
-- [ ] 3.5 Commit the final generated/status tranche and obtain exact-commit PASS verdicts from all
+- [x] 3.5 Commit the final generated/status tranche and obtain exact-commit PASS verdicts from all
   three independent personas.
   - **Acceptance:** all reports cite one exact `HEAD`, inspect the full diff/import roots, and return
     `PASS`; `test -z "$(git status --short)"` exits 0.
-- [ ] 3.6 Push the exact audited theorem/status head, require green exact-head CI, and record
+- [x] 3.6 Push the exact audited theorem/status head, require green exact-head CI, and record
   complete evidence while keeping the PR draft.
   - **Acceptance:** `test "$(git rev-parse HEAD)" = "$(git ls-remote --heads origin refs/heads/formal/storage-algebra-lean-m3b-checkpoint-c1 | cut -f1)"`;
     `test "$(git rev-parse HEAD)" = "$(gh pr view --json headRefOid --jq .headRefOid)"`;
     `test "$(gh pr view --json isDraft --jq .isDraft)" = true`; and exact-head `lean.yml` CI
     succeed; the current PR body/comment records the matrix plus all persona verdicts.
-- [ ] 3.7 Record completion in one administrative status/Graphify-manifest commit, then require its
+- [x] 3.7 Record completion in one administrative status/Graphify-manifest commit, then require its
   exact-head CI, three-persona status audit, superseding PR evidence, and only then mark the PR
   ready for review without further repo edits.
   - **Acceptance:** every checkbox/status claim is true; local/remote/PR SHAs match the final
