@@ -41,8 +41,14 @@ below is **1.0.0**.
 - [x] Abstract Watermarks W1 mechanized over complete `(kind, key)` addresses:
   overwrite/idempotence, distinct-address commutation and framing, trace
   composition, and final-matching-command lookup with initial fallback.
-- [ ] Extend the mechanized model to CheckpointStore, keyed transactions,
-  lease traces, and concrete PostgreSQL refinement obligations.
+- [x] M3b CheckpointStore C1: complete (abstract save-side projection only).
+  Finite chunk identities form an unconditional join; byte-bearing maps are
+  existing-left-biased and commute only under explicit compatibility, with a
+  local collision-free-on-bound-values bridge. The runtime position-key fix is
+  implemented, while ordered reconstruction remains a future Lean theorem.
+- [ ] Extend the mechanized model to Checkpoint C2a/GC, collision handling,
+  ordered reconstruction, keyed transactions, lease traces, and concrete
+  PostgreSQL/runtime refinement obligations.
 
 ## Milestone 2 — Core implementation (module implementations complete)
 

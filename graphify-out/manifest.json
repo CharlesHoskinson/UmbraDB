@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
-    "mtime": 1784676647.0863197,
-    "ast_hash": "f32cda3601a2568a35bbb7826695b0d2",
+    "mtime": 1784680718.005002,
+    "ast_hash": "3cf60f204767cc3206cfe203ea7dca00",
     "semantic_hash": ""
   },
   "Formal/STORAGE_TYPES.md": {
@@ -285,13 +285,13 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784676647.0823197,
-    "ast_hash": "7bf5fac0e9c8740c75ead8e5f557e094",
+    "mtime": 1784680708.613167,
+    "ast_hash": "2b6c381ebe256020978b03b7f4641c53",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784676647.0863197,
-    "ast_hash": "37a9efa5f444f19b7756975eae7f709b",
+    "mtime": 1784680708.613167,
+    "ast_hash": "99f7129868c1106bedae3992f5e541a5",
     "semantic_hash": ""
   },
   "design/design-algebra.md": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md": {
-    "mtime": 1784678569.3196993,
-    "ast_hash": "34cbc5baa13ee6aa1d111748051bab8d",
+    "mtime": 1784680708.617167,
+    "ast_hash": "430bec4b935bc236f6af1a99750b1572",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md": {
@@ -470,8 +470,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md": {
-    "mtime": 1784680521.616449,
-    "ast_hash": "dd67374c37648126a43c08c9cf726352",
+    "mtime": 1784680903.002913,
+    "ast_hash": "c1929d32454318977836888fd8b85556",
     "semantic_hash": ""
   }
 }

@@ -1,15 +1,14 @@
 # Proposal — Sprint 6: Lean M3b CheckpointStore C1
 
-> **Status:** Planning; proof implementation is blocked until the specification and theorem plan
-> pass the three-persona planning audit.
+> **Status:** Complete — abstract save-side projection only.
 
 ## Why
 
-Abstract Watermarks W1 is merged and the detailed formal roadmap schedules CheckpointStore C1
-next. The repository has a completed PostgreSQL CheckpointStore and property tests, but the Lean
-project does not yet define the save-side chunk projection or prove its identity-set and
-compatible-map algebra. The older claim that content addressing alone makes arbitrary
-hash-to-bytes union commutative must be made precise without assuming cryptographic injectivity.
+Abstract Watermarks W1 was merged and the detailed formal roadmap scheduled CheckpointStore C1
+next. The repository had a completed PostgreSQL CheckpointStore and property tests but no Lean
+save-side chunk projection or proof of its identity-set and compatible-map algebra. The older
+claim that content addressing alone makes arbitrary hash-to-bytes union commutative needed to be
+made precise without assuming cryptographic injectivity.
 
 ## What changes
 
@@ -31,5 +30,5 @@ hash-to-bytes union commutative must be made precise without assuming cryptograp
 
 The sprint adds Lean source/tests, planning/specification records, status updates, and regenerated
 knowledge-graph artifacts. It preserves the runtime API and pinned toolchain. The completed claim
-will be C1 for the abstract save-only chunk projection, not verification of the PostgreSQL adapter
-or complete checkpoint lifecycle.
+is C1 for the abstract save-only chunk projection, not verification of the PostgreSQL adapter or
+complete checkpoint lifecycle.

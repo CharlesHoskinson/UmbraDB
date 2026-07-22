@@ -1,7 +1,7 @@
 # Graph Report - UmbraDB-storage-algebra-lean  (2026-07-21)
 
 ## Corpus Check
-- 93 files · ~135,821 words
+- 93 files · ~136,026 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `54d81b97`
+- Built from commit: `b47953a3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
