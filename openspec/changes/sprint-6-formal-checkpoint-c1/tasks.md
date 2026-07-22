@@ -30,34 +30,34 @@ specified persona review passes or all findings are fixed and re-reviewed.
 
 ## 1. Chunk-identity projection
 
-- [ ] 1.1 Add `ChunkIds`, `chunkIdsOfHashes`, `mergeChunkIds`, and `saveChunkIds`.
+- [x] 1.1 Add `ChunkIds`, `chunkIdsOfHashes`, `mergeChunkIds`, and `saveChunkIds`.
   - **Acceptance:** `lake env lean UmbraDBFormal/Checkpoint/Projection.lean` exits 0 and
     `! rg -n 'APISmoke' UmbraDBFormal/Checkpoint` exits 0.
-- [ ] 1.2 Prove membership, identities, associativity, commutativity, idempotence, upper/least
+- [x] 1.2 Prove membership, identities, associativity, commutativity, idempotence, upper/least
   bounds, append projection, and save transition laws.
   - **Acceptance:** the exact projection declarations frozen in the detailed plan elaborate with
     only `[DecidableEq Hash]`, and
     `lake env lean UmbraDBFormal/Checkpoint/Projection.lean` exits 0.
-- [ ] 1.3 Add projection contracts for empty, overlap, list order, and duplicate erasure.
+- [x] 1.3 Add projection contracts for empty, overlap, list order, and duplicate erasure.
   - **Acceptance:** `lake env lean UmbraDBFormalTest/Checkpoint/Projection.lean` exits 0.
 
 ## 2. Compatible chunk maps
 
-- [ ] 2.1 Add finite `ChunkMap`, existing-left-biased `mergeChunkMaps`, key projection,
+- [x] 2.1 Add finite `ChunkMap`, existing-left-biased `mergeChunkMaps`, key projection,
   `Compatible`, `BoundValues`, `WellHashed`, and `CollisionFreeOn`.
   - **Acceptance:** `lake env lean UmbraDBFormal/Checkpoint/ChunkMap.lean` and
     `! rg -n 'instance.*SemilatticeSup|SemilatticeSup.*ChunkMap' UmbraDBFormal/Checkpoint` exit 0.
-- [ ] 2.2 Prove lookup/key characterization, identities, associativity/idempotence, binding
+- [x] 2.2 Prove lookup/key characterization, identities, associativity/idempotence, binding
   preservation, compatible commutation, and pairwise compatibility closure.
   - **Acceptance:** the exact map declarations frozen in the detailed plan through
     `compatible_merge_right` elaborate without `[DecidableEq Bytes]` or a SHA axiom, and
     `lake env lean UmbraDBFormal/Checkpoint/ChunkMap.lean` exits 0.
-- [ ] 2.3 Prove the explicit collision-free-on-bound-values compatibility bridge.
+- [x] 2.3 Prove the explicit collision-free-on-bound-values compatibility bridge.
   - **Acceptance:** `compatible_of_collisionFreeOn` takes `CollisionFreeOn`, defined as
     `Set.InjOn`, as a premise; `lake env lean UmbraDBFormal/Checkpoint/ChunkMap.lean` and
     `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-trust.ps1` exit 0 from
     `Formal/Lean`.
-- [ ] 2.4 Add adversarial compatible/conflicting-map contracts and a concrete collision-free digest
+- [x] 2.4 Add adversarial compatible/conflicting-map contracts and a concrete collision-free digest
   witness; route all modules through production/test/trust umbrellas.
   - **Acceptance:** `lake env lean UmbraDBFormalTest/Checkpoint/ChunkMap.lean` and
     `lake build --wfail` exit 0; conflicting same-hash values exhibit order dependence.
