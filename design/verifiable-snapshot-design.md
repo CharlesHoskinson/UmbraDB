@@ -5,6 +5,10 @@
 
 This document is **decisive** — it recommends one v1 design and states what is deferred — but it flags, in §12, the genuinely open decisions the council must ratify before any implementation begins. Every load-bearing choice is grounded in a brief (cited `[NN]`) and, where the mechanism lives in Midnight, a `repo/path:line`.
 
+### Related research (2026-07-22)
+
+See `design/mithril-committee-certification-research.md` (branch `research/mithril-committee-certification`) for a research note investigating whether a Mithril-style (Cardano) stake-weighted threshold-signature committee-certification scheme is adoptable for Midnight, using Midnight's own federated consensus committee as signers. **Verdict: not before Midnight persists per-epoch committee-member stake weights (a real protocol-side prerequisite that does not exist today) — flagged as a future direction, not a v1 change.** Two points from that note are directly relevant here and worth checking against this document's §8 `attest` circuit sketch and §12 Q4 (contract governance / vk versioning): (1) this design's L3 self-attestation answers a different question than committee certification could ever answer — a wallet attesting its own private state under its own key is not something a third-party committee can stand in for, since no committee can attest a private balance it cannot see; (2) the *parameter-binding lesson* distilled from the real Mithril CVE (GHSA-724h-fpm5-4qvr) — "everything that affects how a verifier will interpret a **future** signature must be inside what was signed at the previous step, not travel alongside it" — should be checked against any future revision of this design's open vk-versioning/contract-governance decision (§12 Q4); the research note's §6.1 spells out the concrete gap.
+
 ---
 
 ## 1. Problem and core principle
