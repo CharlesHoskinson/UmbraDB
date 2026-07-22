@@ -6,6 +6,7 @@ import * as migration000 from "./migrations/000_schema.js";
 import * as migration001 from "./migrations/001_temporal_kv.js";
 import * as migration002 from "./migrations/002_checkpoint_store.js";
 import * as migration003 from "./migrations/003_watermarks.js";
+import * as migration004 from "./migrations/004_transaction_history.js";
 
 interface Migration {
   name: string;
@@ -34,7 +35,7 @@ async function withReservedTransaction<T>(reserved: ISql, fn: () => Promise<T>):
   }
 }
 
-const migrations: Migration[] = [migration000, migration001, migration002, migration003];
+const migrations: Migration[] = [migration000, migration001, migration002, migration003, migration004];
 
 export interface RunMigrationsOptions {
   schema: string;

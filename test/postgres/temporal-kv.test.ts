@@ -378,13 +378,21 @@ describe("PgTemporalKV", () => {
         await expect(iteration).rejects.toMatchObject({ name: "AbortError" });
 
         // Still holding the lock at this point -- if the backend still shows up waiting on it,
-        // query.cancel() did NOT actually reach the server.
-        await new Promise((r) => setTimeout(r, 50));
-        const after = await sql<{ n: number }[]>`
-          select count(*)::int as n from pg_stat_activity
-          where wait_event_type = 'Lock' and query ilike '%kv_current%'
-        `;
-        expect(after[0]!.n).toBe(0);
+        // query.cancel() did NOT actually reach the server. Poll (bounded) rather than a single
+        // fixed sleep: the server-side cancellation round-trip latency varies by environment
+        // (notably slower under rootless-Docker/WSL2 networking), so a fixed 50ms was flaky. The
+        // assertion is unchanged -- the backend MUST stop waiting on the lock -- we only allow
+        // more time for query.cancel() to reach and take effect on the server.
+        let afterN = 1;
+        for (let i = 0; i < 60 && afterN !== 0; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          const after = await sql<{ n: number }[]>`
+            select count(*)::int as n from pg_stat_activity
+            where wait_event_type = 'Lock' and query ilike '%kv_current%'
+          `;
+          afterN = after[0]!.n;
+        }
+        expect(afterN).toBe(0);
       } finally {
         releaseLock?.();
         await lockTxDone;

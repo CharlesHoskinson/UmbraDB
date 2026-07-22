@@ -29,7 +29,7 @@ describe("runMigrations", () => {
         select count(*)::text as count from ${sql("idempotent_test")}._migrations
       `;
       expect(second[0]!.count).toBe(first[0]!.count);
-      expect(Number(first[0]!.count)).toBe(4); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks
+      expect(Number(first[0]!.count)).toBe(5); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks + 004_transaction_history
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -45,7 +45,7 @@ describe("runMigrations", () => {
         runMigrations(sqlB, { schema }),
       ]);
       const rows = await sqlA<{ name: string }[]>`select name from ${sqlA(schema)}._migrations order by name`;
-      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks"]);
+      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
     } finally {
       await sqlA.end({ timeout: 5 });
       await sqlB.end({ timeout: 5 });
@@ -80,8 +80,8 @@ describe("runMigrations", () => {
         ]);
         const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
         const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
-        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks"]);
-        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks"]);
+        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
+        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
         const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
         expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
       } finally {
@@ -193,6 +193,10 @@ describe("error translation (design.md §4a)", () => {
       connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
       schema: "unreachable_test",
       maxConnections: 1,
+      // Fail fast: unreachable endpoint; avoids the 30s default connect timeout hanging past the
+      // test timeout where a closed port does not promptly refuse (WSL2). Mirrors the raw
+      // postgres() call below, which already sets connect_timeout: 2 for the same reason.
+      connectTimeout: 2,
     });
     try {
       await expect(runMigrations(sql, { schema: "unreachable_test" })).rejects.toBeInstanceOf(ConnectionError);

@@ -321,6 +321,9 @@ describe("PgTransactionLeaseLayer leases (acquireLease / tryAcquireLease / relea
       connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
       schema: TEST_SCHEMA,
       maxConnections: 1,
+      // Fail fast: unreachable endpoint; avoids the 30s default connect timeout hanging past the
+      // test timeout where a closed port does not promptly refuse (WSL2).
+      connectTimeout: 2,
     });
     try {
       await expect(new PgTransactionLeaseLayer(badSql).acquireLease("lease-f"))

@@ -1,0 +1,64 @@
+{
+  "schema": "umbradb-env-lock/v1",
+  "captured": "2026-07-21",
+  "note": "Machine-readable pin of the WSL dev environment. Update in the same commit as CHANGELOG.md whenever anything changes. SHAs are the exact commits built/used.",
+  "host": {
+    "windows": "11 Home 26200",
+    "wsl_distro": "Ubuntu-26.04",
+    "wsl_codename": "resolute",
+    "kernel": "6.18.33.1-microsoft-standard-WSL2",
+    "linux_user": "charles",
+    "repo_root": "/home/charles/repos"
+  },
+  "tools": {
+    "rust": "1.95.0",
+    "cargo": "1.95.0",
+    "rust_targets": ["wasm32v1-none", "aarch64-unknown-linux-gnu"],
+    "node": "24.18.0",
+    "npm": "11.16.0",
+    "yarn_project": "4.17.1",
+    "yarn_global_legacy": "1.22.22",
+    "python3": "3.14.4",
+    "docker": "29.6.2",
+    "docker_mode": "rootless",
+    "gh": "2.96.0",
+    "graphify": "0.9.24",
+    "scrapling": "0.4.11",
+    "openspec": "1.6.0",
+    "protoc": "3.21.12",
+    "psql": "18.4",
+    "clang": "21.1.8"
+  },
+  "midnight_repos": {
+    "midnight-node":        { "sha": "750b87c2", "describe": "node-1.0.0-rc.2-226-g750b87c2", "checkout": "HEAD" },
+    "midnight-indexer":     { "sha": "0775a15",  "describe": "v4.3.3-56-g0775a15",           "checkout": "HEAD" },
+    "midnight-ledger":      { "sha": "d89e0b63", "describe": "ledger-8.1.0",                 "checkout": "tag ledger-8.1.0 (detached)" },
+    "midnight-wallet":      { "sha": "e744d994", "describe": "@midnightntwrk/wallet-sdk-abstractions@2.1.0-33-ge744d994", "checkout": "HEAD" },
+    "midnight-node-docker": { "sha": "b1ffa9e",  "describe": "b1ffa9e",                      "checkout": "HEAD" }
+  },
+  "midnight_infra_versions": {
+    "proof_server":       "8.1.0  (built from midnight-ledger tag ledger-8.1.0, crate midnight-proof-server)",
+    "indexer_standalone": "4.3.3  (built from midnight-indexer HEAD, --features standalone)",
+    "node":               "1.0.0-rc.2+226  (built from midnight-node HEAD; carries res/preprod chain-spec)",
+    "wallet_sdk_ledger_v8": "8.1.0  (npm, public registry.npmjs.org)",
+    "wallet_sdk_zkir_v2":   "2.1.0  (npm, public registry.npmjs.org)"
+  },
+  "wallet_sdk_compose_pins_reference": {
+    "_comment": "The wallet SDK's own infra/compose/docker-compose-dynamic.yml pins these ghcr images for its local 'undeployed' devnet. We build source equivalents instead; recorded here for cross-checking compatibility.",
+    "proof-server": "ghcr.io/midnight-ntwrk/proof-server:8.1.0",
+    "indexer-standalone": "ghcr.io/midnight-ntwrk/indexer-standalone:4.3.2",
+    "midnight-node": "ghcr.io/midnight-ntwrk/midnight-node:1.0.0"
+  },
+  "build_status": {
+    "proof_server": "BUILT (25M; warms ZK params from srs.midnight.network on first run)",
+    "indexer_standalone": "BUILT (120M, --features standalone)",
+    "node": "BUILT (1.6G, midnight-node 2.1.0, res/preprod baked in)",
+    "wallet_sdk_install": "DONE (public npm)",
+    "compact_compiler": "INSTALLED (compact 0.5.1 CLI + compactc 0.31.1)"
+  },
+  "faucet": {
+    "preprod_tnight_received": "1000 (confirmed on-chain, tx 00ea17cf...a20bea, status SUCCESS)",
+    "faucet_url": "https://midnight-tmnight-preprod.nethermind.dev/",
+    "our_unshielded_address": "mn_addr_preprod14plwqf5qymh879pskxyharf86plfj288ccvklaa74nqsha5f2p3szaxvvc"
+  }
+}

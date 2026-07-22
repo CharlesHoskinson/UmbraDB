@@ -341,6 +341,9 @@ describe("PgWatermarks", () => {
         connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
         schema: TEST_SCHEMA,
         maxConnections: 1,
+        // Fail fast: this endpoint is unreachable and, in environments where a closed port hangs
+        // rather than refusing (WSL2), the 30s default connect timeout outlives the test timeout.
+        connectTimeout: 2,
       });
       try {
         const s = new PgWatermarks(deadSql, TEST_SCHEMA);
