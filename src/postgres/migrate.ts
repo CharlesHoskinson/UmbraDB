@@ -8,7 +8,9 @@ import * as migration002 from "./migrations/002_checkpoint_store.js";
 import * as migration003 from "./migrations/003_watermarks.js";
 import * as migration004 from "./migrations/004_transaction_history.js";
 
-interface Migration {
+/** Exported so a second migration lineage (e.g. `./migrations/chain_archive/index.ts`'s
+ *  `chainArchiveMigrations`) can be typed against the same shape without duplicating it. */
+export interface Migration {
   name: string;
   up(sql: ISql, schema: string): Promise<void>;
 }
@@ -35,10 +37,32 @@ async function withReservedTransaction<T>(reserved: ISql, fn: () => Promise<T>):
   }
 }
 
-const migrations: Migration[] = [migration000, migration001, migration002, migration003, migration004];
+/** UmbraDB's own Tier-1 (`design/design.md` §0) wallet/checkpoint migration lineage. Renamed
+ *  from the previous unexported `migrations` to make room for `RunMigrationsOptions.migrations`
+ *  selecting a different lineage (e.g. the Tier-1.5 chain-archive one) — this is still the
+ *  default every existing caller gets when it omits that option, so this rename changes no
+ *  runtime behavior for any current call site. */
+const tier1WalletMigrations: Migration[] = [migration000, migration001, migration002, migration003, migration004];
 
 export interface RunMigrationsOptions {
   schema: string;
+  /**
+   * Which migration lineage to apply. Defaults to `tier1WalletMigrations` — every existing
+   * caller that doesn't pass this continues to get exactly the migrations it always did.
+   *
+   * This option is the "small addition" `design/full-chain-storage-design.md` §5 (Tier-1.5)
+   * needed to support a second, independent migration lineage living in its own schema: no
+   * change to `000_schema.ts` itself was required (its `up()` was already fully
+   * schema-parameterized), and no generic multi-lineage registry/framework was built beyond
+   * this one option — a caller that wants the chain-archive lineage passes
+   * `chainArchiveMigrations` (`./migrations/chain_archive/index.ts`) here explicitly, alongside
+   * a `schema` naming the schema it should live in (conventionally `chain_archive`).
+   *
+   * **Nothing in this repo's application code passes this today** — the chain-archive lineage
+   * remains an unregistered, inert, design-stage artifact exactly as it was before this option
+   * existed; this only makes it possible to run it, not wired to actually run it anywhere.
+   */
+  migrations?: Migration[];
 }
 
 /**
@@ -83,6 +107,7 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
 async function runMigrationsImpl<TTypes extends Record<string, unknown> = {}>(
   sql: Sql<TTypes>, opts: RunMigrationsOptions,
 ): Promise<void> {
+  const lineage = opts.migrations ?? tier1WalletMigrations;
   const reserved = await sql.reserve();
   // Revised after a cross-vendor audit found two related bugs in this function's cleanup:
   // (1) `search_path` was widened on this connection but never restored before `release()`,
@@ -112,12 +137,19 @@ async function runMigrationsImpl<TTypes extends Record<string, unknown> = {}>(
       // A FROM-less SELECT always returns exactly one row — not an assumption about this data,
       // a guarantee of the query shape itself.
       if (!bootstrapped[0]!.exists) {
+        // `lineage[0]` rather than the hardcoded `migration000` import: every lineage this
+        // repo defines (`tier1WalletMigrations`, `chainArchiveMigrations`) starts with the same
+        // schema-bootstrap migration, but this reads that fact off `opts.migrations` itself
+        // instead of silently assuming it — a future third lineage that didn't start with a
+        // schema-bootstrap migration would surface as a real bug here (a missing `_migrations`
+        // table) rather than a mismatched hardcoded reference silently running the wrong thing.
+        const bootstrap = lineage[0]!;
         await withReservedTransaction(reserved, async () => {
-          await migration000.up(reserved, opts.schema);
-          await reserved`insert into ${reserved(opts.schema)}._migrations (name) values (${migration000.name})`;
+          await bootstrap.up(reserved, opts.schema);
+          await reserved`insert into ${reserved(opts.schema)}._migrations (name) values (${bootstrap.name})`;
         });
       }
-      for (const m of migrations.slice(1)) {
+      for (const m of lineage.slice(1)) {
         const applied = await reserved<{ one: number }[]>`
           select 1 as one from ${reserved(opts.schema)}._migrations where name = ${m.name}
         `;
