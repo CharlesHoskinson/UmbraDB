@@ -41,9 +41,15 @@ self-hosted peer.
   (preprod tNIGHT/tDUST, no real value), but keep the seed — it's needed to sync/spend and for the
   Sprint 7 conformance run. NOT committed anywhere.
 
-## Birthday hack (fast sync)
+## Sync cost (CORRECTED — no block-height "birthday" for the unshielded wallet)
 
-Preprod tip at capture (2026-07-21) = **block 1,763,259**. Create the wallet with its **birthday
-set at/near this block** so it does not rescan ~1.76M blocks of history from genesis. The faucet
-transaction lands in a later block (> birthday), so it is still observed. Re-read the current tip
-just before creating the wallet: `chain_getHeader` → `result.number` (hex) on the node RPC above.
+Original assumption (a block-height "birthday" to skip genesis rescan) was WRONG for the unshielded
+wallet. Verified by an actual preprod sync (~1.3s, observed the 1000 tNIGHT): the unshielded sync
+subscribes to `UnshieldedTransactions.run({ address, transactionId })` — a per-address, transaction-id
+cursor, NOT a block scan. The indexer resolves directly to the few transactions touching our address,
+so there is NO genesis-rescan cost regardless of chain tip height, and no birthday config field exists
+for this wallet type. Fast by construction.
+
+A viewing-key/merkle-tree scan "birthday-like" concern MAY still apply to the SHIELDED and DUST wallets
+(not exercised here, since the funded balance is on the unshielded address). Revisit if/when shielded or
+dust state is synced. Preprod tip is still readable via `chain_getHeader` → `result.number` (hex).

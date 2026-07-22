@@ -184,6 +184,77 @@ Verified against BOTH the real SDK source and the official docs:
   state after a restart — UmbraDB's Postgres store + the CheckpointStore WalletState envelope is what
   makes recovery-from-DB possible at all.
 
+## Workstream: snapshot root-of-trust (owner-raised — likely SDK + indexer PRs; enables remote DB)
+
+**The problem, framed:** the SDK's in-memory state is "correct by construction" because it is
+REPLAY-derived (scanned from the indexer stream). A persisted UmbraDB snapshot breaks that guarantee —
+restoring from it SKIPS the replay, so the restored in-memory state has no intrinsic proof it is
+correct. We need a **root of trust**: a cryptographic anchor that lets a restored snapshot verify
+"this is the correct wallet state as of block N" against on-chain commitments WITHOUT a full rescan.
+This is doubly required for a **remote/untrusted DB** (hosted or shared across devices) — the killer
+feature: trustless restore from a DB the wallet does not have to trust (plus client-side encryption for
+shielded-state privacy, and anti-rollback/freshness so a stale-but-valid snapshot can't be replayed).
+
+**Grounding (already-existing anchors):** Midnight exposes a block-header `stateRoot`, a zswap
+commitment Merkle tree (`zswapMerkleTreeCollapsedUpdate`), and dust commitment/generation trees
+(`dustCommitmentMerkleTreeUpdate`, `dustGenerationMerkleTreeUpdate`). A verifiable snapshot most likely
+anchors to these (membership proofs for the wallet's notes vs. the committed tree at block N), possibly
+with a bounded incremental replay from the snapshot block to tip rather than from genesis.
+
+**Deep-research fan-out (running, per the sprint-authoring pipeline):** four parallel agents, each
+scrapling + real source, writing cited briefs to `design/research/2026-07-21-snapshot-root-of-trust/`:
+01 Midnight state commitments (what anchors exist + gaps), 02 prior-art checkpoint sync (ETH weak-subj,
+Cosmos state-sync, Bitcoin assumeutxo, Mina, Zcash birthday, light-client proofs), 03 authenticated
+snapshot integrity (no-replay verification, remote/untrusted + rollback + privacy), 04 SDK+indexer
+integration surface (concrete PR sketches for both repos).
+
+Plus a **Fable brainstorm** (angle 05, `05-compact-attestation-brainstorm.md`): the owner's clever idea
+— use a **Compact ZK contract** to have the live, correct-by-construction in-memory wallet ATTEST
+`hash(snapshot)` on-chain (proving the caller knows the wallet key, binding the hash to the wallet
+identity + block N in zero-knowledge). Restore verifies the snapshot hash against the on-chain
+attestation instead of replaying; a remote/untrusted DB can't forge a snapshot because it can't produce
+the matching attestation. Fable is grounding the design in what Compact can actually express before
+proposing variants (on-chain hash attestation, Merkle-committed state w/ membership proofs vs the
+existing zswap/dust trees, and the harder proof-of-correct-scan), with trust model + cost + feasibility
+for each.
+
+**Next:** design council (distinct-angle design agents + a correctness-audit spec gate) synthesizes the
+briefs into a recommended root-of-trust design + the SDK PR and indexer PR proposals. This is its own
+feature workstream (a "verifiable snapshot" capability) feeding external PRs — sequenced after the
+Sprint 7/8 DB-sync core, but researched now so the design is ready.
+
+## MILESTONE: live preprod wallet sync PROVEN (de-risk agent, SUCCESS)
+
+The wallet SDK **synced our funded wallet against public preprod and observed the full 1000 tNIGHT** —
+reproducibly, in ~1.3s. Evidence: balance `{0x00…00: 1000000000n}` (native token, 1000 tNIGHT), the
+available UTXO, and a tx-history entry with hash `b194e71d…493341` + identifier `00ea17cf…20bea`
+(matches the faucet tx), finalized at block 1,763,274. This de-risks the Sprint 8 live-sync milestone at
+the SDK level — remaining Sprint 8 work is wiring `PgTransactionHistoryStorage` in as `txHistoryStorage`
+(replacing `InMemoryTransactionHistoryStorage`) + the cold-boot recovery test.
+
+**Reusable Sprint 8 wiring (validated):** only the `UnshieldedWallet` package is needed for the funded
+unshielded balance — no facade/shielded/dust wallet, no proof-server, no node RPC; sync is driven
+entirely by the indexer WS (`wss://indexer.preprod.midnight.network/api/v4/graphql/ws`). Config:
+`networkId: NetworkId.NetworkId.PreProd`, `indexerClientConnection` (http+ws URLs), `txHistoryStorage`.
+Key derivation: `HDWallet.fromSeed → selectAccount(0) → selectRole(Roles.NightExternal) → deriveKeyAt(0)`
+→ `createKeystore` → `UnshieldedWallet(config).startWithPublicKey(...)`. Sync-completion: wait for
+`availableCoins.length > 0` BEFORE `waitForSyncedState()` (a fresh wallet can report strictly-complete
+before the coin-bearing tx applies). Reusable test written at
+`~/repos/midnight-wallet/packages/wallet-integration-tests/test/preprodUnshieldedSync.manual.integration.test.ts`.
+
+**CORRECTION — no block-height "birthday" for the unshielded wallet.** My earlier "birthday hack"
+framing was wrong for this wallet type. The unshielded sync subscribes to `UnshieldedTransactions.run(
+{address, transactionId})` — a per-address, transaction-id cursor, NOT a block scan — so the indexer
+resolves directly to the handful of txs touching our address with NO genesis-rescan cost regardless of
+chain tip. That's why it synced in ~1.3s; no birthday config field exists for it. (A viewing-key/
+merkle-scan "birthday-like" concern may still apply to the SHIELDED/DUST wallets, which weren't
+exercised since the funded balance is unshielded.) `design/environment/preprod-connection.md`'s birthday
+section is corrected accordingly.
+
+**Env note:** the wallet SDK packages were built (`tsc -b` leaf-first; `dist/` is gitignored,
+non-destructive) so bare cross-package imports resolve — a prerequisite for running the SDK, recorded in
+the env log.
+
 ### Sprint 7 — transaction-history-storage
 - Sonnet 5 implementer dispatched (self-contained scope: interface + migration + PgTransactionHistoryStorage
   + unit/property tests + in-repo InMemory oracle + Pg-only conformance). Baseline before: 151 pass / 4
