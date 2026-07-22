@@ -23,7 +23,7 @@ specified persona review passes or all findings are fixed and re-reviewed.
   reviews after Graphify; resolve every blocker before Lean proof edits.
   - **Acceptance:** three read-only persona reports inspect the complete planning files without a
     Lean-blind PUSH manifest and return `PASS`; `git diff --check` exits 0.
-- [ ] 0.5 Commit/push the audited planning tranche and open a draft Sprint 6 PR.
+- [x] 0.5 Commit/push the audited planning tranche and open a draft Sprint 6 PR.
   - **Acceptance:** `git status --short` is clean, local `HEAD` equals the SHA returned by
     `git ls-remote --heads origin refs/heads/formal/storage-algebra-lean-m3b-checkpoint-c1`, and
     `test "$(gh pr view --json isDraft --jq .isDraft)" = true` exits 0.
