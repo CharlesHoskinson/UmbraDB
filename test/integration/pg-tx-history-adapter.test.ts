@@ -280,6 +280,44 @@ describe("PgWalletSdkTransactionHistoryAdapter (Pg-only, required gate)", () => 
     });
   });
 
+  describe("Codex re-audit hardening: prototype-key sections, write-side stash validation, safe status errors", () => {
+    it.each(["__proto__", "constructor", "prototype"])(
+      "rejects an extension section named the prototype-manipulation key %p at write (ValidationError, never a silent drop; row untouched)",
+      async (protoKey) => {
+        const adapter = makeAdapter(`adapter-wallet-proto-${protoKey.replace(/\W/g, "")}`);
+        const finalizedBlock = { hash: "proto-block", height: 4, timestamp: new Date("2026-07-02T00:00:00.000Z") };
+        await expect(adapter.gotFinalized({
+          hash: "proto-h1",
+          identifiers: ["a"],
+          finalizedBlock,
+          [protoKey]: { some: "section" },
+        } as unknown as Sdk.FinalizedEntryInput<TestEntry>)).rejects.toBeInstanceOf(ValidationError);
+        expect(await adapter.get("proto-h1")).toBeUndefined();
+      },
+    );
+
+    it("rejects a runtime-invalid finalizedBlock (string height/timestamp) at WRITE time, not later at read (write/read symmetry)", async () => {
+      const adapter = makeAdapter("adapter-wallet-writeval");
+      await expect(adapter.gotFinalized({
+        hash: "writeval-h1",
+        identifiers: ["a"],
+        // a type-erased caller passing runtime-invalid leaves the generic EntryContentSchema accepts
+        finalizedBlock: { hash: "b", height: "not-a-number", timestamp: "not-a-date" },
+      } as unknown as Sdk.FinalizedEntryInput<TestEntry>)).rejects.toBeInstanceOf(ValidationError);
+      // Fail closed AT WRITE: nothing persisted, so a later getAll() is not bricked by this row.
+      expect(await adapter.get("writeval-h1")).toBeUndefined();
+    });
+
+    it("mapSdkStatusToUmbra throws SerializationFailedError (not a raw TypeError) on a type-erased bigint status", () => {
+      expect(() => mapSdkStatusToUmbra(1n as unknown as Sdk.TransactionHistoryStatus))
+        .toThrow(SerializationFailedError);
+    });
+    it("mapUmbraStatusToSdk throws SerializationFailedError (not a raw TypeError) on a type-erased bigint status", () => {
+      expect(() => mapUmbraStatusToSdk(2n as unknown as "success"))
+        .toThrow(SerializationFailedError);
+    });
+  });
+
   describe("F2: a malformed stashed lifecycle detail (a raw-Pg row bypassing this adapter's own write path) throws a typed, per-hash error on read", () => {
     async function insertRawRow(entryJson: unknown, txHash: string, walletId: string, lifecycle: string): Promise<void> {
       const sql = getSql();

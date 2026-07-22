@@ -111,6 +111,20 @@ const UMBRA_TO_SDK_STATUS: Record<UmbraTransactionHistoryStatus, Sdk.Transaction
   partialSuccess: "PARTIAL_SUCCESS",
 };
 
+/** Safe stringify for an error message about an unexpected/unmapped value that may be a type-erased
+ *  non-string. `JSON.stringify` THROWS a raw TypeError on a `bigint`, and `String` THROWS on a
+ *  `symbol` -- either would mask the intended typed `SerializationFailedError` with a raw error.
+ *  This never throws, so the fail-closed guard always surfaces its own typed error. (Codex re-audit.) */
+function describeStatusValue(v: unknown): string {
+  const t = typeof v;
+  if (t === "string") return JSON.stringify(v);
+  if (t === "bigint") return `${(v as bigint).toString()}n`;
+  if (t === "symbol") return (v as symbol).toString();
+  if (v === null) return "null";
+  if (t === "object" || t === "function") return Object.prototype.toString.call(v);
+  return String(v as number | boolean | undefined);
+}
+
 /** (L1, F6) Maps the SDK's execution-status enum onto UmbraDB's own. Exported so
  *  `pg-tx-history-adapter.test.ts` can exercise the mapping directly as a round-trip, without
  *  needing a whole entry.
@@ -128,7 +142,7 @@ export function mapSdkStatusToUmbra(status: Sdk.TransactionHistoryStatus): Umbra
   if (!Object.prototype.hasOwnProperty.call(SDK_TO_UMBRA_STATUS, status)) {
     throw new SerializationFailedError(
       `PgWalletSdkTransactionHistoryAdapter: unmapped SDK TransactionHistoryStatus value `
-      + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
+      + `${describeStatusValue(status)} -- this adapter's status-enum map does not cover it`,
     );
   }
   return SDK_TO_UMBRA_STATUS[status];
@@ -140,7 +154,7 @@ export function mapUmbraStatusToSdk(status: UmbraTransactionHistoryStatus): Sdk.
   if (!Object.prototype.hasOwnProperty.call(UMBRA_TO_SDK_STATUS, status)) {
     throw new SerializationFailedError(
       `PgWalletSdkTransactionHistoryAdapter: unmapped UmbraDB TransactionHistoryStatus value `
-      + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
+      + `${describeStatusValue(status)} -- this adapter's status-enum map does not cover it`,
     );
   }
   return UMBRA_TO_SDK_STATUS[status];
@@ -187,10 +201,12 @@ const LifecycleDetailStoreSchema = z.object({
  *  {@link LifecycleDetailStoreSchema} BEFORE {@link reconstructLifecycle} ever touches it. Throws
  *  a typed, PER-HASH {@link SerializationFailedError} naming the offending hash on a malformed
  *  stash -- e.g. a raw row seeded directly into Postgres bypassing this adapter's own write path
- *  entirely (this adapter's own writes always produce a schema-valid stash by construction, so
- *  this is unreachable via any legitimate write -- purely defense-in-depth for stored-data
- *  corruption from outside this adapter, mirroring `PgTransactionHistoryStorage`'s own
- *  validate-on-read pattern). `undefined` (no stash at all -- a row never written through this
+ *  entirely. This adapter's own writes always produce a schema-valid stash -- ENFORCED (not merely
+ *  assumed by construction) by {@link toUmbraWriteInput}, which validates the stash against THIS same
+ *  schema at write time, so a runtime-invalid detail is rejected at write rather than bricking a later
+ *  read (Codex re-audit). This read-side check is therefore pure defense-in-depth for stored-data
+ *  corruption from OUTSIDE this adapter, mirroring `PgTransactionHistoryStorage`'s own
+ *  validate-on-read pattern. `undefined` (no stash at all -- a row never written through this
  *  adapter's `got*` methods) is passed through unchanged; {@link reconstructLifecycle}'s own
  *  per-status checks already produce a typed, per-hash error for that case. */
 function parseLifecycleDetailStore(rawDetail: unknown, hash: string): LifecycleDetailStore | undefined {
@@ -211,8 +227,13 @@ function splitCommonAndExtension(rest: Record<string, unknown>): {
   common: Record<string, unknown>;
   extension: Record<string, EntryContent>;
 } {
-  const common: Record<string, unknown> = {};
-  const extension: Record<string, EntryContent> = {};
+  // Null-prototype accumulators: on an ordinary `{}`, `extension[key] = value` with an untrusted
+  // key `"__proto__"` invokes Object.prototype's `__proto__` SETTER -- silently dropping the section
+  // (and mutating the object's prototype) instead of storing it. On a null-prototype object there is
+  // no such setter, so `"__proto__"` becomes an ordinary own key that assertNoReservedAdapterKeys can
+  // then see and reject at the boundary. (Codex re-audit -- same prototype-key class as F6.)
+  const common: Record<string, unknown> = Object.create(null);
+  const extension: Record<string, EntryContent> = Object.create(null);
   for (const [key, value] of Object.entries(rest)) {
     if (COMMON_FIELD_NAMES.has(key)) common[key] = value;
     else extension[key] = value as EntryContent;
@@ -227,15 +248,25 @@ function splitCommonAndExtension(rest: Record<string, unknown>): {
  *  `[UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: detail` spread; this makes the collision structurally
  *  impossible to reach storage at all, mirroring Sprint 7's own `THS_RESERVED_KEY_PREFIX`
  *  boundary-rejection pattern (`src/interfaces/transaction-history-storage.ts`). */
+/** Prototype-manipulation keys that must never be accepted as a wallet section name -- never
+ *  legitimate section names for the conformant SDK (its sections are shielded/unshielded/dust), and
+ *  a vector for silent data loss / prototype pollution. Rejected fail-closed at the boundary, same as
+ *  the reserved-prefix keys. (Codex re-audit.) */
+const DANGEROUS_EXTENSION_KEYS: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+
 function assertNoReservedAdapterKeys(extension: Readonly<Record<string, EntryContent>>, hash: unknown): void {
-  const badKeys = Object.keys(extension).filter((k) => k.startsWith(UMBRADB_ADAPTER_RESERVED_KEY_PREFIX));
+  const badKeys = Object.keys(extension).filter(
+    (k) => k.startsWith(UMBRADB_ADAPTER_RESERVED_KEY_PREFIX) || DANGEROUS_EXTENSION_KEYS.has(k),
+  );
   if (badKeys.length > 0) {
     throw new ValidationError(
-      `PgWalletSdkTransactionHistoryAdapter: entry ${JSON.stringify(hash)} carries a wallet-specific `
-      + `section key reserved for this adapter's own internal lifecycle-detail stash`,
+      `PgWalletSdkTransactionHistoryAdapter: entry ${describeStatusValue(hash)} carries a wallet-specific `
+      + `section key reserved for this adapter's own internal use or a prototype-manipulation key`,
       badKeys.map((k) => ({
         path: `sections.${k}`,
-        message: `key starts with the reserved prefix "${UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}" (reserved for this adapter's own lifecycle-detail stash, ${UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY})`,
+        message: DANGEROUS_EXTENSION_KEYS.has(k)
+          ? `key "${k}" is a prototype-manipulation key and is rejected at the boundary`
+          : `key starts with the reserved prefix "${UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}" (reserved for this adapter's own lifecycle-detail stash, ${UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY})`,
       })),
     );
   }
@@ -246,6 +277,23 @@ function toUmbraWriteInput(
 ): Omit<UmbraTransactionHistoryEntry, "lifecycle"> {
   const { common, extension } = splitCommonAndExtension(rest);
   assertNoReservedAdapterKeys(extension, common.hash);
+  // Validate the lifecycle-detail stash at WRITE time against the SAME strict schema the read path
+  // uses, so write and read agree. Without this, a runtime-invalid detail (e.g. a `finalizedBlock`
+  // with a string `height`/`timestamp` from a type-erased caller) passes the generic
+  // `EntryContentSchema`, is written, and then bricks `get()`/`getAll()` -- a malformed stash
+  // reachable via an adapter write, not only out-of-band corruption. Fail closed HERE instead, so the
+  // "schema-valid stash by construction" invariant is enforced, not merely assumed. (Codex re-audit.)
+  const validatedDetail = LifecycleDetailStoreSchema.safeParse(detail);
+  if (!validatedDetail.success) {
+    throw new ValidationError(
+      `PgWalletSdkTransactionHistoryAdapter: entry ${describeStatusValue(common.hash)}'s lifecycle detail `
+      + `is runtime-invalid and cannot be stashed (write-side validation, symmetric with the read path)`,
+      validatedDetail.error.issues.map((i) => ({
+        path: i.path.join(".") || "<root>",
+        message: i.message,
+      })),
+    );
+  }
   return {
     hash: common.hash as string,
     identifiers: [...(common.identifiers as readonly string[])],
@@ -253,7 +301,7 @@ function toUmbraWriteInput(
     ...(common.status !== undefined ? { status: mapSdkStatusToUmbra(common.status as Sdk.TransactionHistoryStatus) } : {}),
     ...(common.timestamp !== undefined ? { timestamp: common.timestamp as Date } : {}),
     ...(common.fees !== undefined ? { fees: common.fees as bigint | null } : {}),
-    sections: { ...extension, [UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: detail as unknown as EntryContent },
+    sections: { ...extension, [UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: validatedDetail.data as unknown as EntryContent },
   };
 }
 
