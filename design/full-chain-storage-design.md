@@ -1,11 +1,24 @@
 # Full-Chain Storage — Design
 
-**Branch:** `fix/full-chain-storage-schema-v2` (originally drafted on `feature/full-chain-storage`) · **Date:** 2026-07-22 · **Status:** Revised per 3-reviewer design-council audit; schema-stage artifact, migration remains unregistered/inert, not yet applied to any live application DB.
-**Author role:** synthesizing three completed research passes (industry archival prior art, Midnight source/schema audit, UmbraDB's live schema) plus a direct live-devnet confirmation pass, plus this revision's direct empirical Postgres testing (real local `postgres:17-alpine`, not asserted from memory).
+**Branch:** `fix/full-chain-storage-schema-v2` (originally drafted on `feature/full-chain-storage`) · **Date:** 2026-07-22 · **Status:** Revised per 3-reviewer design-council audit, then re-audited by a second independent 3-reviewer round and revised again (v3); schema-stage artifact, migration remains unregistered/inert, not yet applied to any live application DB.
+**Author role:** synthesizing three completed research passes (industry archival prior art, Midnight source/schema audit, UmbraDB's live schema) plus a direct live-devnet confirmation pass, plus the v2 and v3 revisions' own direct empirical Postgres testing (real local `postgres:17-alpine`, not asserted from memory) and, for v3's verifier-key finding, direct reading of the Midnight ledger source.
 
 ## Revision history
 
-**2026-07-22 — revised in response to a 3-reviewer design-council audit (Fable 5 / Opus / GPT-5.6 Sol).** All three reviewers independently read the original draft (`cb80f96`) in full and converged strongly on several defects; this revision fixes all of them with real schema/migration changes, not caveat comments. Summary of what changed:
+### v3 — 2026-07-22, revised in response to a round-2 3-reviewer design-council re-audit (Fable 5 / Opus / GPT-5.6 Sol)
+
+All three reviewers re-read the v2 revision (`5eb860e`) in full. Two called it stable with minor nits; GPT-5.6 Sol raised real findings. Cross-referencing all three, several of the "minor" items turned out to be 2-of-3 convergent, plus one reviewer surfaced a genuine new gap. All six are fixed below with real schema/migration/doc changes, not caveats.
+
+1. **`finalized` consistency (2 of 3 reviewers).** The v2 `CHECK ((status='canonical') = is_canonical)` only tied two of the three fields together — `blocks(finalized=true, status='seen', is_canonical=false)` was legal, which cannot happen under real Substrate/GRANDPA finality semantics (a finalized block is always canonical). Added `CHECK (NOT finalized OR is_canonical)` (`001_chain_archive_core.ts`). §4.2 below now states the invariant explicitly: **finalized ⇒ canonical ⇒ status='canonical'**. Empirically verified against a real Postgres 17 instance: the new CHECK rejects the illegal combination and accepts every legal one.
+2. **Blob-role integrity loss (2 of 3 reviewers).** `chain_blob_roles` could legally have zero rows for a `chain_blobs` hash that `blocks`/`transactions`/`bridge_observations`/verifier-key rows referenced directly — a real regression from the pre-v2 `kind NOT NULL` column, which guaranteed every blob was classified. Chose enforcement over documentation-only: a shared `chain_archive_assert_blob_role()` plpgsql helper plus one thin `BEFORE INSERT OR UPDATE` trigger per blob-referencing table/column (`blocks` ×2, `transactions`, `bridge_observations`, `verifier_key_observations`). **Empirically verified** against a real Postgres 17 instance that a row-level `BEFORE INSERT` trigger on a `PARTITION BY RANGE` parent table is automatically cloned onto every existing and future partition (PG11+ behavior, confirmed via `pg_trigger`), and that the trigger correctly rejects a reference to an unclassified blob while accepting a classified one. See §4.1.
+3. **Rollover runbook broken by this feature's own FKs (2 of 3 reviewers, and worse than originally reported).** The v2 runbook only described creating a new partition for `blocks`; `transactions` and `bridge_observations` need new partitions at the same height boundary too (the migration itself already pre-creates all three in lockstep — `createHeightPartitions` was already called for all three tables — so this was purely a runbook-prose gap, not a schema gap). Worse: the v2 runbook's DEFAULT-drain fallback (copy overflow rows out, delete from `blocks_default`) is now provably broken by the FKs `transactions`/`bridge_observations` added in v2 — **reproduced directly**: `DELETE FROM blocks_default` while a live `transactions` row still references a row inside it fails with `foreign key constraint ... violates`, with no valid ordering that avoids it while the partition stays attached. §4.6 is rewritten around a DETACH/re-ATTACH procedure across all three tables in dependency order, verified end-to-end against real Postgres 17 (see §4.6 for the full transcript).
+4. **Verifier-key modeling gaps (new finding, one reviewer, confirmed independently).** Two issues, both fixed: (a) the CHECK only enforced `scope='contract' => contract_address IS NOT NULL`, not the full "iff" the doc's own comment claimed — fixed to `CHECK ((scope = 'contract') = (contract_address IS NOT NULL))`, empirically confirmed to reject both illegal directions. (b) `PRIMARY KEY (vk_hash)` alone was too narrow. **Verified directly against `transient-crypto/src/proofs.rs` and `ledger/src/structure.rs`** (not assumed): `VerifierKey`'s content-addressed bytes are a pure function of the compiled circuit with no network/contract/address salt, and `structure.rs`'s `VerifierKeyInsert(EntryPointBuf, ContractOperationVersionedVerifierKey)` attaches a VK to a contract's own per-entry-point map — so the same VK bytes genuinely can and do recur across multiple networks (same protocol version) and multiple contract addresses (same circuit/template deployed more than once). `verifier_keys` is replaced by `verifier_key_observations`, a junction table recording each `(vk_hash, net, scope, contract_address, first_seen_height)` context a key was actually seen in; the content-addressed half needed no new table (`chain_blobs` + `chain_blob_roles(role='verifier_key')`, already introduced by fix 2, already are that). See §4.5.
+5. **Completeness-claim overclaim (new finding, one reviewer, valid documentation fix).** §9 claimed a parent-hash walk proves the archive is "complete." Rewritten to state precisely what that check proves (canonical-header continuity for the one chain walked) versus what it does NOT prove (fork completeness, transaction/observation completeness, or body integrity — `extrinsics_root` cannot be recomputed and checked since block bodies are nullable). See §9.
+6. **Minor items:** `transactions.protocol_version` gained `CHECK (protocol_version >= 0)` (the v2 doc's "nonnegative checks throughout" claim didn't actually cover it); the `transactions_by_block` index was dropped as a strict left-prefix of the existing PK index (`transactions_by_hash` is kept — it is not a PK left-prefix); one automated test (`test/postgres/chain-archive-migrate.test.ts`) now exercises `runMigrations(sql, { schema, migrations: chainArchiveMigrations })` end-to-end — fresh apply, idempotent re-run, a same-height fork with an overlapping tx hash, a rejected dual-canonical insert, and a rejected FK violation — closing the "no committed automated test for the new lineage" gap; confirmed `origin/main` only moved with an unrelated docs commit (`b1ecc53`) since this branch was cut, nothing to reconcile.
+
+### v2 — 2026-07-22, revised in response to a 3-reviewer design-council audit (Fable 5 / Opus / GPT-5.6 Sol)
+
+All three reviewers independently read the original draft (`cb80f96`) in full and converged strongly on several defects; this revision fixes all of them with real schema/migration changes, not caveat comments. Summary of what changed:
 
 1. **Fork-breaking `transactions` PK bug fixed** (caught independently by 2 of 3 reviewers) — PK changed from `(block_height, tx_hash)` to `(net, block_height, block_hash, tx_hash)`, plus a separate `UNIQUE (net, block_height, block_hash, position)` constraint. See §4.3.
 2. **Canonical-chain uniqueness is now enforced**, not just conventionally assumed — a `CHECK` ties `status`/`is_canonical` together, and a partial unique index enforces at most one canonical block per `(net, height)`. This was **empirically verified against a real Postgres 17 instance** (transcript in §4.2) rather than resolved by trusting either reviewer's unverified claim about partitioned-table behavior.
@@ -179,6 +192,37 @@ CREATE INDEX chain_blob_roles_by_role ON chain_blob_roles (role);
 
 This table is a deliberately good target for the sibling `feature/network-torrent` branch's retrieval work (SHA-256-keyed, content-addressed) — no design coordination needed beyond that shape being stable.
 
+**v3 audit fix — blob-role integrity, flagged by 2 of 3 round-2 reviewers.** Nothing above stopped a `chain_blobs` row from having zero `chain_blob_roles` rows, even though `blocks.header_blob_hash`/`body_blob_hash`, `transactions.raw_blob_hash`, `bridge_observations.raw_blob_hash`, and (post-v3) `verifier_key_observations.vk_hash` all reference `chain_blobs(hash)` directly with no guarantee a role row exists for the hash they point at — a real regression from the pre-v2 `kind NOT NULL` column, which guaranteed every blob was classified. The audit offered a choice: (a) enforce it (trigger/constraint), or (b) document role-tagging as advisory-only (the real reference is each FK column; roles are just a queryable label) if enforcement isn't worth the complexity. **Chose (a).** It turned out not to be excessively complex: one shared plpgsql helper plus one thin `BEFORE INSERT OR UPDATE` trigger per consuming table/column.
+
+```sql
+CREATE FUNCTION chain_archive_assert_blob_role(
+  p_blob_hash bytea, p_role text, p_table text, p_column text
+) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF p_blob_hash IS NULL THEN RETURN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM chain_blob_roles WHERE blob_hash = p_blob_hash AND role = p_role) THEN
+    RAISE EXCEPTION 'blob % referenced by %.% has no chain_blob_roles row for role %',
+      encode(p_blob_hash, 'hex'), p_table, p_column, p_role USING ERRCODE = '23514';
+  END IF;
+END;
+$$;
+
+-- one thin trigger per consuming table, e.g.:
+CREATE FUNCTION transactions_check_blob_roles() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM chain_archive_assert_blob_role(NEW.raw_blob_hash, 'tx_raw', 'transactions', 'raw_blob_hash');
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER transactions_blob_roles_trigger
+  BEFORE INSERT OR UPDATE OF raw_blob_hash ON transactions
+  FOR EACH ROW EXECUTE FUNCTION transactions_check_blob_roles();
+```
+
+**Empirically verified against a real Postgres 17 instance while revising this migration:** (1) a row-level `BEFORE INSERT` trigger defined on a `PARTITION BY RANGE` *parent* table is automatically cloned onto every existing and future partition — confirmed via `pg_trigger` listing the trigger present on the parent and every child partition after creating the parent-level trigger (PG11+ behavior; nothing has to be redeclared per-partition). (2) The trigger correctly rejects an insert whose referenced blob has no matching `chain_blob_roles` row (`RAISE EXCEPTION` fires with the expected message) and correctly accepts one that does, once the role row is inserted first.
+
+This is an insert/update-time invariant only, matching this design's insert-only model (§6): nothing here ever deletes a `chain_blob_roles` row, so there is no corresponding delete-side guard — that gap doesn't exist today because no code path creates it. `blocks.body_blob_hash` is nullable, so its trigger check (like the helper function itself) no-ops on `NULL` and only fires once a body blob is actually attached.
+
 ### 4.2 `blocks` — the block tree, not just the canonical chain
 
 **Kept unchanged from the original draft, praised by all three reviewers:** every received block is kept, canonical or not — the Bitcoin Core pattern, chosen specifically because indiscriminate cascade-delete-on-reorg (Cardano db-sync's pattern) is a real limitation for a store whose entire purpose is being a recovery source of last resort.
@@ -199,6 +243,7 @@ CREATE TABLE blocks (
   finalized        boolean     NOT NULL DEFAULT false,
   synced_at        timestamptz NOT NULL DEFAULT now(),
   CHECK ((status = 'canonical') = is_canonical),
+  CHECK (NOT finalized OR is_canonical),
   PRIMARY KEY (net, height, block_hash)
 ) PARTITION BY RANGE (height);
 
@@ -224,6 +269,10 @@ CREATE INDEX blocks_by_parent ON blocks (parent_hash);
 
 3. **`net`** (network/genesis-identity dimension) added, folded into the PK alongside `height`/`block_hash`. Nothing before this stopped two different networks' archive data from being silently comingled in one physical archive; naming matches the existing `net` column convention in `002_checkpoint_store.ts`/`checkpoint-store.ts`. **Scope note:** v1 still partitions by `height` alone (not `(net, height)` list-then-range sub-partitioning) — correct and sufficient for the expected deployment shape of one UmbraDB instance archiving one network's chain tree at a time, with `net` providing a hard safety rail against accidental comingling rather than a physical partitioning dimension. If a future deployment genuinely needs one physical archive schema serving multiple networks' data concurrently at volume, `PARTITION BY LIST (net)` with `height`-range sub-partitions per network is the natural next step — flagged, not built, since nothing in this pass's scope requires it (§10).
 
+4. **v3 audit fix — `finalized` consistency (2 of 3 round-2 reviewers).** Point 1's `CHECK` only ties `status`/`is_canonical` together — it left `finalized=true, status='seen', is_canonical=false` legal, which cannot happen under real Substrate/GRANDPA finality semantics: GRANDPA only ever finalizes blocks on the chain it considers canonical, so a finalized block is always canonical. Added `CHECK (NOT finalized OR is_canonical)`. **Empirically verified against a real Postgres 17 instance:** the new CHECK rejects `(status='seen', is_canonical=false, finalized=true)` while accepting every legal combination — `(seen, false, false)`, `(canonical, true, true)`, `(canonical, true, false)` (canonical but not yet finalized — GRANDPA finality lags block production, so this is the normal steady state for the most recent several blocks).
+
+   **Explicit transition semantics** (the design doc did not previously spell this out): a block row's lifecycle is `finalized ⇒ canonical ⇒ status='canonical'`, in that strict implication direction only — the converse does not hold. A block can be `is_canonical=true, finalized=false` (it is the current best chain's block at that height, per block-production/fork-choice, but GRANDPA has not yet finalized it — normal for recent blocks) and later either advance to `finalized=true` (once GRANDPA finalizes it — legal, since it was already canonical) or regress to `is_canonical=false` on a reorg (legal, since an unfinalized block can still be superseded). Once `finalized=true`, `is_canonical` may never become `false` for that row again — the CHECK enforces this at every write, but note it is a snapshot-time constraint (true at the moment of each `INSERT`/`UPDATE`), not a temporal one; application code that flips `is_canonical=false` on a row it does not first confirm is unfinalized would still be rejected by the CHECK, but the CHECK cannot itself distinguish "attempting an impossible un-finalization" from "a caller bug caught here" — both surface as the same constraint violation, which is the correct outcome either way (the write is illegal regardless of cause).
+
 **Unchanged rationale from the original draft:** `parent_hash` still has no FK (a self-referencing FK across range partitions complicates out-of-order reorg backfill — a child block can arrive before its parent is durably committed; parent-link integrity remains an application-level invariant). `body_blob_hash` remains nullable pending body/extrinsics sync — see §4.4 for why this no longer blocks bridge-data archival. The canonical tip pointer is not a new table here — see §5's revised watermarks decision.
 
 ### 4.3 `transactions` — metadata only, raw bytes via blob reference
@@ -240,7 +289,7 @@ CREATE TABLE transactions (
   block_hash       bytea       NOT NULL CHECK (octet_length(block_hash) = 32),
   position         integer     NOT NULL CHECK (position >= 0),
   kind             text        NOT NULL CHECK (kind IN ('regular', 'system')),
-  protocol_version integer     NOT NULL,
+  protocol_version integer     NOT NULL CHECK (protocol_version >= 0),
   result           text        CHECK (result IN ('success', 'partial_success', 'failure') OR result IS NULL),
   raw_blob_hash    bytea       NOT NULL REFERENCES chain_blobs(hash),
   synced_at        timestamptz NOT NULL DEFAULT now(),
@@ -249,11 +298,14 @@ CREATE TABLE transactions (
   FOREIGN KEY (net, block_height, block_hash) REFERENCES blocks (net, height, block_hash)
 ) PARTITION BY RANGE (block_height);
 
-CREATE INDEX transactions_by_hash  ON transactions (tx_hash);
-CREATE INDEX transactions_by_block ON transactions (net, block_height, block_hash);
+CREATE INDEX transactions_by_hash ON transactions (tx_hash);
 ```
 
 **A real FK to `blocks` is now enforced** — the original draft had none ("No cross-table FK to `transactions`" was stated as a deliberate range-partition/hot-path trade-off, but reviewers flagged this specific direction — `transactions` → `blocks` — as a real gap, since transaction rows are only ever written after their containing block row already exists, unlike the parent-link backfill-ordering concern that genuinely applies to `blocks.parent_hash`). **Empirically confirmed working** against a real Postgres 17 instance while revising this migration: an FK from one range-partitioned table (`transactions`, partitioned by `block_height`) to another (`blocks`, partitioned by `height`), both referencing/referenced columns in the same domain, is accepted by Postgres and correctly rejects (a) a transaction referencing a wholly nonexistent block, and (b) a transaction whose `block_height`/`block_hash` pair doesn't jointly match any real `blocks` row (both cases tested directly with real inserts against the real migration's tables).
+
+**v3 audit fixes (minor items):** `protocol_version` gained `CHECK (protocol_version >= 0)` — the v2 doc claimed "nonnegative checks throughout" but this column had none, an actual gap in that claim, not just an omission from this list. The v2 `transactions_by_block ON (net, block_height, block_hash)` index was **dropped**: it is a strict left-prefix of the PK's own btree index `(net, block_height, block_hash, tx_hash)`, so Postgres already satisfies any `(net)` / `(net, block_height)` / `(net, block_height, block_hash)` lookup — including the FK's own existence checks — off the PK index directly; the separate index bought no distinct access pattern, only extra write-amplification and storage on every insert. `transactions_by_hash` is kept: `tx_hash` alone is *not* a PK left-prefix (the PK's first column is `net`), so "look up a transaction by hash alone, across every block and fork" is a genuinely distinct access pattern the PK index cannot serve.
+
+**v3 audit fix — blob-role integrity.** `raw_blob_hash` now has a `BEFORE INSERT OR UPDATE OF raw_blob_hash` trigger requiring a matching `chain_blob_roles (blob_hash, role='tx_raw')` row to already exist — see §4.1's `chain_archive_assert_blob_role` writeup for the shared mechanism and its empirical verification.
 
 Otherwise directly matches §3.3's live-confirmed split: `kind`/`result` mirror the indexer's own `variant`/`transaction_result` columns; `raw_blob_hash` is where the opaque SCALE payload (§3.2) lives.
 
@@ -282,26 +334,51 @@ CREATE INDEX bridge_observations_by_kind ON bridge_observations (kind);
 ```
 `kind`'s value set (`cnight_registration`, `system_parameters_d`, `spo_registration`, `other`) mirrors the indexer tables actually confirmed live in §3.7/§3.8; `spo_registration` is included even though SPO data itself remains **not needed** as its own category (§7) — this is the shape for "if a bridge-adjacent SPO observation is ever archived here," not a commitment to build SPO archival now.
 
-### 4.5 `verifier_keys` — the one "build now" addition beyond the core three (unchanged decision)
+**v3 audit fix — blob-role integrity.** `raw_blob_hash` now has a `BEFORE INSERT OR UPDATE OF raw_blob_hash` trigger requiring a matching `chain_blob_roles (blob_hash, role='bridge_observation')` row to already exist — see §4.1.
 
-The indexer has **no dedicated VK archive at all** today (confirmed: no `verifier_keys`-equivalent table in the live schema, §3) — this remains the one category where UmbraDB adds coverage the indexer genuinely lacks.
+### 4.5 `verifier_key_observations` — v3 redesign of the "build now" VK addition (replaces v2's `verifier_keys`)
+
+The indexer has **no dedicated VK archive at all** today (confirmed: no `verifier_keys`-equivalent table in the live schema, §3) — this remains the one category where UmbraDB adds coverage the indexer genuinely lacks. What changed in v3 is the shape, not the decision to build it.
+
+**v2's shape (`verifier_keys`, `PRIMARY KEY (vk_hash)`) had two gaps, both raised in the round-2 audit:**
+
+**(a) The CHECK only enforced one direction.** v2's `CHECK (scope <> 'contract' OR contract_address IS NOT NULL)` only enforced `scope='contract' => contract_address IS NOT NULL` — but the v2 doc's own comment claimed the full **iff**: "`contract_address` IS NOT NULL ⇐⇒ `scope = 'contract'`". A protocol-scoped row with a non-null `contract_address` was silently accepted, contradicting the doc's own stated invariant. Fixed with `CHECK ((scope = 'contract') = (contract_address IS NOT NULL))`, which is a real biconditional. **Empirically verified against a real Postgres 17 instance:** both illegal combinations are rejected (`scope='protocol'` with a non-null address; `scope='contract'` with a null address), and both legal combinations are accepted.
+
+**(b) `PRIMARY KEY (vk_hash)` alone was too narrow — confirmed by reading the ledger source directly, not assumed.** The design doc's own §4.5 text already claimed "a protocol-circuit VK's bytes may legitimately be identical across networks running the same protocol version," but the v2 schema didn't actually act on that claim — a single-row-per-hash table cannot record more than one context for the same key. This revision checked the claim against `transient-crypto/src/proofs.rs` and `ledger/src/structure.rs` directly:
+
+- `VerifierKey`'s `Serializable::serialize` writes only the inner `MidnightVK` bytes (`SerdeFormat::Processed`) with no network ID, contract address, or deployment-specific salt anywhere in the encoding (`proofs.rs:501-514`). `Tagged::tag()` returns the fixed constant `"verifier-key[v6]"` for *every* instance (`proofs.rs:382-389`) — a format-version marker, not a per-key identifier. So the content-addressed hash of a VK is a pure function of the compiled circuit, full stop: two networks running the same protocol version, or two contract deployments of the same circuit/template, produce byte-identical VK content and therefore the identical hash.
+- `structure.rs:2692-2696`'s `SingleUpdate::VerifierKeyInsert(EntryPointBuf, ContractOperationVersionedVerifierKey)` attaches a VK to one specific contract's own per-entry-point map. Nothing about this prevents the *same* circuit (and therefore the same VK bytes/hash) being inserted under different entry points, in different contracts at different addresses, or the *same* protocol circuit being observed on multiple networks.
+
+**Conclusion: keys are genuinely shared across networks and across contract deployments, not a hypothetical edge case** — so `PRIMARY KEY (vk_hash)` was a real modeling bug, not an acceptable simplification. Fixed by splitting the old single table in two, per the task's suggested shape:
+
+- **The content-addressed half needed no new table.** `chain_blobs (hash -> bytes)` already *is* "vk_hash -> key bytes," and `chain_blob_roles (role = 'verifier_key')` (§4.1, itself a v3 addition) already tracks "this hash is known to be a VK." Building a third, redundant content-keyed table here would just duplicate that.
+- **`verifier_key_observations`** is the new table — the "each place/context this key was actually seen" junction the task asked for:
 
 ```sql
-CREATE TABLE verifier_keys (
-  vk_hash           bytea       PRIMARY KEY REFERENCES chain_blobs(hash),
+CREATE TABLE verifier_key_observations (
+  id                bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  vk_hash           bytea       NOT NULL REFERENCES chain_blobs(hash),
   net               text        NOT NULL,
   scope             text        NOT NULL CHECK (scope IN ('protocol', 'contract')),
   tag               text        NOT NULL,
   contract_address  bytea,
   first_seen_height bigint      NOT NULL CHECK (first_seen_height >= 0),
-  created_at        timestamptz NOT NULL DEFAULT now(),
-  CHECK (scope <> 'contract' OR contract_address IS NOT NULL)
+  synced_at         timestamptz NOT NULL DEFAULT now(),
+  CHECK ((scope = 'contract') = (contract_address IS NOT NULL)),
+  UNIQUE NULLS NOT DISTINCT (vk_hash, net, scope, contract_address, first_seen_height)
 );
 
-CREATE INDEX verifier_keys_by_contract ON verifier_keys (contract_address) WHERE contract_address IS NOT NULL;
+CREATE INDEX verifier_key_observations_by_vk_hash  ON verifier_key_observations (vk_hash);
+CREATE INDEX verifier_key_observations_by_contract ON verifier_key_observations (contract_address) WHERE contract_address IS NOT NULL;
 ```
 
-**What changed:** the `scope='contract' => contract_address IS NOT NULL` invariant the original draft's own comment *claimed* ("non-null iff scope = 'contract'") but never actually enforced now has a real `CHECK`. An index on `contract_address` was added (partial, excluding NULLs) since contract-scoped lookups are the whole point of that scope, per the audit. A `net` column was added — "first observed on," not an exclusivity claim, since a protocol-circuit VK's bytes may legitimately be identical across networks running the same protocol version; PK remains `vk_hash` alone (unpartitioned — VK count is bounded by fixed protocol circuits + deployed contracts, nowhere near block/tx volume).
+The natural key the task specified — `(vk_hash, net, scope, contract_address, first_seen_height)` — cannot itself be the `PRIMARY KEY`: Postgres requires every PK column to be `NOT NULL`, and `contract_address` is legitimately `NULL` for protocol-scoped rows, which would make every protocol-scoped observation un-insertable. Used a surrogate `id` PK plus `UNIQUE NULLS NOT DISTINCT (...)` instead (PG15+; this repo targets PG17). **Empirically verified against a real Postgres 17 instance:** two *different* protocol-scoped observations of the same key (different `net`, both `contract_address IS NULL`) are correctly accepted as distinct rows, while an exact duplicate context (same `vk_hash`/`net`/`scope`/`contract_address`/`first_seen_height`, both `NULL` `contract_address`) is correctly rejected — ordinary `UNIQUE` treats every `NULL` as distinct from every other `NULL` and would **not** have caught that duplicate; `NULLS NOT DISTINCT` is what makes the dedup semantics actually match "one row per real observed context." A duplicate `contract`-scoped context (both non-null, matching addresses) was likewise confirmed rejected by an ordinary `UNIQUE` in the same way, so `NULLS NOT DISTINCT` fixes the protocol-scope gap without weakening the contract-scope case.
+
+`tag` moved onto this table rather than staying a property of the content-addressed hash: it names the circuit/entry-point role a key was observed playing in a given context, which is a property of the *observation*, not of the bytes — the same bytes observed in two different contexts could legitimately carry the same or a different human-readable `tag`.
+
+**v3 audit fix — blob-role integrity.** `vk_hash` now has a `BEFORE INSERT OR UPDATE OF vk_hash` trigger requiring a matching `chain_blob_roles (blob_hash, role='verifier_key')` row to already exist — see §4.1.
+
+`verifier_key_observations` remains unpartitioned (unchanged rationale from v2's `verifier_keys`): observation count is bounded by fixed protocol circuits × networks + deployed contracts × entry points, nowhere near block/tx volume.
 
 ### 4.6 Range partitioning strategy
 
@@ -311,11 +388,46 @@ CREATE INDEX verifier_keys_by_contract ON verifier_keys (contract_address) WHERE
 
 **The `DEFAULT`-partition operational trap is addressed, not just noted (audit finding, flagged by two reviewers as a real operational hazard).** The original draft created exactly one bounded partition (`[0, 1000000)`) plus an unbounded `DEFAULT` catch-all from day one — meaning any height at or beyond 1,000,000 falls into `DEFAULT` immediately, and rolling that over later requires detaching a partition that may already hold a large, unbounded number of rows. This revision instead **pre-creates `CHAIN_ARCHIVE_PRECREATED_PARTITIONS = 5` bounded buckets ahead of genesis** (`[0, 1M), [1M, 2M), [2M, 3M), [3M, 4M), [4M, 5M)` — 5,000,000 blocks of headroom) plus one `DEFAULT` beyond that, so a healthy deployment should never actually write into `DEFAULT` in practice.
 
-**Concrete rollover runbook** (replacing the original's bare "defer to `pg_partman` or an equivalent scheduled job" with actual steps), to be run as a scheduled job well before the top pre-created bucket fills:
-1. Monitor `max(height)` in `blocks` (or the `chain_archive.watermarks` canonical-tip cursor, §5) against the upper bound of the highest-bounded partition.
-2. When the tip crosses within some margin (e.g. 20%) of that bound, **attach a new bounded partition ahead of the gap**: `CREATE TABLE blocks_pN PARTITION OF blocks FOR VALUES FROM (<next_lo>) TO (<next_hi>)` — this is a fast, metadata-only DDL operation (no data movement) precisely because it claims a range `DEFAULT` has not yet received any rows for.
-3. `DEFAULT` should only ever need draining if the monitoring in step 1 was missed and it already holds rows for what should have been the next bounded range. If that happens: create the correctly-bounded partition as a new empty table (`CREATE TABLE blocks_new_pN (LIKE blocks INCLUDING ALL)`), `INSERT INTO blocks_new_pN SELECT * FROM blocks_default WHERE height >= lo AND height < hi`, `DELETE FROM blocks_default WHERE height >= lo AND height < hi`, then `ALTER TABLE blocks ATTACH PARTITION blocks_new_pN FOR VALUES FROM (lo) TO (hi)`. This is the heavyweight path the pre-creation headroom above is specifically meant to make unnecessary in normal operation; it is data-copy + delete, not a `pg_partman`-only capability, so it's schedulable without that dependency if needed.
-4. `pg_partman` (or an equivalent scheduled job runner) remains the recommended way to *automate* step 2 on a timer — this pass still does not build that automation, but the manual procedure above is concrete and immediately executable without it.
+#### v3 rewrite — the rollover runbook, corrected and extended to all three tables
+
+**v3 audit fix (2 of 3 round-2 reviewers, and worse than originally reported).** The v2 runbook above had two real problems, both now fixed:
+
+1. **Scope gap: it only described `blocks`.** `transactions` and `bridge_observations` also need a new bounded partition created ahead of the same height boundary — they are partitioned by the same underlying block-height progression (`block_height`), just under a different column name. This was purely a *runbook-prose* gap, not a schema gap: `createHeightPartitions` (`001_chain_archive_core.ts`) was already called identically for `blocks`, `transactions`, and `bridge_observations` at migration time, so the healthy "pre-create ahead of the tip" step (step 2 below) always needed to — and now explicitly does — run against all three tables in lockstep, not just `blocks`.
+
+2. **The DEFAULT-drain fallback (v2 step 3) is provably broken by the FKs v2 itself added.** v2's procedure was `INSERT INTO blocks_new_pN SELECT ... FROM blocks_default ...` then `DELETE FROM blocks_default WHERE ...` then `ATTACH`. That `DELETE` is rejected once `transactions`/`bridge_observations` have any row referencing a `blocks_default` row in the range being deleted — **reproduced directly against a real Postgres 17 instance**: with a `transactions` row FK-referencing a `blocks` row that lives in `blocks_default`, `ALTER TABLE blocks DETACH PARTITION blocks_default` (the same underlying problem the `DELETE` step also hits, since both require removing/reassigning rows still referenced by a live FK) fails with `removing partition "blocks_default" violates foreign key constraint "transactions_..._fkey"`. There is no ordering of "delete from `blocks_default`" and "keep `transactions`/`bridge_observations` FK-valid" that works while those child rows are still attached to the live partitioned hierarchy — the v2 runbook's copy-then-delete step for `blocks_default` was simply never going to succeed once a single `transactions` or `bridge_observations` row pointed into it.
+
+**Resolution, chosen from the task's three options: (a) a DETACH-based procedure across all three tables in the correct dependency order** — not (b) `DEFERRABLE` FKs (rejected: deferring the constraint check doesn't solve the actual problem, which is *relocating* a row between partitions of the same table, not a same-transaction insert/delete ordering issue — `DEFERRABLE` would not make the `DELETE FROM blocks_default` step itself valid, since the row instance is being removed permanently from that table, not replaced by commit time) and not (c) a full redesign (rejected: the existing pre-creation headroom, §4.6 above, already keeps `DEFAULT` a genuine "should never be hit" safety net in normal operation for all three tables — steps 1–2 below just needed to say so explicitly for `transactions`/`bridge_observations` too; the DEFAULT-drain path in step 4 below only exists for the already-acknowledged "monitoring was missed" failure mode, which a DETACH-based procedure handles correctly without a bigger redesign).
+
+**Every step below was run end-to-end against a real Postgres 17 instance** (parent/child tables shaped exactly like `blocks`/`transactions`, with the real FK) to confirm the procedure actually works, not just that it looks plausible:
+
+1. **Steady state (extends v2's step 1 to all three tables).** Monitor `max(height)` in `blocks` (or the `chain_archive.watermarks` canonical-tip cursor, §5) against the upper bound of the highest-bounded partition shared by `blocks`/`transactions`/`bridge_observations` (they use the same bucket boundaries, since they share `partition-config.ts`'s constants).
+2. **Steady state (extends v2's step 2 to all three tables).** When the tip crosses within some margin (e.g. 20%) of that bound, attach a new bounded partition on **all three tables** for the same `[lo, hi)` range — fast, metadata-only DDL, since it claims a range `DEFAULT` has not yet received any rows for: `CREATE TABLE blocks_pN PARTITION OF blocks FOR VALUES FROM (lo) TO (hi)`, and the same for `transactions_pN`/`bridge_observations_pN` on their `block_height`-partitioned tables. Order between the three doesn't matter here (all are empty new partitions, no FK validation scan is triggered by an `ATTACH`/`CREATE ... PARTITION OF` of an empty table). This should be the *only* path ever exercised on a healthy deployment — steps 3–4 exist purely for the "monitoring was missed" recovery case.
+3. **Recovery (only if step 1's monitoring was missed and `DEFAULT` already holds rows for what should have been the next bounded range).** Empirically verified this exact sequence:
+   - **DETACH children before the parent** — this ordering is load-bearing, confirmed by testing the reverse order and observing it fail: `ALTER TABLE blocks DETACH PARTITION blocks_default` while a live `transactions` row still references a row inside it is rejected (`violates foreign key constraint`). Detaching the *referencing* side first removes those rows from the live, FK-checked hierarchy, which is what makes detaching the *referenced* side possible next:
+     ```sql
+     ALTER TABLE transactions DETACH PARTITION transactions_default;
+     ALTER TABLE bridge_observations DETACH PARTITION bridge_observations_default;
+     ALTER TABLE blocks DETACH PARTITION blocks_default;
+     ```
+     (`DETACH PARTITION CONCURRENTLY`, PG14+, is available if a large `DEFAULT` makes the plain synchronous form's lock duration a concern; it must run outside an explicit transaction block and completes in two phases — omitted here as an unneeded complication for the common case where `DEFAULT` was only briefly under-provisioned.)
+   - **Immediately recreate empty `DEFAULT` partitions on all three tables** so live writes resume with effectively zero downtime — this step is metadata-only and doesn't depend on anything below it:
+     ```sql
+     CREATE TABLE blocks_default PARTITION OF blocks DEFAULT;
+     CREATE TABLE transactions_default PARTITION OF transactions DEFAULT;
+     CREATE TABLE bridge_observations_default PARTITION OF bridge_observations DEFAULT;
+     ```
+   - **Re-attach the detached data as correctly-bounded partitions, off to the side, at leisure.** Each detached table (`blocks_default`, `transactions_default`, `bridge_observations_default` — now ordinary standalone tables, no longer part of the live constrained hierarchy) is inspected for its actual height span. If a detached table's entire contents fall within a single target bucket `[lo, hi)` — the common case, since this only happens when monitoring lagged by less than one bucket width — it can be re-attached **directly, with no data copy at all**, since `ATTACH`/rename is metadata-only once there is no longer a live `DEFAULT` on that parent to conflict with the new bound:
+     ```sql
+     ALTER TABLE blocks_default RENAME TO blocks_pN;                      -- reusing the physical table
+     ALTER TABLE blocks ATTACH PARTITION blocks_pN FOR VALUES FROM (lo) TO (hi);
+     ALTER TABLE transactions_default RENAME TO transactions_pN;
+     ALTER TABLE transactions ATTACH PARTITION transactions_pN FOR VALUES FROM (lo) TO (hi);  -- validates the FK; must run after blocks_pN is attached
+     ALTER TABLE bridge_observations_default RENAME TO bridge_observations_pN;
+     ALTER TABLE bridge_observations ATTACH PARTITION bridge_observations_pN FOR VALUES FROM (lo) TO (hi);
+     ```
+     **Empirically confirmed**: this exact detach → recreate-DEFAULT → rename+reattach sequence round-trips real rows (a `blocks` row plus a `transactions` row FK-referencing it) with the FK intact and correctly re-validated on the `transactions` re-attach (parent must be re-attached first, matching ordinary FK-validation ordering).
+   - If a detached table's contents instead span *more than one* target bucket (monitoring was missed for longer), split it before re-attaching: for each bucket `[lo, hi)` in ascending order, `CREATE TABLE blocks_pN (LIKE blocks INCLUDING ALL)`, `INSERT INTO blocks_pN SELECT * FROM blocks_default_staging WHERE height >= lo AND height < hi`, `DELETE FROM blocks_default_staging WHERE height >= lo AND height < hi` — this `DELETE` is now safe, unlike v2's broken version, because `blocks_default_staging` is a free-standing table no longer part of the live FK-checked hierarchy — then `ATTACH` each bucket (parent before its matching `transactions`/`bridge_observations` bucket, same ordering as above), repeating until the staging table is empty, then `DROP` it.
+4. `pg_partman` (or an equivalent scheduled job runner) remains the recommended way to *automate* step 2 on a timer across all three tables — this pass still does not build that automation, but the procedure above is concrete, tested, and immediately executable without it.
 
 ---
 
@@ -326,7 +438,7 @@ CREATE INDEX verifier_keys_by_contract ON verifier_keys (contract_address) WHERE
 **Resolution: its own dedicated Postgres schema (`chain_archive`) and its own migration file numbering/lineage**, structurally separate from `tier1_wallet`'s `000`–`004` sequence:
 
 - `src/postgres/migrations/chain_archive/000_schema.ts` is **not a new file** — it is `migration000` (the existing `src/postgres/migrations/000_schema.ts`), reused as-is. That migration's `up(sql, schema)` was already fully schema-parameterized (`CREATE SCHEMA IF NOT EXISTS <schema>` + a `<schema>._migrations` bookkeeping table scoped to whatever `schema` string is passed in) — nothing about it assumed `tier1_wallet` specifically, so running it a second time against a *different* schema name bootstraps an independent `_migrations` table scoped to that schema, with no changes needed to the migration itself.
-- `src/postgres/migrations/chain_archive/001_chain_archive_core.ts` is the new file — everything in §4 (`chain_blobs`, `chain_blob_roles`, `blocks`, `transactions`, `bridge_observations`, `verifier_keys`, `watermarks`).
+- `src/postgres/migrations/chain_archive/001_chain_archive_core.ts` is the new file — everything in §4 (`chain_blobs`, `chain_blob_roles`, `blocks`, `transactions`, `bridge_observations`, `verifier_key_observations`, `watermarks`).
 - `src/postgres/migrations/chain_archive/index.ts` exports `chainArchiveMigrations: Migration[] = [migration000, chainArchiveCore]` — the lineage array.
 
 **The one small addition `migrate.ts` needed** (checked first, per the task's explicit instruction not to over-engineer a generic multi-schema framework): `RunMigrationsOptions` gained one new optional field, `migrations?: Migration[]`, defaulting to the existing (now-renamed) `tier1WalletMigrations` array. `runMigrationsImpl` reads `opts.migrations ?? tier1WalletMigrations` once, and uses that resolved `lineage` array everywhere it previously used the hardcoded `migrations` array — including generalizing the schema-bootstrap step to `lineage[0]` instead of a hardcoded `migration000` reference, so a future third lineage that didn't happen to start with a schema-bootstrap migration would surface as a real, visible bug rather than a silently-wrong hardcoded assumption. `Migration` (the interface) is now exported so `chain_archive/index.ts` can type against it without duplicating the shape. No new generic "lineage registry," no dynamic lineage discovery, no config-driven lineage selection — a caller passes the array it wants, or gets the default it always got.
@@ -373,14 +485,21 @@ It is **not** registered in `migrate.ts`'s default `tier1WalletMigrations` linea
 
 ## 9. Generalizing the verifiable-snapshot L0–L3 layers to full-chain-archive snapshots
 
-`design/verifiable-snapshot-design.md` establishes, for **wallet-state** snapshots, the theorem this design inherits verbatim: *the DB is never a source of correctness, only of availability; every check reduces to an on-chain commitment, which reduces to finality.* The same four layers generalize to a **chain-archive** snapshot (a claim like "this `blocks`/`transactions` range, as stored in UmbraDB, is the complete and correct archive for `[0, N]`") with no new primitive required:
+`design/verifiable-snapshot-design.md` establishes, for **wallet-state** snapshots, the theorem this design inherits verbatim: *the DB is never a source of correctness, only of availability; every check reduces to an on-chain commitment, which reduces to finality.* The same four layers generalize to a **chain-archive** snapshot with no new primitive required — but §L1 below states precisely what that check does and does not prove; see the v3 audit fix immediately following the layer list for why the doc previously overclaimed here.
 
 - **L0 (anchor).** Instead of a wallet's zswap/dust/unshielded root, the anchor is the **block-tree's own frontier**: `{net, height N, block_hash, parent_hash chain}`. Blocks are already intrinsically hash-linked (`parent_hash` in every header, §3.1/§4.2) — recomputing "does my stored chain from genesis to N hash-chain correctly to the tip's `parent_hash` at every step" is a strictly simpler offline check than the wallet case's Merkle-tree rehash, because it's a linear walk over already-stored rows, not a tree recomputation over selectively-disclosed leaves.
-- **L1 (bounded-scan completeness).** Because every block header commits to its parent, a contiguous stored range `[M, N]` with no gap and a verified hash-chain walk **is** a completeness proof — no commitment can be silently omitted from the middle of a hash-chained sequence without breaking the chain.
+- **L1 (bounded-scan continuity of ONE header chain — not a general completeness proof).** Because every block header commits to its parent, a contiguous stored range `[M, N]` with no gap and a verified hash-chain walk proves that **one specific header chain, as stored, is internally continuous end to end** — no header can be silently omitted from the middle of that one hash-chained sequence without breaking the walk. That is a real, useful, cheaply-checkable property, but it is a narrower claim than "the archive is complete," and this doc previously stated the broader claim without qualification (v3 audit finding, one round-2 reviewer, §10.9).
 - **L2 (remote/untrusted-DB hardening).** Applies unchanged in spirit: if this archive is ever served from a hosted/replicated UmbraDB instance rather than a trusted local one, the same AES-GCM-at-rest / anti-rollback / multi-device concerns apply to the archive's own monotonic sync watermark (`chain_archive.watermarks`, §5) exactly as they apply to a wallet snapshot's `seq`.
 - **L3 (on-chain self-certification).** The `verifiable-snapshot` design's Compact "Attested Manifest Root" contract is explicitly designed with a Merkle-committed structured snapshot root over domain-separated sections — a second commitment slot for a `chainArchiveManifestRoot` (committing to, e.g., `sha256` over the ordered `(net, height, block_hash)` sequence UmbraDB has actually archived) is a structurally identical addition, not a new mechanism.
 
-This connection point is deliberately left at the concept level — the task that will formalize it is a separate, later design-council process, gated on this schema being stable.
+**v3 audit fix — completeness-claim overclaim (new finding, one round-2 reviewer, a documentation-accuracy fix, no schema change).** The pre-v3 text above stated that the L1 hash-chain walk proves the archive is "complete." That is not accurate, and this doc's own established honesty discipline elsewhere (§7's UNVERIFIED flags, §3.6's "confirmed absent, not confirmed present") calls for the same precision here. What the L1 walk actually proves, and does not prove:
+
+- **Proves:** for the *one* chain of header rows actually walked (genesis to the row picked as the endpoint), the stored sequence is internally continuous — every `parent_hash` in the walk correctly links to the previous row's `block_hash`, with no gap. This is a real, cheap, useful check.
+- **Does NOT prove fork completeness.** `blocks` deliberately stores the full block tree, not just the canonical chain (§4.2) — but a single canonical-chain walk from genesis to tip says nothing about whether every non-canonical/orphaned block UmbraDB ever received was actually retained. A missing orphaned-fork row does not break the canonical walk at all.
+- **Does NOT prove transaction or bridge-observation completeness.** Nothing about a `blocks`-only hash-chain walk touches `transactions` or `bridge_observations` — a block row can exist, hash-chain correctly, and still have zero of its real transactions archived, and the walk would not detect it.
+- **Does NOT prove body/extrinsics integrity**, and structurally *cannot* with this v1 schema even in principle: each header carries `extrinsics_root` (§3.1), which is exactly the commitment that would let a verifier recompute and check "do the transactions I have for this block actually match what the header committed to" — but `blocks.body_blob_hash` is nullable (§4.2, pending unscheduled body/extrinsics sync), so the raw block body needed to recompute `extrinsics_root` is often simply not present. Even where `transactions` rows exist for a block, this v1 schema has no code path that recomputes `extrinsics_root` from them and compares.
+
+A genuine completeness claim (fork completeness + transaction-set completeness + body integrity) is real, separate future work, gated on body/extrinsics sync landing and an explicit `extrinsics_root`-recomputation check being built — not something the current parent-hash walk gets for free. This connection point is otherwise deliberately left at the concept level — the task that will formalize L0–L3 for chain-archive snapshots is a separate, later design-council process, gated on this schema being stable.
 
 ---
 
@@ -393,7 +512,9 @@ This connection point is deliberately left at the concept level — the task tha
 5. **`net` is a safety-rail column, not (yet) a physical partitioning dimension** (§4.2) — correct for the expected single-network-per-deployment shape, but a future multi-network-in-one-archive deployment would need `LIST (net)`-then-`RANGE (height)` sub-partitioning, not built here.
 6. **No FK enforcement on `blocks.parent_hash`** (§4.2) — an explicit, unchanged trade-off (out-of-order reorg backfill), not an oversight; application-level invariant checks must exist wherever `blocks` is actually written to, which this pass does not build (migration-only scope).
 7. **This design does not touch `midnight-storage-core`'s GC gap** noted in the original research brief (every `.persist()` in `midnight-node` today is unbalanced by any `.unpersist()` call site) — that is a `midnight-node` upstream concern, out of scope for a Postgres schema design.
-8. **Partition rollover automation** (§4.6's runbook) is a documented manual/scriptable procedure, not built automation — `pg_partman` or an equivalent scheduler remains the recommended way to run it on a timer, still not wired up in this pass.
+8. **Partition rollover automation** (§4.6's runbook) is a documented manual/scriptable, empirically-verified procedure, not built automation — `pg_partman` or an equivalent scheduler remains the recommended way to run it on a timer across all three tables, still not wired up in this pass.
+9. **The L1 chain-continuity check (§9) proves header-chain continuity, not archive completeness** — restated here per this revision's own honesty discipline (v3 audit finding): fork completeness, transaction/observation completeness, and body/`extrinsics_root` integrity are all separate, currently-unproven properties. A genuine completeness claim is real future work gated on body/extrinsics sync landing and an explicit `extrinsics_root`-recomputation check being built.
+10. **`chain_blob_roles` completeness enforcement (§4.1) is insert/update-time only, not delete-time** — nothing in this schema currently deletes a `chain_blob_roles` row, so there is no gap in practice today, but if a future migration ever adds a delete path for that table, it would need its own guard against deleting a role still required by a live reference; nothing in this pass builds that guard since nothing in this pass needs it.
 
 ---
 
@@ -405,7 +526,7 @@ This connection point is deliberately left at the concept level — the task tha
 | Block tree (`blocks`, `is_canonical`/status, canonical-uniqueness enforced) | ✅ §4.2 | `LIST(net)` sub-partitioning if multi-network-in-one-archive is ever needed; `pg_partman` rollover automation | |
 | Transaction metadata (`transactions`, FK to `blocks`) | ✅ §4.3 | | |
 | Bridge/governance observations (`bridge_observations`) | ✅ §4.4 *(reclassified from deferred)* | | |
-| Verifier-key metadata | ✅ §4.5 | | |
+| Verifier-key metadata (`verifier_key_observations`) | ✅ §4.5 *(v3: split from single-row-per-hash `verifier_keys` into a content-addressed hash + multi-context observation junction, per direct ledger-source confirmation that VK content is genuinely shared across networks/contracts)* | | |
 | Shielded ledger events (zswap) | | **UNVERIFIED** — needs an end-to-end genesis→event replay test before this deferral is trusted | indexer already covers today |
 | Unshielded UTXO events | | **UNVERIFIED** — same | indexer already covers today |
 | Dust generation/registration | | **UNVERIFIED** — same | indexer already covers today |
@@ -417,4 +538,4 @@ This connection point is deliberately left at the concept level — the task tha
 
 ---
 
-*Grounding: three completed research passes (industry archival prior art; Midnight source/schema audit; UmbraDB live-schema confirmation) as condensed in the original task brief; live-devnet evidence captured directly in §3 (node RPC `localhost:9944`, indexer GraphQL `localhost:8088`, and a direct SQLite read of the indexer's own `/data/indexer.sqlite`), 2026-07-22; this revision's own direct empirical Postgres testing (a real local `postgres:17-alpine` container, spun up and torn down solely for this revision) for the partial-unique-index-on-partitioned-table question (§4.2), the cross-partitioned-table FK question (§4.3), the generated-column/CHECK behavior (§4.1), and a full end-to-end application of the actual revised migration including the fork-PK-fix scenario (§4.3, §8); `design/design.md` §0 and `design/verifiable-snapshot-design.md` re-read directly, not from memory. No Midnight source modified; nothing committed to any node/indexer state; no migration run against any application database (only ephemeral, disposable test containers created and destroyed solely for this revision's own verification).*
+*Grounding: three completed research passes (industry archival prior art; Midnight source/schema audit; UmbraDB live-schema confirmation) as condensed in the original task brief; live-devnet evidence captured directly in §3 (node RPC `localhost:9944`, indexer GraphQL `localhost:8088`, and a direct SQLite read of the indexer's own `/data/indexer.sqlite`), 2026-07-22; the v2 revision's own direct empirical Postgres testing (a real local `postgres:17-alpine` container, spun up and torn down solely for that revision) for the partial-unique-index-on-partitioned-table question (§4.2), the cross-partitioned-table FK question (§4.3), the generated-column/CHECK behavior (§4.1), and a full end-to-end application of the actual revised migration including the fork-PK-fix scenario (§4.3, §8); `design/design.md` §0 and `design/verifiable-snapshot-design.md` re-read directly, not from memory. **v3 additionally grounded in:** its own fresh empirical Postgres 17 testing (another disposable local container) for the `finalized`-CHECK behavior (§4.2), the blob-role trigger-on-partitioned-table propagation and enforcement behavior (§4.1), the `verifier_key_observations` CHECK-biconditional and `UNIQUE NULLS NOT DISTINCT` dedup behavior (§4.5), and the DETACH/re-ATTACH partition-rollover procedure across FK-linked tables (§4.6); a direct read of `transient-crypto/src/proofs.rs` and `ledger/src/structure.rs` (not assumed) for the verifier-key sharing finding (§4.5); and one committed automated test (`test/postgres/chain-archive-migrate.test.ts`) that actually runs `chainArchiveMigrations` against real Postgres and exercises the fork/dual-canonical/FK-violation scenarios end-to-end, run and confirmed passing as part of this revision (`npx vitest run`, full suite, no regressions; `npx tsc --noEmit`, clean). No Midnight source modified; nothing committed to any node/indexer state; no migration run against any application database (only ephemeral, disposable test containers created and destroyed solely for verification, across both revisions).*

@@ -30,3 +30,10 @@ import type { Migration } from "../../migrate.js";
  * live apply.
  */
 export const chainArchiveMigrations: Migration[] = [migration000, chainArchiveCore];
+
+// v3 note: `chainArchiveCore` now also creates `chain_archive_assert_blob_role` (a shared
+// plpgsql helper) and one thin `BEFORE INSERT OR UPDATE` trigger per blob-referencing table
+// (`blocks`, `transactions`, `bridge_observations`, `verifier_key_observations`) enforcing
+// `chain_blob_roles` completeness, and `verifier_keys` was replaced by
+// `verifier_key_observations` — see `001_chain_archive_core.ts`'s own header comment and the
+// design doc's "Revision history — v3" note for the full reasoning.

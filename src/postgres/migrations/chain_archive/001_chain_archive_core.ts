@@ -4,12 +4,39 @@ import { CHAIN_ARCHIVE_HEIGHT_PARTITION_SIZE, CHAIN_ARCHIVE_PRECREATED_PARTITION
 
 /**
  * `chain_blobs` / `chain_blob_roles` / `blocks` / `transactions` / `bridge_observations` /
- * `verifier_keys` / `watermarks` DDL for the **Tier-1.5 chain-archive lineage**
+ * `verifier_key_observations` / `watermarks` DDL for the **Tier-1.5 chain-archive lineage**
  * (`design/full-chain-storage-design.md` §4/§5/§7, revised in response to the 3-reviewer
  * design-council audit — Fable 5 / Opus / GPT-5.6 Sol — that found the original
  * `005_chain_archive.ts` had a fork-breaking PK bug, unenforced canonical-chain uniqueness, an
  * unjustified `block_undo` table, a silent bridge-data survival hole, and several smaller
  * schema gaps; see the design doc's revision-history note for the full list).
+ *
+ * **v3 revision (round-2 design-council re-audit — Fable 5 / Opus / GPT-5.6 Sol; see the design
+ * doc's "Revision history — v3" note for the full writeup):**
+ *   1. `blocks` gained `CHECK (NOT finalized OR is_canonical)` — closes a gap the v2 `(status =
+ *      'canonical') = is_canonical` CHECK didn't cover (finalized-but-not-canonical was legal).
+ *   2. `chain_blob_roles` completeness is now DB-enforced, not merely conventional: every table
+ *      that references `chain_blobs(hash)` (`blocks.header_blob_hash`/`body_blob_hash`,
+ *      `transactions.raw_blob_hash`, `bridge_observations.raw_blob_hash`,
+ *      `verifier_key_observations.vk_hash`) has a `BEFORE INSERT OR UPDATE` trigger requiring a
+ *      matching `chain_blob_roles` row to already exist for the role that column implies.
+ *      **Empirically confirmed** against a real Postgres 17 instance while revising this
+ *      migration: a `BEFORE INSERT FOR EACH ROW` trigger defined on a `PARTITION BY RANGE`
+ *      parent table is automatically cloned onto every existing AND future partition (confirmed
+ *      via `pg_trigger`), and correctly rejects an insert whose referenced blob has no matching
+ *      role row while accepting one that does.
+ *   3. `verifier_keys` split into `verifier_key_observations` (§4.5's redesign) — see that
+ *      table's own comment block for the full reasoning, grounded in reading
+ *      `transient-crypto/src/proofs.rs` and `ledger/src/structure.rs` directly.
+ *   4. `transactions.protocol_version` gained a `CHECK (protocol_version >= 0)` (closes a gap
+ *      in the v2 "nonnegative checks throughout" claim); the redundant `transactions_by_block`
+ *      index (a strict left-prefix of the existing PK index) was dropped.
+ *   5. The `blocks`/`transactions`/`bridge_observations` DEFAULT-partition rollover runbook
+ *      (design doc §4.6) was rewritten around an empirically-verified DETACH/re-ATTACH
+ *      procedure — the v2 runbook's copy-then-delete-from-DEFAULT step is provably broken by
+ *      the very FKs this feature added (confirmed by reproducing the exact failure: `DELETE`
+ *      from a DEFAULT partition that still holds FK-referenced rows is rejected). No schema
+ *      change was needed for this fix — see the design doc for the corrected runbook.
  *
  * This migration is applied to its **own** schema (conventionally `chain_archive`, but the
  * schema name is passed in by the caller exactly like every other migration in this repo) via
@@ -84,6 +111,47 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   `;
 
   // ---------------------------------------------------------------------------------------
+  // chain_archive_assert_blob_role — v3 audit fix, blob-role integrity (flagged by 2 of 3
+  // round-2 reviewers). Before this, `chain_blob_roles` could legally have zero rows for a
+  // `chain_blobs` hash that `blocks`/`transactions`/`bridge_observations`/
+  // `verifier_key_observations` reference directly — a real regression from the pre-v2 `kind
+  // NOT NULL` column, which guaranteed every blob was classified. Chose enforcement (option
+  // (a) from the audit's menu, not documenting role-tagging as advisory-only) because it
+  // empirically turned out not to be excessively complex: one shared helper function plus one
+  // thin `BEFORE INSERT OR UPDATE` trigger per consuming table/column, verified against a real
+  // Postgres 17 instance to (1) correctly reject a reference to an unclassified blob and (2)
+  // correctly propagate from the partitioned parent to every partition automatically (PG11+
+  // behavior — row triggers on a partitioned table are cloned onto existing and future
+  // partitions, not something that must be redeclared per-partition).
+  //
+  // This is an insert/update-time invariant, not a delete-time one: nothing in this schema ever
+  // deletes a `chain_blob_roles` row (consistent with the rest of this design's insert-only
+  // model, §6), so there is no corresponding trigger guarding against a role being removed out
+  // from under an existing reference — that gap doesn't exist today because no code path
+  // creates it.
+  // ---------------------------------------------------------------------------------------
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.chain_archive_assert_blob_role(
+      p_blob_hash bytea, p_role text, p_table text, p_column text
+    ) RETURNS void LANGUAGE plpgsql AS $fn$
+    BEGIN
+      IF p_blob_hash IS NULL THEN
+        RETURN;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM ${sql(schema)}.chain_blob_roles
+        WHERE blob_hash = p_blob_hash AND role = p_role
+      ) THEN
+        RAISE EXCEPTION 'blob % referenced by %.% has no chain_blob_roles row for role %'
+          , encode(p_blob_hash, 'hex'), p_table, p_column, p_role
+          USING ERRCODE = '23514'; -- check_violation: a classification-completeness failure,
+                                    -- not a generic runtime error
+      END IF;
+    END;
+    $fn$
+  `;
+
+  // ---------------------------------------------------------------------------------------
   // blocks — the block tree, not just the canonical chain (§4.2; kept as all three reviewers
   // praised this modeling choice). Revisions from the original:
   //   1. FORK-BREAKING PK BUG FIX (caught independently by 2 of 3 reviewers): this table's PK
@@ -138,6 +206,15 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       finalized        boolean     NOT NULL DEFAULT false,
       synced_at        timestamptz NOT NULL DEFAULT now(),
       CHECK ((status = 'canonical') = is_canonical),
+      -- v3 audit fix (2 of 3 round-2 reviewers): the CHECK above only ties status/is_canonical
+      -- together, leaving finalized=true, status='seen', is_canonical=false legal -- impossible
+      -- under real Substrate/GRANDPA finality semantics (a finalized block is always
+      -- canonical). finalized implies is_canonical (equivalently NOT finalized OR is_canonical)
+      -- closes it; empirically confirmed against a real Postgres 17 instance while revising
+      -- this migration to both (a) reject the illegal combination and (b) still accept every
+      -- legal one (seen/not-canonical/not-finalized; canonical/finalized;
+      -- canonical/not-yet-finalized).
+      CHECK (NOT finalized OR is_canonical),
       PRIMARY KEY (net, height, block_hash)
     ) PARTITION BY RANGE (height)
   `;
@@ -155,6 +232,26 @@ export async function up(sql: ISql, schema: string): Promise<void> {
   await sql`
     CREATE INDEX blocks_by_parent
       ON ${sql(schema)}.blocks (parent_hash)
+  `;
+
+  // v3 audit fix — blob-role integrity (see chain_archive_assert_blob_role above). `blocks` has
+  // two blob-hash columns: `header_blob_hash` (NOT NULL, always checked) and `body_blob_hash`
+  // (nullable, checked only when present -- the helper function itself no-ops on NULL).
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.blocks_check_blob_roles() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      PERFORM ${sql(schema)}.chain_archive_assert_blob_role(
+        NEW.header_blob_hash, 'block_header', 'blocks', 'header_blob_hash');
+      PERFORM ${sql(schema)}.chain_archive_assert_blob_role(
+        NEW.body_blob_hash, 'block_body', 'blocks', 'body_blob_hash');
+      RETURN NEW;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER blocks_blob_roles_trigger
+      BEFORE INSERT OR UPDATE OF header_blob_hash, body_blob_hash ON ${sql(schema)}.blocks
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.blocks_check_blob_roles()
   `;
 
   // ---------------------------------------------------------------------------------------
@@ -184,7 +281,9 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       block_hash       bytea       NOT NULL CHECK (octet_length(block_hash) = 32),
       position         integer     NOT NULL CHECK (position >= 0),
       kind             text        NOT NULL CHECK (kind IN ('regular', 'system')),
-      protocol_version integer     NOT NULL,
+      -- v3 audit fix (minor item 6): the v2 design doc claimed "nonnegative checks throughout"
+      -- but this column had none -- added to actually match that claim.
+      protocol_version integer     NOT NULL CHECK (protocol_version >= 0),
       result           text        CHECK (result IN ('success', 'partial_success', 'failure') OR result IS NULL),
       raw_blob_hash    bytea       NOT NULL REFERENCES ${sql(schema)}.chain_blobs(hash),
       synced_at        timestamptz NOT NULL DEFAULT now(),
@@ -200,9 +299,29 @@ export async function up(sql: ISql, schema: string): Promise<void> {
     CREATE INDEX transactions_by_hash
       ON ${sql(schema)}.transactions (tx_hash)
   `;
+  // v3 audit fix (minor item 6): `transactions_by_block` (ON (net, block_height, block_hash))
+  // dropped -- it is a strict left-prefix of the PK's own btree index (net, block_height,
+  // block_hash, tx_hash), so Postgres can already satisfy any (net) / (net, block_height) /
+  // (net, block_height, block_hash) lookup or the FK's own existence checks off the PK index
+  // directly; the separate index bought no distinct access pattern, only extra write-amplification
+  // and storage. `transactions_by_hash` (above) is kept -- it is NOT a PK left-prefix (`tx_hash`
+  // alone, not `(net, block_height, block_hash, tx_hash)`), and is the genuinely distinct
+  // "look up a transaction by hash alone, across all blocks/forks" access pattern.
+
+  // v3 audit fix — blob-role integrity (see chain_archive_assert_blob_role above).
   await sql`
-    CREATE INDEX transactions_by_block
-      ON ${sql(schema)}.transactions (net, block_height, block_hash)
+    CREATE FUNCTION ${sql(schema)}.transactions_check_blob_roles() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      PERFORM ${sql(schema)}.chain_archive_assert_blob_role(
+        NEW.raw_blob_hash, 'tx_raw', 'transactions', 'raw_blob_hash');
+      RETURN NEW;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER transactions_blob_roles_trigger
+      BEFORE INSERT OR UPDATE OF raw_blob_hash ON ${sql(schema)}.transactions
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.transactions_check_blob_roles()
   `;
 
   // ---------------------------------------------------------------------------------------
@@ -242,32 +361,114 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       ON ${sql(schema)}.bridge_observations (kind)
   `;
 
+  // v3 audit fix — blob-role integrity (see chain_archive_assert_blob_role above).
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.bridge_observations_check_blob_roles() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      PERFORM ${sql(schema)}.chain_archive_assert_blob_role(
+        NEW.raw_blob_hash, 'bridge_observation', 'bridge_observations', 'raw_blob_hash');
+      RETURN NEW;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER bridge_observations_blob_roles_trigger
+      BEFORE INSERT OR UPDATE OF raw_blob_hash ON ${sql(schema)}.bridge_observations
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.bridge_observations_check_blob_roles()
+  `;
+
   // ---------------------------------------------------------------------------------------
-  // verifier_keys — the one "build now" addition beyond the core three in the original design
-  // (§4.5; the indexer has no dedicated VK archive today). Revisions: `net` (the network a VK
-  // was first observed on — a protocol-circuit VK's bytes may legitimately be shared across
-  // networks running the same protocol version, so this is "first seen on," not an exclusivity
-  // claim); the `scope='contract' => contract_address IS NOT NULL` invariant the original
-  // doc's comment CLAIMED but never enforced now has a real CHECK; and a partial index on
-  // `contract_address` (contract-scoped lookups are the whole point of that scope, per the
-  // audit).
+  // verifier_key_observations — v3 audit fix (new finding, round-2 reviewer, confirmed against
+  // ledger source). Replaces the v2 single `verifier_keys` table, which had two real gaps:
+  //
+  // (a) its CHECK only enforced `scope='contract' => contract_address IS NOT NULL`, not the
+  //     full "iff" the v2 design doc's own comment claimed (`contract_address IS NOT NULL <=>
+  //     scope='contract'`) -- a protocol-scoped row with a non-null `contract_address` was
+  //     silently accepted. Fixed below with `CHECK ((scope = 'contract') = (contract_address IS
+  //     NOT NULL))`, enforcing both directions -- empirically confirmed against a real Postgres
+  //     17 instance to reject BOTH illegal combinations (protocol+non-null address,
+  //     contract+null address) while accepting both legal ones.
+  //
+  // (b) `PRIMARY KEY (vk_hash)` alone was too narrow. Confirmed by reading
+  //     `transient-crypto/src/proofs.rs` and `ledger/src/structure.rs` directly (not assumed):
+  //     `VerifierKey`'s content-addressed bytes are a pure function of the compiled circuit
+  //     (`MidnightVK`, written via `SerdeFormat::Processed` with no network/contract/address
+  //     salt anywhere in `VerifierKey::serialize`/`Tagged::tag` -- the tag is the fixed constant
+  //     `"verifier-key[v6]"` for every instance, a format version marker, not a per-key
+  //     identifier), and `structure.rs`'s `VerifierKeyInsert(EntryPointBuf,
+  //     ContractOperationVersionedVerifierKey)` attaches a VK to a contract's own per-entry-point
+  //     map -- nothing stops two different contract addresses (the same circuit/template
+  //     deployed more than once) or two different networks (same protocol version) from
+  //     genuinely sharing byte-identical VK content. A single-row-per-hash table cannot record
+  //     more than one (net, scope, contract_address) context per key without either rejecting a
+  //     real second sighting or overwriting the first one's context. Fixed by splitting the
+  //     table in two:
+  //       - The content-addressed half already exists and needed no new table: `chain_blobs`
+  //         (hash -> bytes) IS "vk_hash -> key bytes," and `chain_blob_roles`
+  //         (role = 'verifier_key') already tracks "this hash is known to be a VK" (the same
+  //         mechanism the blob-role-integrity fix above introduced) -- building a third,
+  //         redundant content-keyed table here would just duplicate that.
+  //       - `verifier_key_observations` (below) is the new table: the "each place/context this
+  //         key was actually seen" junction the audit asked for, keyed on
+  //         `(vk_hash, net, scope, contract_address, first_seen_height)` per the task brief.
+  //         That exact tuple cannot be a PRIMARY KEY, though -- Postgres requires every PK
+  //         column to be NOT NULL, and `contract_address` is legitimately NULL for
+  //         protocol-scoped rows, which would silently make protocol-scoped observations
+  //         un-insertable. Uses a surrogate `id` PK plus `UNIQUE NULLS NOT DISTINCT
+  //         (vk_hash, net, scope, contract_address, first_seen_height)` instead (PG15+, this
+  //         repo targets PG17) -- **empirically confirmed** against a real Postgres 17 instance:
+  //         two *different* protocol-scoped observations of the same key (different `net`, both
+  //         `contract_address IS NULL`) are correctly accepted as distinct rows, while an exact
+  //         duplicate context (same vk_hash/net/scope/contract_address/first_seen_height, both
+  //         NULL `contract_address`) is correctly rejected -- ordinary `UNIQUE` treats every
+  //         NULL as distinct from every other NULL and would NOT have caught that duplicate;
+  //         `NULLS NOT DISTINCT` is what makes the dedup semantics actually match "one row per
+  //         real observed context."
+  //
+  //     `tag` moved onto this table (not kept as a property of the content-addressed hash): it
+  //     names the circuit/entry-point role a key was observed playing in a given context (e.g.
+  //     which contract entry point inserted it), which is a property of the observation, not of
+  //     the bytes themselves -- the same bytes observed in two different contexts could
+  //     legitimately carry the same or different human-readable `tag`, so it belongs here.
   // ---------------------------------------------------------------------------------------
   await sql`
-    CREATE TABLE ${sql(schema)}.verifier_keys (
-      vk_hash           bytea       PRIMARY KEY REFERENCES ${sql(schema)}.chain_blobs(hash),
+    CREATE TABLE ${sql(schema)}.verifier_key_observations (
+      id                bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      vk_hash           bytea       NOT NULL REFERENCES ${sql(schema)}.chain_blobs(hash),
       net               text        NOT NULL,
       scope             text        NOT NULL CHECK (scope IN ('protocol', 'contract')),
       tag               text        NOT NULL,
       contract_address  bytea,
       first_seen_height bigint      NOT NULL CHECK (first_seen_height >= 0),
-      created_at        timestamptz NOT NULL DEFAULT now(),
-      CHECK (scope <> 'contract' OR contract_address IS NOT NULL)
+      synced_at         timestamptz NOT NULL DEFAULT now(),
+      CHECK ((scope = 'contract') = (contract_address IS NOT NULL)),
+      UNIQUE NULLS NOT DISTINCT (vk_hash, net, scope, contract_address, first_seen_height)
     )
   `;
 
   await sql`
-    CREATE INDEX verifier_keys_by_contract
-      ON ${sql(schema)}.verifier_keys (contract_address) WHERE contract_address IS NOT NULL
+    CREATE INDEX verifier_key_observations_by_vk_hash
+      ON ${sql(schema)}.verifier_key_observations (vk_hash)
+  `;
+  await sql`
+    CREATE INDEX verifier_key_observations_by_contract
+      ON ${sql(schema)}.verifier_key_observations (contract_address) WHERE contract_address IS NOT NULL
+  `;
+
+  // v3 audit fix — blob-role integrity (see chain_archive_assert_blob_role above).
+  await sql`
+    CREATE FUNCTION ${sql(schema)}.verifier_key_observations_check_blob_roles() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      PERFORM ${sql(schema)}.chain_archive_assert_blob_role(
+        NEW.vk_hash, 'verifier_key', 'verifier_key_observations', 'vk_hash');
+      RETURN NEW;
+    END;
+    $fn$
+  `;
+  await sql`
+    CREATE TRIGGER verifier_key_observations_blob_roles_trigger
+      BEFORE INSERT OR UPDATE OF vk_hash ON ${sql(schema)}.verifier_key_observations
+      FOR EACH ROW EXECUTE FUNCTION ${sql(schema)}.verifier_key_observations_check_blob_roles()
   `;
 
   // ---------------------------------------------------------------------------------------
