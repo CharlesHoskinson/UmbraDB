@@ -1,16 +1,16 @@
 # Graph Report - UmbraDB-storage-algebra-lean  (2026-07-21)
 
 ## Corpus Check
-- 88 files · ~132,056 words
+- 93 files · ~136,026 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1033 nodes · 1424 edges · 125 communities (73 shown, 52 thin omitted)
+- 1078 nodes · 1464 edges · 129 communities (79 shown, 50 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6d9cb622`
+- Built from commit: `b47953a3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -71,7 +71,7 @@
 - save ValidationError before any work requirement
 - CheckpointSummary metadata/label round-trip requirement
 - PgWatermarks.get implementation
-- UmbraDBSql
+- migrate.ts
 - Watermarks Postgres errors surface as StorageError requirement
 - get never throws for an unset cursor requirement
 - get returns last value scoped per (kind,key) requirement
@@ -124,7 +124,7 @@
 - GC architecture and query-tracing: research findings
 - Requirement: load always fully verifies chunk integrity before returning
 - Requirement: prune rejects a retainCount that is not a positive safe integer, before any deletion runs
-- checkpoint-store.property.test.ts
+- ADDED Requirements
 - Requirement: A chunk still referenced by any surviving manifest is never reclaimed (Law C2a)
 - Requirement: A manifest preserves the exact order and multiplicity of its chunks, including repeats
 - Requirement: An already-aborted opts.signal rejects before any database work; a signal aborting after the call has begun has no effect
@@ -135,6 +135,10 @@
 - Requirement: history is newest-first, scoped per wallet+network, and supports cursor paging with no gap or duplicate
 - Requirement: manifestHash is computed once at write time from the ordered chunk-hash sequence
 - Requirement: prune retains exactly the N newest complete manifests per wallet+network
+- Storage Algebra Lean M3b CheckpointStore C1 Sprint
+- Design — Sprint 6: Lean M3b CheckpointStore C1
+- Proposal — Sprint 6: Lean M3b CheckpointStore C1
+- Tasks — Sprint 6: Lean M3b CheckpointStore C1
 
 ## God Nodes (most connected - your core abstractions)
 1. `TransactionHandle` - 22 edges
@@ -151,14 +155,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `Correctness rule: verify external claims against real source` --rationale_for--> `kv_current/kv_history temporal-table design`  [INFERRED]
   openspec/config.yaml → design/design.md
+- `startTestDatabase()` --calls--> `runMigrations()`  [EXTRACTED]
+  test/postgres/setup.ts → src/postgres/migrate.ts
 - `getAt single-statement UNION ALL race fix` --references--> `kv_current/kv_history temporal-table design`  [EXTRACTED]
   openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design.md
 - `Migrations as TypeScript functions (schema-configurability fix)` --references--> `kv_current/kv_history temporal-table design`  [EXTRACTED]
   openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design.md
 - `save() fixed-size chunking algorithm` --references--> `Content-addressed checkpoint chunker`  [EXTRACTED]
   openspec/changes/sprint-3-checkpoint-store/design.md → design/design.md
-- `Chunk reclamation grace-window requirement` --references--> `Content-addressed checkpoint chunker`  [EXTRACTED]
-  openspec/changes/sprint-3-checkpoint-store/specs/checkpoint-store/spec.md → design/design.md
 
 ## Import Cycles
 - None detected.
@@ -169,23 +173,23 @@
 - **Modules composing the Sprint 2 transaction-handle registry** — sprint2_design_transaction_handle_registry, sprint1_design_pgtemporalkv_put, sprint3_design_torn_read_fix, sprint4_design_composing_txlease [EXTRACTED 1.00]
 - **Pre-check-only withAbort cancellation pattern across sprints** — sprint1_design_listkeys_cursor, sprint2_design_withtransaction, sprint3_design_cancellation_scope_decision, sprint4_design_cancellation [INFERRED 0.85]
 
-## Communities (125 total, 52 thin omitted)
+## Communities (129 total, 50 thin omitted)
 
 ### Community 0 - "checkpoint-store.ts"
 Cohesion: 0.07
-Nodes (30): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+22 more)
+Nodes (29): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+21 more)
 
 ### Community 1 - "transaction-lease.ts"
 Cohesion: 0.11
 Nodes (13): LeaseFaultError, LeaseNotHeldError, LeaseTimeoutError, Rollback, TransactionFaultError, TransactionHandleInvalidError, TransactionLeaseError, TransactionLeaseErrorCode (+5 more)
 
 ### Community 2 - "temporal-kv.ts"
-Cohesion: 0.11
-Nodes (30): AsOf, AssertExact, ExpectedVersionSchema, hasPostgresUnsafeText(), HistoryUnavailableError, JsonValue, jsonValueHasUnsafeText(), JsonValueSchema (+22 more)
+Cohesion: 0.09
+Nodes (37): RFC-8259, AsOf, AssertExact, ExpectedVersionSchema, hasPostgresUnsafeText(), HistoryUnavailableError, JsonValue, jsonValueHasUnsafeText() (+29 more)
 
 ### Community 3 - "watermarks.ts"
-Cohesion: 0.17
-Nodes (11): RFC-8259, WatermarkKey, WatermarkKind, Watermarks, WatermarkValue, WatermarkValueSchema, resolveTransaction(), PgWatermarks (+3 more)
+Cohesion: 0.25
+Nodes (5): WatermarkValue, WatermarkValueSchema, WatermarkRow, arbitraryWatermarkValue, { sql: getSql }
 
 ### Community 4 - "scoped-review-manifest"
 Cohesion: 0.22
@@ -227,9 +231,9 @@ Nodes (30): Superseded — see `Formal/STORAGE_ALGEBRA.md`, crdt-lean Dependency
 Cohesion: 0.25
 Nodes (7): Global Constraints, Plan Self-Review, Storage Algebra Lean M1 Implementation Plan, Task 1: Pin the project and prove the imported API smoke slice, Task 2: Implement the executable TemporalKV history kernel, Task 3: Prove the M1 TemporalKV theorem slice, Task 4: Add reproducible trust gates and close the M1 documentation loop
 
-### Community 57 - "UmbraDBSql"
-Cohesion: 0.12
-Nodes (15): assertNoConflictingSearchPath(), assertValidSchemaName(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, Migration, migrations, runMigrations() (+7 more)
+### Community 57 - "migrate.ts"
+Cohesion: 0.15
+Nodes (7): assertValidSchemaName(), Migration, migrations, runMigrations(), runMigrationsImpl(), RunMigrationsOptions, withReservedTransaction()
 
 ### Community 63 - "Design — Postgres+JSONB storage rebuild"
 Cohesion: 0.05
@@ -256,8 +260,8 @@ Cohesion: 0.06
 Nodes (32): Advisory-lock class registry (classes 1/2/3), Module → Postgres module mapping table, Postgres advisory-lock writer lease (corrected design), CheckpointNotFoundError, CheckpointStore interface, CheckpointWalletStateStore (production adapter), Global cross-wallet chunk GC reclamation fix, WalletStateStore (project abstraction) (+24 more)
 
 ### Community 71 - "transaction-lease.ts"
-Cohesion: 0.18
-Nodes (17): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, TransactionOptions, TransactionOptionsSchema, abortError(), activeTransactions, HeldLease (+9 more)
+Cohesion: 0.19
+Nodes (18): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, TransactionOptions, TransactionOptionsSchema, abortError(), isStatementTimeout(), activeTransactions (+10 more)
 
 ### Community 72 - "ADDED Requirements"
 Cohesion: 0.11
@@ -268,16 +272,16 @@ Cohesion: 0.50
 Nodes (3): Change summary, Mandatory Codex audit, Validation
 
 ### Community 75 - "watermarks.test.ts"
-Cohesion: 0.14
-Nodes (6): ConnectionError, SerializationFailedError, SharedStorageErrorCode, ValidationError, FAKE_TX, { sql: getSql, connectionUri }
+Cohesion: 0.12
+Nodes (11): assertNoConflictingSearchPath(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, { sql: getSql }, registerSuiteLifecycle(), startTestDatabase(), stopTestDatabase() (+3 more)
 
 ### Community 76 - "Design — Sprint 3: CheckpointStore"
 Cohesion: 0.13
 Nodes (14): 0. Package layout, 1. Chunking, 2.1 `ckpt_manifest_chunks` needs an explicit position, 2.2 `seq` needs an explicit allocator, 2.3 `complete`: kept, and explicitly written `true` by every `save()`, 2. Schema — two corrections to `design/design.md` §3, 3. `prune` — two-step GC, `design/design.md` §3's pass plus §2.1's cascade, 4. `load` — full verification, no exceptions (+6 more)
 
 ### Community 77 - "errors.ts"
-Cohesion: 0.22
-Nodes (10): StorageError, ClockRegressionError, CONNECTION_FAILURE_CODES, ExclusionViolationError, isConnectionFailure(), isPgDriverError(), isStatementTimeout(), PgDriverError (+2 more)
+Cohesion: 0.16
+Nodes (12): ConnectionError, SerializationFailedError, SharedStorageErrorCode, StorageError, ClockRegressionError, CONNECTION_FAILURE_CODES, ExclusionViolationError, isConnectionFailure() (+4 more)
 
 ### Community 78 - "Design — Sprint 4: Watermarks"
 Cohesion: 0.15
@@ -338,6 +342,10 @@ Nodes (6): 1. Executable carrier, 2. Commands and interpretation, 3. Laws, 4. Tr
 ### Community 92 - "Performance — design"
 Cohesion: 0.29
 Nodes (6): 1. Postgres-side profiling, 2. Node-side query correlation, 3. GC architecture (the load-bearing decision), 4. Benchmark harness, 5. Activity logging, Performance — design
+
+### Community 93 - "temporal-kv.test.ts"
+Cohesion: 0.22
+Nodes (3): ValidationError, FAKE_TX, { sql: getSql }
 
 ### Community 94 - "1. Shared Conventions"
 Cohesion: 0.33
@@ -403,6 +411,10 @@ Nodes (4): Requirement: load always fully verifies chunk integrity before return
 Cohesion: 0.50
 Nodes (4): Requirement: prune rejects a retainCount that is not a positive safe integer, before any deletion runs, Scenario: A non-integer or non-finite retainCount is rejected with no effect, Scenario: An integer retainCount outside the safe integer range is rejected with no effect, Scenario: retainCount of zero is rejected with no effect
 
+### Community 110 - "ADDED Requirements"
+Cohesion: 0.12
+Nodes (16): ADDED Requirements, formal-checkpoint-c1, Requirement: C1 remains a save-only abstract projection, Requirement: Chunk identities form an unconditional finite join projection, Requirement: Chunk-map merge preserves existing bytes, Requirement: Collision freedom is an explicit local theorem premise, Requirement: Compatible chunk maps satisfy conditional C1 commutation, Requirement: Saving identity inputs is extensive, repeat-idempotent, and order-independent (+8 more)
+
 ### Community 111 - "Requirement: A chunk still referenced by any surviving manifest is never reclaimed (Law C2a)"
 Cohesion: 0.67
 Nodes (3): Requirement: A chunk still referenced by any surviving manifest is never reclaimed (Law C2a), Scenario: A chunk shared across wallets survives one wallet's prune, Scenario: Interleaved save and prune never orphans a live manifest's chunk
@@ -443,25 +455,41 @@ Nodes (3): Requirement: manifestHash is computed once at write time from the ord
 Cohesion: 0.67
 Nodes (3): Requirement: prune retains exactly the N newest complete manifests per wallet+network, Scenario: Pruning to retain k newest keeps exactly those k, Scenario: Pruning to retain the single newest manifest keeps only it
 
+### Community 125 - "Storage Algebra Lean M3b CheckpointStore C1 Sprint"
+Cohesion: 0.22
+Nodes (8): Adversarial examples, Audited semantic decisions, Compatible-map theorem gate, Explicit non-goals, Identity-projection theorem gate, Source layout, Storage Algebra Lean M3b CheckpointStore C1 Sprint, Verification matrix
+
+### Community 126 - "Design — Sprint 6: Lean M3b CheckpointStore C1"
+Cohesion: 0.29
+Nodes (6): 1. Finite identity projection, 2. Finite byte-bearing maps, 3. Collision premise bridge, 4. Laws and trust boundary, 5. Refinement boundary, Design — Sprint 6: Lean M3b CheckpointStore C1
+
+### Community 127 - "Proposal — Sprint 6: Lean M3b CheckpointStore C1"
+Cohesion: 0.33
+Nodes (5): Impact, Non-goals, Proposal — Sprint 6: Lean M3b CheckpointStore C1, What changes, Why
+
+### Community 128 - "Tasks — Sprint 6: Lean M3b CheckpointStore C1"
+Cohesion: 0.33
+Nodes (5): 0. Specification freeze, 1. Chunk-identity projection, 2. Compatible chunk maps, 3. Close-out, Tasks — Sprint 6: Lean M3b CheckpointStore C1
+
 ## Knowledge Gaps
-- **523 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+518 more)
+- **551 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+546 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **52 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **50 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Storage Algebra Lean Formalization — Approved Design and Status` connect `Storage Algebra Lean Formalization — Approved Design and Status` to `Design — Postgres+JSONB storage rebuild`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
+  _High betweenness centrality (0.008) - this node is a cross-community bridge._
 - **Why does `TransactionHandle` connect `temporal-kv.ts` to `transaction-lease.ts`, `watermarks.ts`, `transaction-lease.ts`, `watermarks.test.ts`, `temporal-kv.test.ts`?**
+  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+- **Why does `Storage Layer Interface Specification` connect `Storage Layer Interface Specification` to `1. Shared Conventions`, `README.md`, `3. Module Interfaces`?**
   _High betweenness centrality (0.006) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `private` to the rest of the system?**
-  _523 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _551 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `checkpoint-store.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.0711864406779661 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07199032062915911 - nodes in this community are weakly interconnected._
 - **Should `transaction-lease.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.11384615384615385 - nodes in this community are weakly interconnected._
 - **Should `temporal-kv.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.10708898944193061 - nodes in this community are weakly interconnected._
-- **Should `Storage Algebra Lean Formalization — Approved Design and Status` be split into smaller, more focused modules?**
-  _Cohesion score 0.045454545454545456 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08717948717948718 - nodes in this community are weakly interconnected._

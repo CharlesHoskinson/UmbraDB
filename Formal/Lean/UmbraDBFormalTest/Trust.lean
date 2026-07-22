@@ -1,5 +1,7 @@
 import Mathlib.Util.AssertNoSorry
 import UmbraDBFormalTest.APISmoke
+import UmbraDBFormalTest.Checkpoint.ChunkMap
+import UmbraDBFormalTest.Checkpoint.Projection
 import UmbraDBFormalTest.TemporalKV.Model
 import UmbraDBFormalTest.TemporalKV.Laws
 import UmbraDBFormalTest.TemporalKV.Retention.Model

@@ -702,8 +702,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": "storage-errors.ts"
     },
     {
@@ -735,8 +735,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_sharedstorageerrorcode",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": "sharedstorageerrorcode"
     },
     {
@@ -746,8 +746,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 93,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": "validationerror"
     },
     {
@@ -757,8 +757,8 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror_constructor",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 93,
+      "community_name": "temporal-kv.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -779,8 +779,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": "serializationfailederror"
     },
     {
@@ -790,8 +790,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror_constructor",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -801,8 +801,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": "connectionerror"
     },
     {
@@ -812,8 +812,8 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror_constructor",
-      "community": 75,
-      "community_name": "watermarks.test.ts",
+      "community": 77,
+      "community_name": "errors.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -1505,8 +1505,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_interfaces_watermarks",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "watermarks.ts"
     },
     {
@@ -1516,8 +1516,8 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarkkind",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "watermarkkind"
     },
     {
@@ -1527,8 +1527,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarkkey",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "watermarkkey"
     },
     {
@@ -1549,8 +1549,8 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarks",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "watermarks"
     },
     {
@@ -1560,8 +1560,8 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarks_set",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".set()"
     },
     {
@@ -1571,8 +1571,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarks_get",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".get()"
     },
     {
@@ -1582,8 +1582,8 @@
       "source_location": "L42",
       "_origin": "ast",
       "id": "docref_rfc_8259",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "rfc-8259"
     },
     {
@@ -1593,8 +1593,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_abort",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 71,
+      "community_name": "transaction-lease.ts",
       "norm_label": "abort.ts"
     },
     {
@@ -1615,8 +1615,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_postgres_abort_withabort",
-      "community": 0,
-      "community_name": "checkpoint-store.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "withabort()"
     },
     {
@@ -1857,8 +1857,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_client",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "client.ts"
     },
     {
@@ -1868,8 +1868,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_postgres_client_umbradbsql",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "umbradbsql"
     },
     {
@@ -1880,7 +1880,7 @@
       "_origin": "ast",
       "id": "src_postgres_client_assertvalidschemaname",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "assertvalidschemaname()"
     },
     {
@@ -1890,8 +1890,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_postgres_client_umbradbconnectionoptions",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "umbradbconnectionoptions"
     },
     {
@@ -1901,8 +1901,8 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "src_postgres_client_assertnoconflictingsearchpath",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "assertnoconflictingsearchpath()"
     },
     {
@@ -1912,8 +1912,8 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "src_postgres_client_createclient",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "createclient()"
     },
     {
@@ -2033,8 +2033,8 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "src_postgres_errors_isstatementtimeout",
-      "community": 77,
-      "community_name": "errors.ts",
+      "community": 71,
+      "community_name": "transaction-lease.ts",
       "norm_label": "isstatementtimeout()"
     },
     {
@@ -2067,7 +2067,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "migrate.ts"
     },
     {
@@ -2078,7 +2078,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_migration",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "migration"
     },
     {
@@ -2089,7 +2089,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_migration_up",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": ".up()"
     },
     {
@@ -2100,7 +2100,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_withreservedtransaction",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "withreservedtransaction()"
     },
     {
@@ -2111,7 +2111,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_migrations",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "migrations"
     },
     {
@@ -2122,7 +2122,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsoptions",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "runmigrationsoptions"
     },
     {
@@ -2133,7 +2133,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrations",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "runmigrations()"
     },
     {
@@ -2144,7 +2144,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsimpl",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "runmigrationsimpl()"
     },
     {
@@ -2155,7 +2155,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "000_schema.ts"
     },
     {
@@ -2166,7 +2166,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema_up",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "up()"
     },
     {
@@ -2177,7 +2177,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "001_temporal_kv.ts"
     },
     {
@@ -2188,7 +2188,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv_up",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "up()"
     },
     {
@@ -2199,7 +2199,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "002_checkpoint_store.ts"
     },
     {
@@ -2210,7 +2210,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store_up",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "up()"
     },
     {
@@ -2221,7 +2221,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "003_watermarks.ts"
     },
     {
@@ -2232,7 +2232,7 @@
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks_up",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "up()"
     },
     {
@@ -2297,8 +2297,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_postgres_temporal_kv_pgtemporalkv_constructor",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2451,8 +2451,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_resolvetransaction",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "resolvetransaction()"
     },
     {
@@ -2550,8 +2550,8 @@
       "source_location": "L205",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_constructor",
-      "community": 71,
-      "community_name": "transaction-lease.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2638,8 +2638,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": "pgwatermarks"
     },
     {
@@ -2649,8 +2649,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks_constructor",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -2660,8 +2660,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks_set",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".set()"
     },
     {
@@ -2671,8 +2671,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks_setimpl",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".setimpl()"
     },
     {
@@ -2682,8 +2682,8 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks_get",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".get()"
     },
     {
@@ -2693,8 +2693,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "src_postgres_watermarks_pgwatermarks_getimpl",
-      "community": 3,
-      "community_name": "watermarks.ts",
+      "community": 2,
+      "community_name": "temporal-kv.ts",
       "norm_label": ".getimpl()"
     },
     {
@@ -2704,8 +2704,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test",
-      "community": 110,
-      "community_name": "checkpoint-store.property.test.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "checkpoint-store.property.test.ts"
     },
     {
@@ -2715,8 +2715,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_sql_getsql",
-      "community": 110,
-      "community_name": "checkpoint-store.property.test.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "{ sql: getsql }"
     },
     {
@@ -2726,8 +2726,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_store",
-      "community": 110,
-      "community_name": "checkpoint-store.property.test.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "store()"
     },
     {
@@ -2737,8 +2737,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_freshwallet",
-      "community": 110,
-      "community_name": "checkpoint-store.property.test.ts",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "freshwallet()"
     },
     {
@@ -2814,8 +2814,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_client_test",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "client.test.ts"
     },
     {
@@ -2826,7 +2826,7 @@
       "_origin": "ast",
       "id": "test_postgres_migrate_test",
       "community": 57,
-      "community_name": "UmbraDBSql",
+      "community_name": "migrate.ts",
       "norm_label": "migrate.test.ts"
     },
     {
@@ -2836,8 +2836,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_setup",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "setup.ts"
     },
     {
@@ -2847,8 +2847,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "test_postgres_setup_starttestdatabase",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "starttestdatabase()"
     },
     {
@@ -2858,8 +2858,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "test_postgres_setup_stoptestdatabase",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "stoptestdatabase()"
     },
     {
@@ -2869,8 +2869,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "test_postgres_setup_registersuitelifecycle",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "registersuitelifecycle()"
     },
     {
@@ -3001,8 +3001,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_transaction_lease_property_test",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "transaction-lease.property.test.ts"
     },
     {
@@ -3012,8 +3012,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "test_postgres_transaction_lease_property_test_connectionuri",
-      "community": 57,
-      "community_name": "UmbraDBSql",
+      "community": 75,
+      "community_name": "watermarks.test.ts",
       "norm_label": "{ connectionuri }"
     },
     {
@@ -4197,7 +4197,7 @@
       "label": "1. Executive conclusion",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L21",
+      "source_location": "L22",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_1_executive_conclusion",
       "community": 5,
@@ -4208,7 +4208,7 @@
       "label": "2. Research protocol",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L57",
+      "source_location": "L58",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_2_research_protocol",
       "community": 5,
@@ -4219,7 +4219,7 @@
       "label": "2.1 Historical implementation baseline",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L74",
+      "source_location": "L75",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_2_1_historical_implementation_baseline",
       "community": 5,
@@ -4230,7 +4230,7 @@
       "label": "3. Proof-blocking findings",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L92",
+      "source_location": "L93",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
       "community": 5,
@@ -4241,7 +4241,7 @@
       "label": "3.1 The TemporalKV carrier is too small",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L94",
+      "source_location": "L95",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_1_the_temporalkv_carrier_is_too_small",
       "community": 5,
@@ -4252,7 +4252,7 @@
       "label": "3.2 The proposed action is not an ordinary monoid action",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L107",
+      "source_location": "L108",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_2_the_proposed_action_is_not_an_ordinary_monoid_action",
       "community": 5,
@@ -4263,7 +4263,7 @@
       "label": "3.3 T3 omits the current event and cannot replay a pruned suffix",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L131",
+      "source_location": "L132",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_3_t3_omits_the_current_event_and_cannot_replay_a_pruned_suffix",
       "community": 5,
@@ -4274,7 +4274,7 @@
       "label": "3.4 The time field is not a commit instant",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L143",
+      "source_location": "L144",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_4_the_time_field_is_not_a_commit_instant",
       "community": 5,
@@ -4285,7 +4285,7 @@
       "label": "3.5 T2 overstates atomic conflict reporting",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L157",
+      "source_location": "L158",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_5_t2_overstates_atomic_conflict_reporting",
       "community": 5,
@@ -4296,7 +4296,7 @@
       "label": "3.6 T5 credits a constraint with more than it enforces",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L169",
+      "source_location": "L170",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_6_t5_credits_a_constraint_with_more_than_it_enforces",
       "community": 5,
@@ -4307,7 +4307,7 @@
       "label": "3.7 C1 needs compatibility or a collision assumption",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L190",
+      "source_location": "L191",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_7_c1_needs_compatibility_or_a_collision_assumption",
       "community": 5,
@@ -4318,7 +4318,7 @@
       "label": "3.8 C2 safety and liveness are different theorem classes",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L207",
+      "source_location": "L208",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_8_c2_safety_and_liveness_are_different_theorem_classes",
       "community": 5,
@@ -4329,7 +4329,7 @@
       "label": "3.9 The checkpoint schema loses list semantics",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L220",
+      "source_location": "L221",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_9_the_checkpoint_schema_loses_list_semantics",
       "community": 5,
@@ -4340,7 +4340,7 @@
       "label": "3.10 L1 has two non-equivalent meanings",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L229",
+      "source_location": "L230",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_3_10_l1_has_two_non_equivalent_meanings",
       "community": 5,
@@ -4351,7 +4351,7 @@
       "label": "4. Law-by-law repair map",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L241",
+      "source_location": "L242",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_4_law_by_law_repair_map",
       "community": 5,
@@ -4362,7 +4362,7 @@
       "label": "5. Recommended candidate model",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L256",
+      "source_location": "L257",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
       "community": 5,
@@ -4373,7 +4373,7 @@
       "label": "5.1 Layer A: per-key temporal history",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L261",
+      "source_location": "L262",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_1_layer_a_per_key_temporal_history",
       "community": 5,
@@ -4384,7 +4384,7 @@
       "label": "5.2 Layer B: keyed store and transaction guard",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L320",
+      "source_location": "L321",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_2_layer_b_keyed_store_and_transaction_guard",
       "community": 5,
@@ -4395,7 +4395,7 @@
       "label": "5.3 Layer C: retention",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L345",
+      "source_location": "L346",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_3_layer_c_retention",
       "community": 5,
@@ -4406,7 +4406,7 @@
       "label": "5.4 Checkpoints",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L358",
+      "source_location": "L359",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_4_checkpoints",
       "community": 5,
@@ -4417,7 +4417,7 @@
       "label": "5.5 Watermarks",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L378",
+      "source_location": "L379",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_5_watermarks",
       "community": 5,
@@ -4428,7 +4428,7 @@
       "label": "5.6 Lease state",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L385",
+      "source_location": "L386",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_5_6_lease_state",
       "community": 5,
@@ -4439,7 +4439,7 @@
       "label": "6. Lean 4 feasibility",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L393",
+      "source_location": "L394",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_6_lean_4_feasibility",
       "community": 5,
@@ -4450,7 +4450,7 @@
       "label": "6.1 Approved M1 module layout",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L441",
+      "source_location": "L442",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_6_1_approved_m1_module_layout",
       "community": 5,
@@ -4461,7 +4461,7 @@
       "label": "6.2 First theorem tranche",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L471",
+      "source_location": "L472",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_6_2_first_theorem_tranche",
       "community": 5,
@@ -4472,7 +4472,7 @@
       "label": "7. Formalization strategies considered",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L492",
+      "source_location": "L493",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_7_formalization_strategies_considered",
       "community": 5,
@@ -4483,7 +4483,7 @@
       "label": "8. Test and implementation gaps exposed by the proof plan",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L503",
+      "source_location": "L504",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_8_test_and_implementation_gaps_exposed_by_the_proof_plan",
       "community": 5,
@@ -4494,7 +4494,7 @@
       "label": "9. Trust and refinement boundary",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L531",
+      "source_location": "L532",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_9_trust_and_refinement_boundary",
       "community": 5,
@@ -4505,7 +4505,7 @@
       "label": "Completed M1/M2/W1 claims",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L533",
+      "source_location": "L534",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_completed_m1_m2_w1_claims",
       "community": 5,
@@ -4516,7 +4516,7 @@
       "label": "Deferred M2\u2013M5 proof work",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L568",
+      "source_location": "L569",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_deferred_m2_m5_proof_work",
       "community": 5,
@@ -4527,7 +4527,7 @@
       "label": "Named external obligations",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L580",
+      "source_location": "L583",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_named_external_obligations",
       "community": 5,
@@ -4538,7 +4538,7 @@
       "label": "10. Sprint 2 transaction/lease proposal",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L599",
+      "source_location": "L602",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_10_sprint_2_transaction_lease_proposal",
       "community": 5,
@@ -4549,7 +4549,7 @@
       "label": "11. Evidence matrix",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L623",
+      "source_location": "L626",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_11_evidence_matrix",
       "community": 5,
@@ -4560,7 +4560,7 @@
       "label": "11.1 Repository evidence",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L625",
+      "source_location": "L628",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_11_1_repository_evidence",
       "community": 5,
@@ -4571,7 +4571,7 @@
       "label": "11.2 External primary sources",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L641",
+      "source_location": "L644",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_11_2_external_primary_sources",
       "community": 5,
@@ -4582,7 +4582,7 @@
       "label": "12. Milestone status",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L668",
+      "source_location": "L671",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_12_milestone_status",
       "community": 5,
@@ -4593,7 +4593,7 @@
       "label": "M0 \u2014 freeze semantics",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L670",
+      "source_location": "L673",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m0_freeze_semantics",
       "community": 5,
@@ -4604,7 +4604,7 @@
       "label": "M1 \u2014 no-`sorry` TemporalKV vertical slice (completed)",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L677",
+      "source_location": "L680",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m1_no_sorry_temporalkv_vertical_slice_completed",
       "community": 5,
@@ -4615,7 +4615,7 @@
       "label": "M2 \u2014 complete temporal laws (abstract per-key tranche completed)",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L685",
+      "source_location": "L688",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m2_complete_temporal_laws_abstract_per_key_tranche_completed",
       "community": 5,
@@ -4626,7 +4626,7 @@
       "label": "M3 \u2014 simple stores (in progress)",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L697",
+      "source_location": "L700",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m3_simple_stores_in_progress",
       "community": 5,
@@ -4637,7 +4637,7 @@
       "label": "M4 \u2014 leases and liveness (deferred)",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L703",
+      "source_location": "L709",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m4_leases_and_liveness_deferred",
       "community": 5,
@@ -4648,7 +4648,7 @@
       "label": "M5 \u2014 refinement evidence (deferred)",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L709",
+      "source_location": "L715",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_m5_refinement_evidence_deferred",
       "community": 5,
@@ -4659,7 +4659,7 @@
       "label": "13. Approved implementation decisions",
       "file_type": "document",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L717",
+      "source_location": "L723",
       "_origin": "ast",
       "id": "formal_storage_algebra_lean_research_13_approved_implementation_decisions",
       "community": 5,
@@ -4967,7 +4967,7 @@
       "label": "Getting started",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L170",
+      "source_location": "L179",
       "_origin": "ast",
       "id": "readme_getting_started",
       "community": 84,
@@ -4978,7 +4978,7 @@
       "label": "Design",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L214",
+      "source_location": "L223",
       "_origin": "ast",
       "id": "readme_design",
       "community": 84,
@@ -4989,7 +4989,7 @@
       "label": "Layout",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L237",
+      "source_location": "L247",
       "_origin": "ast",
       "id": "readme_layout",
       "community": 84,
@@ -5000,7 +5000,7 @@
       "label": "License",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L262",
+      "source_location": "L272",
       "_origin": "ast",
       "id": "readme_license",
       "community": 84,
@@ -5055,7 +5055,7 @@
       "label": "Milestone 2 \u2014 Core implementation (module implementations complete)",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L47",
+      "source_location": "L53",
       "_origin": "ast",
       "id": "roadmap_milestone_2_core_implementation_module_implementations_complete",
       "community": 85,
@@ -5066,7 +5066,7 @@
       "label": "Milestone 3 \u2014 Testing (current)",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L92",
+      "source_location": "L98",
       "_origin": "ast",
       "id": "roadmap_milestone_3_testing_current",
       "community": 85,
@@ -5077,7 +5077,7 @@
       "label": "Milestone 4 \u2014 Performance (`Performance/`)",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L114",
+      "source_location": "L120",
       "_origin": "ast",
       "id": "roadmap_milestone_4_performance_performance",
       "community": 85,
@@ -5088,7 +5088,7 @@
       "label": "Milestone 5 \u2014 Cutover",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L134",
+      "source_location": "L140",
       "_origin": "ast",
       "id": "roadmap_milestone_5_cutover",
       "community": 85,
@@ -5099,7 +5099,7 @@
       "label": "1.0.0 acceptance checklist",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L140",
+      "source_location": "L146",
       "_origin": "ast",
       "id": "roadmap_1_0_0_acceptance_checklist",
       "community": 85,
@@ -5110,7 +5110,7 @@
       "label": "Non-goals",
       "file_type": "document",
       "source_file": "ROADMAP.md",
-      "source_location": "L153",
+      "source_location": "L159",
       "_origin": "ast",
       "id": "roadmap_non_goals",
       "community": 85,
@@ -5885,6 +5885,105 @@
       "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_verification_matrix",
       "community": 88,
       "community_name": "Storage Algebra Lean M3a Watermarks Sprint",
+      "norm_label": "verification matrix"
+    },
+    {
+      "label": "2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md"
+    },
+    {
+      "label": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "storage algebra lean m3b checkpointstore c1 sprint"
+    },
+    {
+      "label": "Audited semantic decisions",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L16",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_audited_semantic_decisions",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "audited semantic decisions"
+    },
+    {
+      "label": "Source layout",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L30",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_source_layout",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "source layout"
+    },
+    {
+      "label": "Identity-projection theorem gate",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L38",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_identity_projection_theorem_gate",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "identity-projection theorem gate"
+    },
+    {
+      "label": "Compatible-map theorem gate",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L84",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_compatible_map_theorem_gate",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "compatible-map theorem gate"
+    },
+    {
+      "label": "Adversarial examples",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L139",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_adversarial_examples",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "adversarial examples"
+    },
+    {
+      "label": "Explicit non-goals",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L152",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_explicit_non_goals",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
+      "norm_label": "explicit non-goals"
+    },
+    {
+      "label": "Verification matrix",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L161",
+      "_origin": "ast",
+      "id": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_verification_matrix",
+      "community": 125,
+      "community_name": "Storage Algebra Lean M3b CheckpointStore C1 Sprint",
       "norm_label": "verification matrix"
     },
     {
@@ -9254,6 +9353,402 @@
       "norm_label": "3. close-out"
     },
     {
+      "label": "design.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "design.md"
+    },
+    {
+      "label": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "design \u2014 sprint 6: lean m3b checkpointstore c1"
+    },
+    {
+      "label": "1. Finite identity projection",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_1_finite_identity_projection",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "1. finite identity projection"
+    },
+    {
+      "label": "2. Finite byte-bearing maps",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_2_finite_byte_bearing_maps",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "2. finite byte-bearing maps"
+    },
+    {
+      "label": "3. Collision premise bridge",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L60",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_3_collision_premise_bridge",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "3. collision premise bridge"
+    },
+    {
+      "label": "4. Laws and trust boundary",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_4_laws_and_trust_boundary",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "4. laws and trust boundary"
+    },
+    {
+      "label": "5. Refinement boundary",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L86",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_design_5_refinement_boundary",
+      "community": 126,
+      "community_name": "Design \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "5. refinement boundary"
+    },
+    {
+      "label": "proposal.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "proposal.md"
+    },
+    {
+      "label": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "proposal \u2014 sprint 6: lean m3b checkpointstore c1"
+    },
+    {
+      "label": "Why",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_why",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "why"
+    },
+    {
+      "label": "What changes",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L13",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_what_changes",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "what changes"
+    },
+    {
+      "label": "Non-goals",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L22",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_non_goals",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "non-goals"
+    },
+    {
+      "label": "Impact",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L29",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_impact",
+      "community": 127,
+      "community_name": "Proposal \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "impact"
+    },
+    {
+      "label": "spec.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "spec.md"
+    },
+    {
+      "label": "formal-checkpoint-c1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_formal_checkpoint_c1",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "formal-checkpoint-c1"
+    },
+    {
+      "label": "ADDED Requirements",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "added requirements"
+    },
+    {
+      "label": "Requirement: Chunk identities form an unconditional finite join projection",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_identities_form_an_unconditional_finite_join_projection",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: chunk identities form an unconditional finite join projection"
+    },
+    {
+      "label": "Scenario: Overlapping saves converge on the same identities",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L11",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_overlapping_saves_converge_on_the_same_identities",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: overlapping saves converge on the same identities"
+    },
+    {
+      "label": "Scenario: Duplicate positions erase only at the identity projection",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_duplicate_positions_erase_only_at_the_identity_projection",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: duplicate positions erase only at the identity projection"
+    },
+    {
+      "label": "Requirement: Saving identity inputs is extensive, repeat-idempotent, and order-independent",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_saving_identity_inputs_is_extensive_repeat_idempotent_and_order_independent",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: saving identity inputs is extensive, repeat-idempotent, and order-independent"
+    },
+    {
+      "label": "Scenario: Empty input adds no identity",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L26",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_empty_input_adds_no_identity",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: empty input adds no identity"
+    },
+    {
+      "label": "Requirement: Chunk-map merge preserves existing bytes",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_map_merge_preserves_existing_bytes",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: chunk-map merge preserves existing bytes"
+    },
+    {
+      "label": "Scenario: Same hash with different bytes exposes order dependence",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L37",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_same_hash_with_different_bytes_exposes_order_dependence",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: same hash with different bytes exposes order dependence"
+    },
+    {
+      "label": "Requirement: Compatible chunk maps satisfy conditional C1 commutation",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L43",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_compatible_chunk_maps_satisfy_conditional_c1_commutation",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: compatible chunk maps satisfy conditional c1 commutation"
+    },
+    {
+      "label": "Scenario: Equal overlapping bindings commute",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L51",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_equal_overlapping_bindings_commute",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: equal overlapping bindings commute"
+    },
+    {
+      "label": "Scenario: Compatibility is not assumed transitive",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L56",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_compatibility_is_not_assumed_transitive",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: compatibility is not assumed transitive"
+    },
+    {
+      "label": "Requirement: Collision freedom is an explicit local theorem premise",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L62",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_collision_freedom_is_an_explicit_local_theorem_premise",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: collision freedom is an explicit local theorem premise"
+    },
+    {
+      "label": "Scenario: A concrete injective digest discharges the bridge",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L69",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_a_concrete_injective_digest_discharges_the_bridge",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: a concrete injective digest discharges the bridge"
+    },
+    {
+      "label": "Requirement: C1 remains a save-only abstract projection",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_c1_remains_a_save_only_abstract_projection",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "requirement: c1 remains a save-only abstract projection"
+    },
+    {
+      "label": "Scenario: Completion status preserves future obligations",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L80",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_completion_status_preserves_future_obligations",
+      "community": 110,
+      "community_name": "ADDED Requirements",
+      "norm_label": "scenario: completion status preserves future obligations"
+    },
+    {
+      "label": "tasks.md",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "tasks.md"
+    },
+    {
+      "label": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "tasks \u2014 sprint 6: lean m3b checkpointstore c1"
+    },
+    {
+      "label": "0. Specification freeze",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_0_specification_freeze",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "0. specification freeze"
+    },
+    {
+      "label": "1. Chunk-identity projection",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_1_chunk_identity_projection",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "1. chunk-identity projection"
+    },
+    {
+      "label": "2. Compatible chunk maps",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L44",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_2_compatible_chunk_maps",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "2. compatible chunk maps"
+    },
+    {
+      "label": "3. Close-out",
+      "file_type": "document",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L69",
+      "_origin": "ast",
+      "id": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_3_close_out",
+      "community": 128,
+      "community_name": "Tasks \u2014 Sprint 6: Lean M3b CheckpointStore C1",
+      "norm_label": "3. close-out"
+    },
+    {
       "label": "spec.md",
       "file_type": "document",
       "source_file": "openspec/specs/temporal-kv/spec.md",
@@ -10347,7 +10842,7 @@
       "community": 9,
       "norm_label": "tier 1 / tier 2 postgres schema split",
       "community_name": "Tier 1 / Tier 2 Postgres schema split",
-      "id": "design_design_design_design_design_design_design_tier_split"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "label": "FerretDB Mongo-compatibility shim evaluated and rejected",
@@ -10361,7 +10856,7 @@
       "community": 11,
       "norm_label": "ferretdb mongo-compatibility shim evaluated and rejected",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_ferretdb_rejection"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "label": "kv_current/kv_history temporal-table design",
@@ -10375,7 +10870,7 @@
       "community": 11,
       "norm_label": "kv_current/kv_history temporal-table design",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "label": "TransactionKeyReuseError / txid_current() fix",
@@ -10389,7 +10884,7 @@
       "community": 11,
       "norm_label": "transactionkeyreuseerror / txid_current() fix",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "label": "kv_history retention policy (pg_cron)",
@@ -10403,7 +10898,7 @@
       "community": 11,
       "norm_label": "kv_history retention policy (pg_cron)",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_kv_history_retention"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_kv_history_retention"
     },
     {
       "label": "Content-addressed checkpoint chunker",
@@ -10417,7 +10912,7 @@
       "community": 11,
       "norm_label": "content-addressed checkpoint chunker",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "label": "ckpt_manifest_chunks junction table (original, later corrected)",
@@ -10431,7 +10926,7 @@
       "community": 11,
       "norm_label": "ckpt_manifest_chunks junction table (original, later corrected)",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "label": "watermarks table schema sketch",
@@ -10445,7 +10940,7 @@
       "community": 11,
       "norm_label": "watermarks table schema sketch",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_watermarks_schema"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "label": "Postgres advisory-lock writer lease (corrected design)",
@@ -10459,7 +10954,7 @@
       "community": 70,
       "norm_label": "postgres advisory-lock writer lease (corrected design)",
       "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
-      "id": "design_design_design_design_design_design_design_writer_lease_corrected"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "label": "Advisory-lock class registry (classes 1/2/3)",
@@ -10473,7 +10968,7 @@
       "community": 70,
       "norm_label": "advisory-lock class registry (classes 1/2/3)",
       "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
-      "id": "design_design_design_design_design_design_design_advisory_lock_registry"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "label": "private_state_salts table / per-scope salt derivation",
@@ -10487,7 +10982,7 @@
       "community": 61,
       "norm_label": "private_state_salts table / per-scope salt derivation",
       "community_name": "private_state_salts table / per-scope salt derivation",
-      "id": "design_design_design_design_design_design_design_private_state_salts"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_private_state_salts"
     },
     {
       "label": "postgres.js driver choice",
@@ -10501,7 +10996,7 @@
       "community": 7,
       "norm_label": "postgres.js driver choice",
       "community_name": "postgres.js driver choice",
-      "id": "design_design_design_design_design_design_design_postgresjs_driver_choice"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "label": "Testcontainers vs pg-mem test-infrastructure decision",
@@ -10515,7 +11010,7 @@
       "community": 15,
       "norm_label": "testcontainers vs pg-mem test-infrastructure decision",
       "community_name": "Testcontainers vs pg-mem test-infrastructure decision",
-      "id": "design_design_design_design_design_design_design_test_infra_decision"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_test_infra_decision"
     },
     {
       "label": "Module \u2192 Postgres module mapping table",
@@ -10529,7 +11024,7 @@
       "community": 70,
       "norm_label": "module \u2192 postgres module mapping table",
       "community_name": "CheckpointStore cancellation scope decision (pre-check only)",
-      "id": "design_design_design_design_design_design_design_module_mapping_table"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_module_mapping_table"
     },
     {
       "label": "State-equivalence merge-blocker gate",
@@ -10543,7 +11038,7 @@
       "community": 11,
       "norm_label": "state-equivalence merge-blocker gate",
       "community_name": "kv_current/kv_history temporal-table design",
-      "id": "design_design_design_design_design_design_design_state_equivalence_gate"
+      "id": "design_design_design_design_design_design_design_design_design_design_design_state_equivalence_gate"
     },
     {
       "label": "Remove MongoDB dependency rationale",
@@ -21357,7 +21852,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L72",
+      "source_location": "L73",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research",
@@ -21445,7 +21940,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L17",
+      "source_location": "L18",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research",
@@ -21544,7 +22039,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L15",
+      "source_location": "L16",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research",
@@ -21621,7 +22116,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L636",
+      "source_location": "L639",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research",
@@ -21643,7 +22138,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L16",
+      "source_location": "L17",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research",
@@ -21654,7 +22149,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L599",
+      "source_location": "L602",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21665,7 +22160,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L623",
+      "source_location": "L626",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21676,7 +22171,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L668",
+      "source_location": "L671",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21687,7 +22182,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L717",
+      "source_location": "L723",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21698,7 +22193,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21709,7 +22204,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L57",
+      "source_location": "L58",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21720,7 +22215,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L92",
+      "source_location": "L93",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21731,7 +22226,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L241",
+      "source_location": "L242",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21742,7 +22237,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L256",
+      "source_location": "L257",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21753,7 +22248,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L393",
+      "source_location": "L394",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21764,7 +22259,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L492",
+      "source_location": "L493",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21775,7 +22270,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L503",
+      "source_location": "L504",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21786,7 +22281,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L531",
+      "source_location": "L532",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_storage_algebra_lean_formalization_approved_design_and_status",
@@ -21797,7 +22292,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L74",
+      "source_location": "L75",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_2_research_protocol",
@@ -21808,7 +22303,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L229",
+      "source_location": "L230",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21819,7 +22314,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L94",
+      "source_location": "L95",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21830,7 +22325,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L107",
+      "source_location": "L108",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21841,7 +22336,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L131",
+      "source_location": "L132",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21852,7 +22347,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L143",
+      "source_location": "L144",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21863,7 +22358,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L157",
+      "source_location": "L158",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21874,7 +22369,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21885,7 +22380,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L190",
+      "source_location": "L191",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21896,7 +22391,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L207",
+      "source_location": "L208",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21907,7 +22402,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L220",
+      "source_location": "L221",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_3_proof_blocking_findings",
@@ -21918,7 +22413,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L261",
+      "source_location": "L262",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21929,7 +22424,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L320",
+      "source_location": "L321",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21940,7 +22435,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L345",
+      "source_location": "L346",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21951,7 +22446,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L358",
+      "source_location": "L359",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21962,7 +22457,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L378",
+      "source_location": "L379",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21973,7 +22468,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L385",
+      "source_location": "L386",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_5_recommended_candidate_model",
@@ -21984,7 +22479,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L441",
+      "source_location": "L442",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_6_lean_4_feasibility",
@@ -21995,7 +22490,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L471",
+      "source_location": "L472",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_6_lean_4_feasibility",
@@ -22006,7 +22501,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L533",
+      "source_location": "L534",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_9_trust_and_refinement_boundary",
@@ -22017,7 +22512,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L568",
+      "source_location": "L569",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_9_trust_and_refinement_boundary",
@@ -22028,7 +22523,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L580",
+      "source_location": "L583",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_9_trust_and_refinement_boundary",
@@ -22039,7 +22534,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L625",
+      "source_location": "L628",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_11_evidence_matrix",
@@ -22050,7 +22545,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L641",
+      "source_location": "L644",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_11_evidence_matrix",
@@ -22061,7 +22556,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L670",
+      "source_location": "L673",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22072,7 +22567,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L677",
+      "source_location": "L680",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22083,7 +22578,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L685",
+      "source_location": "L688",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22094,7 +22589,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L697",
+      "source_location": "L700",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22105,7 +22600,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L703",
+      "source_location": "L709",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22116,7 +22611,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md",
-      "source_location": "L709",
+      "source_location": "L715",
       "weight": 1.0,
       "_origin": "ast",
       "source": "formal_storage_algebra_lean_research_12_milestone_status",
@@ -22325,7 +22820,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L218",
+      "source_location": "L227",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme",
@@ -22336,7 +22831,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L224",
+      "source_location": "L233",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme",
@@ -22347,7 +22842,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L219",
+      "source_location": "L228",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme",
@@ -22358,7 +22853,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L216",
+      "source_location": "L225",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme",
@@ -22390,7 +22885,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L165",
+      "source_location": "L174",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme",
@@ -22412,7 +22907,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L214",
+      "source_location": "L223",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme_umbradb",
@@ -22434,7 +22929,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L170",
+      "source_location": "L179",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme_umbradb",
@@ -22445,7 +22940,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L237",
+      "source_location": "L247",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme_umbradb",
@@ -22456,7 +22951,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L262",
+      "source_location": "L272",
       "weight": 1.0,
       "_origin": "ast",
       "source": "readme_umbradb",
@@ -22521,7 +23016,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L140",
+      "source_location": "L146",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -22554,7 +23049,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L47",
+      "source_location": "L53",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -22565,7 +23060,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L92",
+      "source_location": "L98",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -22576,7 +23071,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L114",
+      "source_location": "L120",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -22587,7 +23082,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L134",
+      "source_location": "L140",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -22598,7 +23093,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "ROADMAP.md",
-      "source_location": "L153",
+      "source_location": "L159",
       "weight": 1.0,
       "_origin": "ast",
       "source": "roadmap_roadmap",
@@ -23315,6 +23810,94 @@
       "_origin": "ast",
       "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_storage_algebra_lean_m3a_watermarks_sprint",
       "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3a_watermarks_verification_matrix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L139",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_adversarial_examples",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_audited_semantic_decisions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L84",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_compatible_map_theorem_gate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L152",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_explicit_non_goals",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_identity_projection_theorem_gate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_source_layout",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md",
+      "source_location": "L161",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_storage_algebra_lean_m3b_checkpointstore_c1_sprint",
+      "target": "docs_superpowers_plans_2026_07_21_storage_algebra_lean_m3b_checkpoint_c1_verification_matrix",
       "confidence_score": 1.0
     },
     {
@@ -26455,6 +27038,358 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_1_finite_identity_projection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_2_finite_byte_bearing_maps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_3_collision_premise_bridge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L70",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_4_laws_and_trust_boundary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/design.md",
+      "source_location": "L86",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_design_design_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_design_5_refinement_boundary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_impact",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_non_goals",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_what_changes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_proposal_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_proposal_why",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_formal_checkpoint_c1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_formal_checkpoint_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L73",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_c1_remains_a_save_only_abstract_projection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_identities_form_an_unconditional_finite_join_projection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_map_merge_preserves_existing_bytes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L62",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_collision_freedom_is_an_explicit_local_theorem_premise",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_compatible_chunk_maps_satisfy_conditional_c1_commutation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_added_requirements",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_saving_identity_inputs_is_extensive_repeat_idempotent_and_order_independent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_identities_form_an_unconditional_finite_join_projection",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_duplicate_positions_erase_only_at_the_identity_projection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_identities_form_an_unconditional_finite_join_projection",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_overlapping_saves_converge_on_the_same_identities",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_saving_identity_inputs_is_extensive_repeat_idempotent_and_order_independent",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_empty_input_adds_no_identity",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_chunk_map_merge_preserves_existing_bytes",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_same_hash_with_different_bytes_exposes_order_dependence",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L56",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_compatible_chunk_maps_satisfy_conditional_c1_commutation",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_compatibility_is_not_assumed_transitive",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_compatible_chunk_maps_satisfy_conditional_c1_commutation",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_equal_overlapping_bindings_commute",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L69",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_collision_freedom_is_an_explicit_local_theorem_premise",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_a_concrete_injective_digest_discharges_the_bridge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md",
+      "source_location": "L80",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_requirement_c1_remains_a_save_only_abstract_projection",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_specs_formal_checkpoint_c1_spec_scenario_completion_status_preserves_future_obligations",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_0_specification_freeze",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_1_chunk_identity_projection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_2_compatible_chunk_maps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md",
+      "source_location": "L69",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_tasks_sprint_6_lean_m3b_checkpointstore_c1",
+      "target": "openspec_changes_sprint_6_formal_checkpoint_c1_tasks_3_close_out",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "openspec/specs/temporal-kv/spec.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -27223,7 +28158,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a76",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_private_state_salts",
+      "source": "design_design_design_design_design_design_design_design_design_design_design_private_state_salts",
       "target": "design_design_interfaces_privatestateprovider"
     },
     {
@@ -27243,7 +28178,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a79",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_module_mapping_table",
+      "source": "design_design_design_design_design_design_design_design_design_design_design_module_mapping_table",
       "target": "design_design_interfaces_checkpointwalletstatestore"
     },
     {
@@ -27254,7 +28189,7 @@
       "source_location": "\u00a70",
       "weight": 1.0,
       "source": "sprint1_design_schema_naming",
-      "target": "design_design_design_design_design_design_design_tier_split"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_tier_split"
     },
     {
       "relation": "rationale_for",
@@ -27263,8 +28198,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a71",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_ferretdb_rejection",
-      "target": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_ferretdb_rejection",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27274,7 +28209,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "design_proposal_mongo_removal",
-      "target": "design_design_design_design_design_design_design_ferretdb_rejection"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_ferretdb_rejection"
     },
     {
       "relation": "semantically_similar_to",
@@ -27283,8 +28218,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72-\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_checkpoint_chunker",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27293,8 +28228,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_kv_history_retention",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_kv_history_retention",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27303,8 +28238,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a72",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_transactionkeyreuseerror",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_transactionkeyreuseerror",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "rationale_for",
@@ -27314,7 +28249,7 @@
       "source_location": "context",
       "weight": 1.0,
       "source": "openspec_config_correctness_rule",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27324,7 +28259,7 @@
       "source_location": "\u00a74",
       "weight": 1.0,
       "source": "sprint1_design_getat_single_statement",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27334,7 +28269,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_ts_functions",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27344,7 +28279,7 @@
       "source_location": "\u00a72.2",
       "weight": 1.0,
       "source": "sprint3_design_seq_allocator",
-      "target": "design_design_design_design_design_design_design_temporalkv_pg_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_temporalkv_pg_schema"
     },
     {
       "relation": "references",
@@ -27354,7 +28289,7 @@
       "source_location": "\u00a74a",
       "weight": 1.0,
       "source": "sprint1_design_error_translation",
-      "target": "design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "references",
@@ -27364,7 +28299,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint1_spec_transaction_key_reuse",
-      "target": "design_design_design_design_design_design_design_transactionkeyreuseerror"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_transactionkeyreuseerror"
     },
     {
       "relation": "conceptually_related_to",
@@ -27373,8 +28308,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a73",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_ckpt_manifest_chunks_original",
-      "target": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27384,7 +28319,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint3_design_chunking",
-      "target": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27394,7 +28329,7 @@
       "source_location": "What changes",
       "weight": 1.0,
       "source": "sprint3_proposal_schema_changes",
-      "target": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27404,7 +28339,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint3_spec_grace_window",
-      "target": "design_design_design_design_design_design_design_checkpoint_chunker"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_checkpoint_chunker"
     },
     {
       "relation": "references",
@@ -27414,7 +28349,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "design_tasks_retired_plan",
-      "target": "design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "references",
@@ -27424,7 +28359,7 @@
       "source_location": "\u00a72.1",
       "weight": 1.0,
       "source": "sprint3_design_manifest_position_fix",
-      "target": "design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_ckpt_manifest_chunks_original"
     },
     {
       "relation": "rationale_for",
@@ -27434,7 +28369,7 @@
       "source_location": "\u00a75",
       "weight": 1.0,
       "source": "sprint4_design_accepted_tradeoffs",
-      "target": "design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -27444,7 +28379,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint4_design_fillfactor",
-      "target": "design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -27454,7 +28389,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint4_proposal_headline_finding",
-      "target": "design_design_design_design_design_design_design_watermarks_schema"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_watermarks_schema"
     },
     {
       "relation": "references",
@@ -27463,8 +28398,8 @@
       "source_file": "design/design.md",
       "source_location": "\u00a75",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_advisory_lock_registry",
-      "target": "design_design_design_design_design_design_design_writer_lease_corrected"
+      "source": "design_design_design_design_design_design_design_design_design_design_design_advisory_lock_registry",
+      "target": "design_design_design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -27474,7 +28409,7 @@
       "source_location": "\u00a71",
       "weight": 1.0,
       "source": "sprint2_design_withtransaction",
-      "target": "design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -27484,7 +28419,7 @@
       "source_location": "Why",
       "weight": 1.0,
       "source": "sprint2_proposal_scope",
-      "target": "design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -27494,7 +28429,7 @@
       "source_location": null,
       "weight": 1.0,
       "source": "sprint2_spec_law_l1",
-      "target": "design_design_design_design_design_design_design_writer_lease_corrected"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_writer_lease_corrected"
     },
     {
       "relation": "references",
@@ -27504,7 +28439,7 @@
       "source_location": "\u00a72",
       "weight": 1.0,
       "source": "sprint1_design_migration_concurrency_lock",
-      "target": "design_design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -27514,7 +28449,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint2_design_lease_acquisition",
-      "target": "design_design_design_design_design_design_design_advisory_lock_registry"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_advisory_lock_registry"
     },
     {
       "relation": "references",
@@ -27524,7 +28459,7 @@
       "source_location": "\u00a73",
       "weight": 1.0,
       "source": "sprint1_design_connection_factory",
-      "target": "design_design_design_design_design_design_design_postgresjs_driver_choice"
+      "target": "design_design_design_design_design_design_design_design_design_design_design_postgresjs_driver_choice"
     },
     {
       "relation": "rationale_for",
@@ -27533,7 +28468,7 @@
       "source_file": "design/design.md",
       "source_location": "\u00a710",
       "weight": 1.0,
-      "source": "design_design_design_design_design_design_design_state_equivalence_gate",
+      "source": "design_design_design_design_design_design_design_design_design_design_design_state_equivalence_gate",
       "target": "design_proposal_mongo_removal"
     },
     {
@@ -28011,5 +28946,5 @@
       "source_file": "openspec/changes/sprint-3-checkpoint-store/design.md"
     }
   ],
-  "built_at_commit": "6d9cb6227653a5d30d4e5a09f306ff678220d9b7"
+  "built_at_commit": "b47953a333256dab724f086424486f4ecc7fdab9"
 }

@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
-    "mtime": 1784676647.0863197,
-    "ast_hash": "f32cda3601a2568a35bbb7826695b0d2",
+    "mtime": 1784680718.005002,
+    "ast_hash": "3cf60f204767cc3206cfe203ea7dca00",
     "semantic_hash": ""
   },
   "Formal/STORAGE_TYPES.md": {
@@ -285,13 +285,13 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784676647.0823197,
-    "ast_hash": "7bf5fac0e9c8740c75ead8e5f557e094",
+    "mtime": 1784680708.613167,
+    "ast_hash": "2b6c381ebe256020978b03b7f4641c53",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784676647.0863197,
-    "ast_hash": "37a9efa5f444f19b7756975eae7f709b",
+    "mtime": 1784680708.613167,
+    "ast_hash": "99f7129868c1106bedae3992f5e541a5",
     "semantic_hash": ""
   },
   "design/design-algebra.md": {
@@ -447,6 +447,31 @@
   "openspec/changes/sprint-5-formal-watermarks/tasks.md": {
     "mtime": 1784677520.232526,
     "ast_hash": "3129c4d42ad6c3dfbdd947cdf645abd9",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md": {
+    "mtime": 1784679028.872976,
+    "ast_hash": "fccec7212da7a9b317df494ba9653918",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-6-formal-checkpoint-c1/design.md": {
+    "mtime": 1784679028.8769758,
+    "ast_hash": "7afef2828b26672b52ec3b4478705d94",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md": {
+    "mtime": 1784680708.617167,
+    "ast_hash": "430bec4b935bc236f6af1a99750b1572",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md": {
+    "mtime": 1784679120.7067382,
+    "ast_hash": "d932c973fe8b305c2a11047b4ca1b4b5",
+    "semantic_hash": ""
+  },
+  "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md": {
+    "mtime": 1784681517.6215782,
+    "ast_hash": "534699b6eadc0a3116cb9ffdf5675ac7",
     "semantic_hash": ""
   }
 }

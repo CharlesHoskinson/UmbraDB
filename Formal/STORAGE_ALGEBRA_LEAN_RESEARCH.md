@@ -1,9 +1,10 @@
 # Storage Algebra Lean Formalization — Approved Design and Status
 
 - **Status:** M1, the abstract per-key M2 TemporalKV tranche, and abstract
-  Watermarks W1 are complete; later milestones remain subject to their stated
-  proof and refinement gates
-- **Branch:** `formal/storage-algebra-lean-m3a-watermarks`
+  Watermarks W1 are complete.
+  M3b CheckpointStore C1: complete (abstract save-side projection only).
+  Later milestones remain subject to their stated proof and refinement gates
+- **Branch:** `formal/storage-algebra-lean-m3b-checkpoint-c1`
 - **Repository baseline:** `148d17fd9b957136798e98ed5986e865b281fd4f`
 - **Lean stack:** Lean 4 / mathlib `v4.32.0`
 - **Primary recommendation:** formalize an executable, history-first abstract
@@ -571,8 +572,10 @@ supplied by the TemporalKV source and law modules, not by the smoke test.
   retention, unavailable-history classification, and retention-transparent
   per-key T3 are complete. Keyed-store lifting, oracle serialization, and SQL
   retention/refinement remain deferred.
-- M3: abstract Watermarks W1 is complete. Checkpoint C1, compatible chunk-map
-  laws, and one-step C2a GC safety remain deferred.
+- M3: abstract Watermarks W1 and Checkpoint C1 for finite identities and
+  compatible chunk maps are complete. The Checkpoint proof is save-side only;
+  ordered reconstruction, collision handling, runtime refinement, and one-step
+  C2a GC safety remain deferred.
 - M4: lease-holder trace safety and any liveness theorem under explicit
   fairness, cancellation, and failure assumptions.
 - M5: keyed transaction and PostgreSQL adapter refinement evidence.
@@ -697,7 +700,10 @@ relevant content markers checked with Scrapling.
 ### M3 — simple stores (in progress)
 
 - Prove W1. **Completed.**
-- Prove C1 for hash sets and compatible maps. **Deferred.**
+- Prove C1 for hash sets and compatible maps. **Completed (abstract save-side
+  projection only).** The implemented `(manifest_id, position)` key preserves
+  ordered duplicate references, but their Lean reconstruction theorem remains
+  deferred.
 - Prove C2a for one-hop manifest reachability. **Deferred.**
 
 ### M4 — leases and liveness (deferred)
