@@ -69,11 +69,16 @@ WalletStateEnvelope (JSON, then UTF-8 → Uint8Array for CheckpointStore.save):
   hex snapshot; `unshielded-wallet/src/v1/Serialization.ts:43-90` a UTXO-array snapshot;
   `dust-wallet/src/v1/Serialization.ts:62-114` a `DustLocalState` hex snapshot — three genuinely
   different schemas). The envelope treats each as a length-checked opaque string.
-- A sub-wallet value MAY be `null`/absent when that sub-wallet was not exercised — the live preprod
+- A sub-wallet value MAY be `null` when that sub-wallet was not exercised — the live preprod
   tier syncs only the **unshielded** wallet (the funded balance is unshielded;
   `preprod-connection.md` "Sync cost"), so its envelope carries `unshielded` populated and
   `shielded`/`dust` `null`. The restore path skips a `null` sub-wallet (spec: WHERE-optional
-  requirement).
+  requirement). **F7 wording fix:** "absent" here means the JSON VALUE is `null`, never that the
+  `shielded`/`unshielded`/`dust` KEY itself is physically omitted from the object — the schema
+  (`WalletStateEnvelopeShapeSchema`, now `.strict()`, F7) requires all three keys present on every
+  decode, and `encode` always emits all three explicitly. This is deliberately fail-closed: a
+  never-exercised sub-wallet is represented, not left ambiguous between "never touched" and "the
+  encoder forgot a key."
 - `envelopeVersion` is checked on load: an unrecognized version is a typed rejection, never a
   best-effort restore of an unknown shape (spec: IF-unwanted requirement). This is the forward
   seam for the future `verifiable-snapshot-recovery` hardening layer, which will add anchor/finality
@@ -106,7 +111,17 @@ The SDK's `configuration.txHistoryStorage` slot expects an object implementing t
 (Sprint 7) implements a **structurally mirrored** interface
 (`src/interfaces/transaction-history-storage.ts:299-300`) but is deliberately *not* the SDK type.
 The adapter is the object handed to the SDK; it forwards to a `PgTransactionHistoryStorage`
-instance constructed with the caller-supplied `mergeWalletEntries`.
+instance constructed with the caller-supplied merge function -- an UmbraDB-shaped merge function
+mirroring the real SDK's `mergeWalletEntries` documented semantics, **not the raw SDK function
+itself** (`referenceMergeEntries`, `test/postgres/reference-merge.ts`, injected by BOTH the
+Pg-only conformance tier and the live preprod tier). **Audit correction (F1):** the raw
+`mergeWalletEntries` (`~/repos/midnight-wallet/packages/facade/src/index.ts`) cannot be injected
+here at all -- it operates on the SDK's own `WalletEntry` shape (top-level
+`shielded`/`unshielded`/`dust`), a different shape from UmbraDB's `sections`-container
+`TransactionHistoryEntry`, and its first line (`[...existing.identifiers]`) throws a `TypeError`
+if ever called with `existing===undefined` (the first write of a hash). `PgTransactionHistoryStorage`
+now never calls the injected merge function on a first write (§3.3 below, and
+`src/interfaces/transaction-history-storage.ts`'s `MergeEntriesFn` doc) precisely because of this.
 
 The proven wiring the adapter plugs into (`preprodUnshieldedSync.manual.integration.test.ts:88-95`):
 
@@ -173,10 +188,35 @@ confirmed against a real cold-boot run, not asserted from the schema alone.
 ### 3.3 No runtime SDK import in core
 
 The adapter imports SDK types; `PgTransactionHistoryStorage` and `PgWalletStateEnvelopeStore` do
-not. The merge function (`mergeWalletEntries`) is injected into `PgTransactionHistoryStorage` at
-construction (`src/interfaces/transaction-history-storage.ts:256-259`,
+not. The merge function (an UmbraDB-shaped function mirroring `mergeWalletEntries`' documented
+semantics -- **not** the raw SDK function itself, per the F1 correction above) is injected into
+`PgTransactionHistoryStorage` at construction (`src/interfaces/transaction-history-storage.ts:256-259`,
 `sprint-7-transaction-history-storage/design.md` §2), so even the production merge policy reaches
-the storage module as an injected function, never as an import.
+the storage module as an injected function, never as an import -- and never the raw SDK symbol
+either way.
+
+**F1 fix (also see `MergeEntriesFn`'s own doc):** `PgTransactionHistoryStorage.writeRows` now
+calls the injected merge function ONLY when a row already exists for the hash; a first write is
+persisted verbatim, never passed through the merge function at all. This is what makes it safe
+for production to inject a merge function whose contract assumes both operands are always
+defined (mirroring the real SDK's own `mergeWalletEntries`), without ever risking a call with
+`existing===undefined`.
+
+### 3.4 serialize() is a diagnostic dump, not a migration path (F10)
+
+`PgTransactionHistoryStorage.serialize()` -- forwarded verbatim by the adapter's own `serialize()`
+-- returns UmbraDB-shaped JSON (this storage layer's own documented bigint/Date tagging scheme), a
+diagnostic dump of `getAll()`'s output, **not** a re-encoding into the SDK's own entry shape.
+Postgres (via `PgTransactionHistoryStorage`'s own table) is the durable, authoritative store; this
+method exists only to satisfy the SDK's `TransactionHistoryReader.serialize(): Promise<string>`
+contract structurally. **The SDK core never calls `serialize()` on the injected storage** -- its
+own `TransactionHistoryStorage` consumers call only `get`/`getAll`/`gotPending`/`gotFinalized`/
+`gotRejected` (verified ground truth, `unshielded-wallet` + `facade` packages) -- so this method's
+specific output shape is never load-bearing for wallet sync itself, only for an operator-invoked
+diagnostic dump. Whether a future migration path from this Postgres-backed storage to an
+in-memory (or different-backend) `TransactionHistoryStorage` implementation should read this
+method's output, or read the table directly, is an explicit **Sprint 9 decision**, not resolved
+here.
 
 ## 4. Live preprod DB-sync verification (nightly/labeled)
 

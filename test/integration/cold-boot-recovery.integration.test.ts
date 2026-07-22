@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { Schema } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { ENVELOPE_VERSION, type WalletStateEnvelope } from "../../src/interfaces/wallet-state-envelope.js";
 import type { UmbraDBSql } from "../../src/postgres/client.js";
@@ -133,7 +134,10 @@ async function phaseB_freshProcessRestoreAndVerify(
   // "tx-history on restore is authoritative from the Pg store" -- checked via a BRAND NEW
   // PgTransactionHistoryStorage instance (no shared reference to phase A's), and BEFORE the
   // sub-wallet is even restored/started below: the row is already there, off Postgres alone, with
-  // no resync of any kind required to see it.
+  // no resync of any kind required to see it. This is the ONE documented raw-Pg read this suite
+  // keeps (F3): it specifically proves ROW PRESENCE WITHOUT RESYNC, in UmbraDB's own native shape,
+  // independent of the adapter's own reconstruction -- a distinct claim from the post-resume
+  // continuity check below, which is what F3 requires routing through the adapter instead.
   const pgStorageAfterRestart = new PgTransactionHistoryStorage(sql, walletId, referenceMergeEntries);
   const txHistoryBeforeRestore = await pgStorageAfterRestart.getAll();
   const faucetRowBeforeRestore = txHistoryBeforeRestore.find((e) => e.hash.startsWith(FAUCET_TX_HASH_PREFIX));
@@ -167,12 +171,20 @@ async function phaseB_freshProcessRestoreAndVerify(
     expect((resumedState.balances as Record<string, bigint>)[nativeTokenType]).toBe(EXPECTED_NIGHT_VALUE);
 
     // §5 step 6/7(b): tx-history continuity holds AFTER resume too, still off the Pg store, not
-    // the restored blob's own embedded copy.
-    const txHistoryAfterResume = await pgStorageAfterRestart.getAll();
-    expect(txHistoryAfterResume.find((e) => e.hash.startsWith(FAUCET_TX_HASH_PREFIX))).toBeDefined();
+    // the restored blob's own embedded copy. F3 fix: this continuity read now goes through the
+    // ADAPTER's own getAll() (not the raw PgTransactionHistoryStorage instance used for the
+    // pre-restore check above) -- proving the adapter's reconstruction path itself survives a
+    // cold boot, decoding against the real SDK schema with finalizedBlock.height intact.
+    const txHistoryAfterResume = await adapterAfterRestart.getAll();
+    const faucetAfterResume = txHistoryAfterResume.find((e) => e.hash.startsWith(FAUCET_TX_HASH_PREFIX));
+    expect(faucetAfterResume).toBeDefined();
+    expect(faucetAfterResume!.lifecycle.status).toBe("finalized");
+    Schema.validateSync(sdk.abstractions.TransactionHistoryStorage.TransactionHistoryEntryCommonSchema)(faucetAfterResume);
+    const faucetLifecycleAfterResume = faucetAfterResume!.lifecycle as { status: "finalized"; finalizedBlock: { height: number } };
+    expect(faucetLifecycleAfterResume.finalizedBlock.height).toBeGreaterThan(0);
 
     // eslint-disable-next-line no-console
-    console.log("[cold-boot] phase B: resume verified -- no full resync, tx-history continuous");
+    console.log("[cold-boot] phase B: resume verified -- no full resync, tx-history continuous (via adapter)");
   } finally {
     await restoredWallet.stop();
   }

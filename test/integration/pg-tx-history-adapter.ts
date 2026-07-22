@@ -1,5 +1,6 @@
 import { TransactionHistoryStorage as Sdk } from "@midnightntwrk/wallet-sdk-abstractions";
-import { SerializationFailedError } from "../../src/interfaces/storage-errors.js";
+import { z } from "zod";
+import { SerializationFailedError, ValidationError } from "../../src/interfaces/storage-errors.js";
 import type {
   EntryContent,
   MergeEntriesFn,
@@ -37,9 +38,25 @@ import { PgTransactionHistoryStorage } from "../../src/postgres/transaction-hist
  * **Lifecycle-detail round-trip (`design.md` §3.2, decision (i)).** The SDK's lifecycle carries
  * per-status detail (`submittedAt` / `finalizedBlock` / `rejectedAt`+`reason`) that UmbraDB's own
  * entry does not model (`lifecycle` there is a bare `{status}`). This adapter stashes that detail
- * under the `sections` key `__lifecycleDetail` (safe: does not start with
- * `THS_RESERVED_KEY_PREFIX`, so it is never rejected by `TransactionHistoryEntrySchema`'s reserved-
- * namespace guard) and reconstructs a schema-valid SDK lifecycle object on `getAll()`/`get()`.
+ * under the reserved `sections` key {@link UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY} (safe: does not
+ * start with Sprint 7's own `THS_RESERVED_KEY_PREFIX`, so it is never rejected by
+ * `TransactionHistoryEntrySchema`'s reserved-namespace guard) and reconstructs a schema-valid SDK
+ * lifecycle object on `getAll()`/`get()`.
+ *
+ * **F2 fix (cross-vendor audit BLOCK finding).** The stash key was previously a bare
+ * `"__lifecycleDetail"` string with no reserved-namespace enforcement of its own — an incoming SDK
+ * entry whose wallet-specific extension ALSO happened to carry a section literally named
+ * `"__lifecycleDetail"` would have been silently clobbered by the old `toUmbraWriteInput`'s spread
+ * order (`{ ...extension, [LIFECYCLE_DETAIL_KEY]: detail }`), with no error at all. Fixed two ways:
+ * (1) the key is renamed to {@link UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY} under this adapter's own
+ * reserved prefix ({@link UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}); (2) the write path now THROWS a
+ * typed {@link ValidationError} at write time if the incoming entry's extension carries any key
+ * inside that reserved namespace, rather than silently overwriting it — see
+ * {@link assertNoReservedAdapterKeys}. (3) `reconstructLifecycle`'s stashed detail is now
+ * Zod-validated ({@link LifecycleDetailStoreSchema}) BEFORE use, so a malformed stash (e.g. a raw
+ * row seeded directly into Postgres, bypassing this adapter's own write path) throws a typed,
+ * per-hash {@link SerializationFailedError} rather than silently reconstructing a bad SDK lifecycle
+ * object or throwing an untranslated error deep in field access.
  *
  * **M1 fix -- reconstruction is authoritative by CURRENT status, not accumulated detail.** A given
  * hash's `__lifecycleDetail` sections value can (harmlessly) accumulate more than one status's
@@ -53,12 +70,26 @@ import { PgTransactionHistoryStorage } from "../../src/postgres/transaction-hist
  * gotRejected` scenario in `pg-tx-history-adapter.test.ts`.
  */
 
-/** Sections key the adapter stashes SDK lifecycle detail under. Deliberately does NOT start with
- *  `THS_RESERVED_KEY_PREFIX` ("__umbradb_ths_") -- that namespace is reserved for
- *  `PgTransactionHistoryStorage`'s own internal bigint/Date JSONB tagging scheme
- *  (`src/interfaces/transaction-history-storage.ts`) and would be rejected at the boundary if
- *  used here. */
-const LIFECYCLE_DETAIL_KEY = "__lifecycleDetail";
+/** Reserved key-PREFIX namespace for THIS adapter's own internal stashing keys under `sections`
+ *  (F2 fix) -- distinct from Sprint 7's own `THS_RESERVED_KEY_PREFIX`
+ *  ("__umbradb_ths_", `src/interfaces/transaction-history-storage.ts`), which
+ *  `PgTransactionHistoryStorage` already enforces at its own Zod boundary and which this prefix
+ *  deliberately does NOT start with (so a key inside THIS namespace is never itself rejected by
+ *  that lower-level guard -- it has to be rejected here, at the adapter's own write path, instead).
+ *  Any incoming SDK entry's extension ("wallet-specific section") carrying a key inside this
+ *  namespace is rejected with a typed {@link ValidationError} at write time -- fail loud, never
+ *  silently overwrite this adapter's own lifecycle-detail stash -- see
+ *  {@link assertNoReservedAdapterKeys}. */
+export const UMBRADB_ADAPTER_RESERVED_KEY_PREFIX = "__umbradb_adapter_";
+
+/** Sections key the adapter stashes reconstructed SDK lifecycle detail under. Renamed (F2 fix)
+ *  from the previous bare `"__lifecycleDetail"`, which shared no reserved-namespace enforcement
+ *  with anything -- a caller section literally named `"__lifecycleDetail"` would have been
+ *  silently clobbered by the old write path's spread order. Lives inside
+ *  {@link UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}'s namespace; a single exported const so both the
+ *  write path (the reservation check) and the read path (the destructure in
+ *  {@link reconstructSdkEntry}) share one literal source of truth. */
+export const UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY = `${UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}lifecycle_detail`;
 
 /** The fixed set of "common" field names every wallet-type's SDK entry shares
  *  (`TransactionHistoryStorage.ts:75-85`). Anything else on a caller-supplied SDK-shaped entry is
@@ -80,25 +111,97 @@ const UMBRA_TO_SDK_STATUS: Record<UmbraTransactionHistoryStatus, Sdk.Transaction
   partialSuccess: "PARTIAL_SUCCESS",
 };
 
-/** (L1) Maps the SDK's execution-status enum onto UmbraDB's own. Exported so
+/** (L1, F6) Maps the SDK's execution-status enum onto UmbraDB's own. Exported so
  *  `pg-tx-history-adapter.test.ts` can exercise the mapping directly as a round-trip, without
- *  needing a whole entry. */
+ *  needing a whole entry.
+ *
+ *  **F6 fix (fail-closed):** an unmapped `status` value used to fall through `Record<...>`
+ *  indexing and silently return `undefined` -- a value that does not satisfy this function's own
+ *  declared return type, and would have propagated a `status: undefined` field deep into a
+ *  reconstructed SDK entry instead of failing loudly at the boundary. Now THROWS a typed
+ *  {@link SerializationFailedError} on an unmapped value in EITHER direction. */
 export function mapSdkStatusToUmbra(status: Sdk.TransactionHistoryStatus): UmbraTransactionHistoryStatus {
-  return SDK_TO_UMBRA_STATUS[status];
+  const mapped = SDK_TO_UMBRA_STATUS[status];
+  if (mapped === undefined) {
+    throw new SerializationFailedError(
+      `PgWalletSdkTransactionHistoryAdapter: unmapped SDK TransactionHistoryStatus value `
+      + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
+    );
+  }
+  return mapped;
 }
 
-/** Inverse of {@link mapSdkStatusToUmbra}. */
+/** Inverse of {@link mapSdkStatusToUmbra}. Same F6 fail-closed fix, mirrored. */
 export function mapUmbraStatusToSdk(status: UmbraTransactionHistoryStatus): Sdk.TransactionHistoryStatus {
-  return UMBRA_TO_SDK_STATUS[status];
+  const mapped = UMBRA_TO_SDK_STATUS[status];
+  if (mapped === undefined) {
+    throw new SerializationFailedError(
+      `PgWalletSdkTransactionHistoryAdapter: unmapped UmbraDB TransactionHistoryStatus value `
+      + `${JSON.stringify(status)} -- this adapter's status-enum map does not cover it`,
+    );
+  }
+  return mapped;
 }
 
-/** The shape stashed under {@link LIFECYCLE_DETAIL_KEY} in UmbraDB's own `sections`. All three
- *  keys are optional because a hash's stored detail can (harmlessly) accumulate more than one
- *  status's worth after repeated merges -- see the class doc's M1 note. */
+/** The shape stashed under {@link UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY} in UmbraDB's own
+ *  `sections`. All three keys are optional because a hash's stored detail can (harmlessly)
+ *  accumulate more than one status's worth after repeated merges -- see the class doc's M1 note. */
 interface LifecycleDetailStore {
   pending?: { submittedAt: Date };
   finalized?: { finalizedBlock: Sdk.FinalizedBlock };
   rejected?: { rejectedAt: Date; reason?: string };
+}
+
+/** F2 fix: Zod schema for {@link LifecycleDetailStore}, validated BEFORE use in
+ *  {@link reconstructLifecycle} -- see {@link parseLifecycleDetailStore}. `.strict()` at every
+ *  level so an unexpected extra key (a sign of a different, unrelated corruption) is rejected
+ *  too, not just a wrong-typed known key. Dates are validated with the same "must be a valid
+ *  Date" check `src/interfaces/transaction-history-storage.ts`'s own `EntryContentSchema` uses --
+ *  by the time this value reaches the adapter, `PgTransactionHistoryStorage`'s own decode has
+ *  already reconstructed any genuine tagged Date/bigint leaves into real `Date`/`bigint`
+ *  instances, so a legitimately-written stash always satisfies `z.date()` here; a value that does
+ *  NOT (e.g. a plain string, because it was never encoded via the tagging scheme at all) is
+ *  exactly the corruption shape this guard exists to catch. */
+const LifecycleDetailStoreSchema = z.object({
+  pending: z.object({
+    submittedAt: z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }),
+  }).strict().optional(),
+  finalized: z.object({
+    finalizedBlock: z.object({
+      hash: z.string(),
+      height: z.number(),
+      timestamp: z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }),
+    }).strict(),
+  }).strict().optional(),
+  rejected: z.object({
+    rejectedAt: z.date().refine((d) => !Number.isNaN(d.getTime()), { message: "must be a valid Date" }),
+    reason: z.string().optional(),
+  }).strict().optional(),
+}).strict();
+
+/** F2 fix: validates a raw, not-yet-trusted stashed lifecycle-detail value (read straight off
+ *  `entry.sections[UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]`, still `unknown` at this point) against
+ *  {@link LifecycleDetailStoreSchema} BEFORE {@link reconstructLifecycle} ever touches it. Throws
+ *  a typed, PER-HASH {@link SerializationFailedError} naming the offending hash on a malformed
+ *  stash -- e.g. a raw row seeded directly into Postgres bypassing this adapter's own write path
+ *  entirely (this adapter's own writes always produce a schema-valid stash by construction, so
+ *  this is unreachable via any legitimate write -- purely defense-in-depth for stored-data
+ *  corruption from outside this adapter, mirroring `PgTransactionHistoryStorage`'s own
+ *  validate-on-read pattern). `undefined` (no stash at all -- a row never written through this
+ *  adapter's `got*` methods) is passed through unchanged; {@link reconstructLifecycle}'s own
+ *  per-status checks already produce a typed, per-hash error for that case. */
+function parseLifecycleDetailStore(rawDetail: unknown, hash: string): LifecycleDetailStore | undefined {
+  if (rawDetail === undefined) return undefined;
+  const parsed = LifecycleDetailStoreSchema.safeParse(rawDetail);
+  if (!parsed.success) {
+    throw new SerializationFailedError(
+      `PgWalletSdkTransactionHistoryAdapter: entry ${JSON.stringify(hash)}'s stashed lifecycle `
+      + `detail (sections.${UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY}) is malformed and could not be `
+      + `validated: ${parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ")}`,
+      parsed.error,
+    );
+  }
+  return parsed.data;
 }
 
 function splitCommonAndExtension(rest: Record<string, unknown>): {
@@ -114,10 +217,32 @@ function splitCommonAndExtension(rest: Record<string, unknown>): {
   return { common, extension };
 }
 
+/** F2 fix: throws a typed {@link ValidationError} -- fail loud, at write time, BEFORE anything is
+ *  persisted -- if the incoming SDK entry's wallet-specific extension carries any section key
+ *  inside this adapter's own reserved namespace ({@link UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}).
+ *  The old write path silently let such a key be clobbered by the later
+ *  `[UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: detail` spread; this makes the collision structurally
+ *  impossible to reach storage at all, mirroring Sprint 7's own `THS_RESERVED_KEY_PREFIX`
+ *  boundary-rejection pattern (`src/interfaces/transaction-history-storage.ts`). */
+function assertNoReservedAdapterKeys(extension: Readonly<Record<string, EntryContent>>, hash: unknown): void {
+  const badKeys = Object.keys(extension).filter((k) => k.startsWith(UMBRADB_ADAPTER_RESERVED_KEY_PREFIX));
+  if (badKeys.length > 0) {
+    throw new ValidationError(
+      `PgWalletSdkTransactionHistoryAdapter: entry ${JSON.stringify(hash)} carries a wallet-specific `
+      + `section key reserved for this adapter's own internal lifecycle-detail stash`,
+      badKeys.map((k) => ({
+        path: `sections.${k}`,
+        message: `key starts with the reserved prefix "${UMBRADB_ADAPTER_RESERVED_KEY_PREFIX}" (reserved for this adapter's own lifecycle-detail stash, ${UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY})`,
+      })),
+    );
+  }
+}
+
 function toUmbraWriteInput(
   rest: Record<string, unknown>, detail: LifecycleDetailStore,
 ): Omit<UmbraTransactionHistoryEntry, "lifecycle"> {
   const { common, extension } = splitCommonAndExtension(rest);
+  assertNoReservedAdapterKeys(extension, common.hash);
   return {
     hash: common.hash as string,
     identifiers: [...(common.identifiers as readonly string[])],
@@ -125,13 +250,15 @@ function toUmbraWriteInput(
     ...(common.status !== undefined ? { status: mapSdkStatusToUmbra(common.status as Sdk.TransactionHistoryStatus) } : {}),
     ...(common.timestamp !== undefined ? { timestamp: common.timestamp as Date } : {}),
     ...(common.fees !== undefined ? { fees: common.fees as bigint | null } : {}),
-    sections: { ...extension, [LIFECYCLE_DETAIL_KEY]: detail as unknown as EntryContent },
+    sections: { ...extension, [UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: detail as unknown as EntryContent },
   };
 }
 
 /** Reconstructs a schema-valid SDK `TransactionLifecycle` from the CURRENT authoritative
  *  `lifecycle.status` plus only the matching sub-key of the stashed detail store (the M1 fix --
- *  see the class doc). */
+ *  see the class doc). `detail` here has ALREADY been Zod-validated by
+ *  {@link parseLifecycleDetailStore} -- this function only handles "which sub-key is missing for
+ *  the current status," never raw shape corruption (F2 fix). */
 function reconstructLifecycle(
   status: UmbraTransactionHistoryEntry["lifecycle"]["status"],
   detail: LifecycleDetailStore | undefined,
@@ -177,8 +304,11 @@ function reconstructLifecycle(
 }
 
 function reconstructSdkEntry<T extends Sdk.TransactionHistoryEntryCommon>(entry: UmbraTransactionHistoryEntry): T {
-  const { [LIFECYCLE_DETAIL_KEY]: rawDetail, ...extensionSections } = entry.sections;
-  const detail = rawDetail as unknown as LifecycleDetailStore | undefined;
+  const { [UMBRADB_ADAPTER_LIFECYCLE_DETAIL_KEY]: rawDetail, ...extensionSections } = entry.sections;
+  // F2 fix: validate the raw stash BEFORE use -- see parseLifecycleDetailStore's own doc. This
+  // is what turns a malformed/tampered stash into a typed, per-hash SerializationFailedError
+  // here, rather than a bad value silently flowing into reconstructLifecycle.
+  const detail = parseLifecycleDetailStore(rawDetail, entry.hash);
   const lifecycle = reconstructLifecycle(entry.lifecycle.status, detail, entry.hash);
 
   const common: Record<string, unknown> = {
@@ -195,11 +325,16 @@ function reconstructSdkEntry<T extends Sdk.TransactionHistoryEntryCommon>(entry:
 
 /**
  * Implements the SDK's `TransactionHistoryStorage<T>` and forwards every call to a
- * `PgTransactionHistoryStorage` instance constructed with the caller-supplied `mergeFn` (the
- * Sprint 7 test double `referenceMergeEntries` for the Pg-only conformance tier; see
- * `openspec/changes/sprint-8-wallet-envelope-live-sync/design.md` §3 and the report accompanying
- * this sprint for why the live tier also uses `referenceMergeEntries` rather than the SDK's own
- * `mergeWalletEntries`).
+ * `PgTransactionHistoryStorage` instance constructed with the caller-supplied `mergeFn`. Both the
+ * Pg-only conformance tier AND the live preprod tier inject `referenceMergeEntries`
+ * (`test/postgres/reference-merge.ts`) here, NOT the real SDK's `mergeWalletEntries` -- the real
+ * function operates on the SDK's own `WalletEntry` shape (top-level `shielded`/`unshielded`/
+ * `dust`), not this adapter's UmbraDB-shaped `TransactionHistoryEntry` (a `sections` container),
+ * and its first line (`[...existing.identifiers]`) throws a `TypeError` if ever called with
+ * `existing===undefined` (the first write of a hash) -- see `MergeEntriesFn`'s own doc (F1
+ * finding) and `openspec/changes/sprint-8-wallet-envelope-live-sync/design.md` §3 for the full
+ * account of why production injects an UmbraDB-shaped merge function mirroring the SDK's
+ * documented semantics, never the raw SDK function itself.
  */
 export class PgWalletSdkTransactionHistoryAdapter<
   T extends Sdk.TransactionHistoryEntryCommon = Sdk.TransactionHistoryEntryWithHash,

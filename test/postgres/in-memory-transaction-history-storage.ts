@@ -85,12 +85,19 @@ export class InMemoryTransactionHistoryStorage implements TransactionHistoryStor
     const incoming = parsed.data;
 
     const existing = this.entries.get(incoming.hash);
-    const merged = this.mergeFn(existing, incoming);
-    if (merged.hash !== incoming.hash) {
-      throw new ValidationError(
-        "InMemoryTransactionHistoryStorage: merge function must not change the entry's hash",
-        [{ path: "hash", message: `merge result hash "${merged.hash}" does not match incoming "${incoming.hash}"` }],
-      );
+    // F1 fix (mirrors PgTransactionHistoryStorage.writeRows): never call the injected merge
+    // function with existing===undefined -- a first write for a hash is persisted verbatim.
+    let merged: TransactionHistoryEntry;
+    if (existing === undefined) {
+      merged = incoming;
+    } else {
+      merged = this.mergeFn(existing, incoming);
+      if (merged.hash !== incoming.hash) {
+        throw new ValidationError(
+          "InMemoryTransactionHistoryStorage: merge function must not change the entry's hash",
+          [{ path: "hash", message: `merge result hash "${merged.hash}" does not match incoming "${incoming.hash}"` }],
+        );
+      }
     }
     this.entries.set(merged.hash, merged);
 

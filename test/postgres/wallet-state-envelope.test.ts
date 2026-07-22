@@ -185,10 +185,62 @@ describe("PgWalletStateEnvelopeStore (Pg-only, required gate)", () => {
     expect(loaded.subWallets).toEqual({ shielded: "S-payload", unshielded: "U-payload", dust: "D-payload" });
   });
 
-  it("load rejects with EnvelopeCorruptError when the stored envelope's echoed (walletId, networkId) does not match the requested key", async () => {
-    const store = envelopeStore();
+  // F8 (audit finding): save() itself now rejects a mismatched envelope before anything is
+  // persisted, so this scenario is no longer reachable via PgWalletStateEnvelopeStore.save's own
+  // public API -- it is reproduced here by writing directly through the underlying CheckpointStore
+  // (bypassing the F8 guard), simulating data written before F8 shipped, or by any other path that
+  // does not go through this store's own save(). This keeps the LOAD-side defense-in-depth check
+  // covered independently of the save-side guard below.
+  it("load rejects with EnvelopeCorruptError when the stored envelope's echoed (walletId, networkId) does not match the requested key (defense-in-depth, bypassing save's own F8 guard)", async () => {
+    const ckpt = checkpointStore();
     const mismatched = envelope({ walletId: "someone-else", networkId: "PreProd" });
-    await store.save("w-mismatch", "PreProd", mismatched);
+    await ckpt.save("w-mismatch", "PreProd", encode(mismatched));
+    const store = envelopeStore();
     await expect(store.load("w-mismatch", "PreProd")).rejects.toBeInstanceOf(EnvelopeCorruptError);
+  });
+
+  // F8 (audit finding, symmetric with the load-side check): save() rejects BEFORE any
+  // encode/persist work happens when the envelope's own echoed (walletId, networkId) does not
+  // match the call args.
+  it("F8: save rejects with ValidationError when the envelope's own (walletId, networkId) does not match the call args, and nothing is persisted", async () => {
+    const store = envelopeStore();
+    const ckpt = checkpointStore();
+    const mismatched = envelope({ walletId: "someone-else", networkId: "PreProd" });
+    await expect(store.save("w-f8-mismatch", "PreProd", mismatched)).rejects.toBeInstanceOf(ValidationError);
+    // nothing was persisted -- a subsequent load for this key sees no checkpoint at all.
+    await expect(ckpt.history("w-f8-mismatch", "PreProd")).resolves.toEqual([]);
+  });
+
+  it("F8: save rejects with ValidationError when only networkId mismatches", async () => {
+    const store = envelopeStore();
+    const mismatched = envelope({ walletId: "w-f8-net", networkId: "MainNet" });
+    await expect(store.save("w-f8-net", "PreProd", mismatched)).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("F8: save succeeds when the envelope's own (walletId, networkId) matches the call args (the normal case is unaffected)", async () => {
+    const store = envelopeStore();
+    const e = envelope({ walletId: "w-f8-ok", networkId: "PreProd" });
+    await expect(store.save("w-f8-ok", "PreProd", e)).resolves.toBeDefined();
+    const loaded = await store.load("w-f8-ok", "PreProd");
+    expect(loaded).toEqual(e);
+  });
+
+  // F7 (audit finding, fail-closed): the envelope schema is now .strict() at every object level --
+  // an unknown top-level field must be rejected, never silently ignored.
+  it("F7: decode rejects a JSON payload carrying an unknown top-level field with EnvelopeCorruptError", () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      envelopeVersion: ENVELOPE_VERSION, walletId: "w", networkId: "n",
+      subWallets: { shielded: null, unshielded: null, dust: null },
+      unexpectedTopLevelField: "should not be allowed",
+    }));
+    expect(() => decode(bytes)).toThrow(EnvelopeCorruptError);
+  });
+
+  it("F7: decode rejects a JSON payload carrying an unknown field inside subWallets with EnvelopeCorruptError", () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      envelopeVersion: ENVELOPE_VERSION, walletId: "w", networkId: "n",
+      subWallets: { shielded: null, unshielded: null, dust: null, extra: "nope" },
+    }));
+    expect(() => decode(bytes)).toThrow(EnvelopeCorruptError);
   });
 });

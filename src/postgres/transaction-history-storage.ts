@@ -284,10 +284,13 @@ function capitalize(s: string): string {
  * `runMigrations` (`migrate.ts`) before constructing this against a fresh database.
  *
  * `walletId` and the entry-merge function are BOTH bound at construction, never a method
- * parameter (`design.md` §2/§4) — this instance never imports `@midnightntwrk/wallet-sdk` (or
- * any wallet-SDK package) at runtime; the merge function passed here is expected to be the real
- * SDK's `mergeWalletEntries` in production, but this class has no compile-time or run-time
- * dependency on that symbol.
+ * parameter (`design.md` §2/§4) — this instance never imports the Midnight wallet SDK (or any
+ * wallet-SDK package) at runtime. Production injects an UmbraDB-shaped merge function that
+ * mirrors the real SDK's `mergeWalletEntries` documented semantics — NOT the raw SDK function
+ * itself, which operates on a different entry shape (the SDK's `WalletEntry`, not this project's
+ * `sections`-container `TransactionHistoryEntry`) and assumes both operands are always defined
+ * (see {@link MergeEntriesFn}'s own doc, F1 finding). This class has no compile-time or run-time
+ * dependency on either symbol.
  *
  * The `schema` constructor parameter defaults to `sql.umbradbSchema`, matching every other
  * adapter's own established pattern (`PgTemporalKV`, `PgWatermarks`).
@@ -463,18 +466,30 @@ export class PgTransactionHistoryStorage implements TransactionHistoryStorage {
       `;
       const existing = existingRows.length > 0 ? rowToEntry(existingRows[0]!) : undefined;
 
-      const merged = this.mergeFn(existing, entry);
-      if (merged.hash !== entry.hash) {
-        throw new ValidationError(
-          "PgTransactionHistoryStorage: merge function must not change the entry's hash",
-          [{ path: "hash", message: `merge result hash "${merged.hash}" does not match incoming "${entry.hash}"` }],
-        );
+      // F1 fix (cross-vendor audit BLOCK finding): NEVER call the injected merge function with
+      // existing===undefined. The real SDK's mergeWalletEntries (and any production merge
+      // mirroring it) assumes both operands are defined and does `[...existing.identifiers]` on
+      // its very first line -- it would throw a TypeError immediately if ever invoked here on a
+      // first write. `entry` has already passed `TransactionHistoryEntrySchema.safeParse` in
+      // `write()`, so persisting it verbatim on a first write is already schema-valid; no need to
+      // re-validate an unchanged value.
+      let result: TransactionHistoryEntry;
+      if (existing === undefined) {
+        result = entry;
+      } else {
+        const merged = this.mergeFn(existing, entry);
+        if (merged.hash !== entry.hash) {
+          throw new ValidationError(
+            "PgTransactionHistoryStorage: merge function must not change the entry's hash",
+            [{ path: "hash", message: `merge result hash "${merged.hash}" does not match incoming "${entry.hash}"` }],
+          );
+        }
+        const validated = TransactionHistoryEntrySchema.safeParse(merged);
+        if (!validated.success) {
+          throw ValidationError.fromZod("PgTransactionHistoryStorage merge function result", validated.error);
+        }
+        result = validated.data;
       }
-      const validated = TransactionHistoryEntrySchema.safeParse(merged);
-      if (!validated.success) {
-        throw ValidationError.fromZod("PgTransactionHistoryStorage merge function result", validated.error);
-      }
-      const result = validated.data;
 
       await sql`
         INSERT INTO ${sql(this.schema)}.transaction_history

@@ -239,10 +239,25 @@ export const TransactionHistoryEntrySchema = z.object({
 });
 
 /**
- * Merges an existing stored entry (`undefined` if none) with an incoming write into the entry
- * that should end up persisted. Injected at {@link TransactionHistoryStorage} construction time
- * — production code is expected to pass the wallet SDK's own `mergeWalletEntries`, but this
- * storage layer has no compile-time or run-time dependency on that symbol (`design.md` §2).
+ * Merges an EXISTING stored entry with an incoming write into the entry that should end up
+ * persisted. Injected at {@link TransactionHistoryStorage} construction time.
+ *
+ * **This function is called ONLY when a stored entry already exists for the hash — both
+ * `existing` and `incoming` are always defined** (F1 fix, cross-vendor audit BLOCK finding). On
+ * the FIRST write of a hash (no existing row), the storage layer persists the incoming entry
+ * VERBATIM and never calls this function at all — see `PgTransactionHistoryStorage.writeRows`.
+ * This matters because the real wallet SDK's `mergeWalletEntries` (`~/repos/midnight-wallet/
+ * packages/facade/src/index.ts`) does `[...existing.identifiers]` on its very first line: calling
+ * it with `existing===undefined` throws a `TypeError` immediately. **Production therefore never
+ * injects the raw SDK `mergeWalletEntries` function** — it injects an UmbraDB-shaped merge
+ * function that mirrors that function's documented semantics (identifier union+dedupe,
+ * first-writer-wins scalar facts, incoming-wins lifecycle, per-section merge-when-both-present) but
+ * operates on UmbraDB's own `TransactionHistoryEntry` shape (a `sections` container) rather than
+ * the SDK's `WalletEntry` shape (top-level `shielded`/`unshielded`/`dust`) — the two are distinct
+ * types, so the raw SDK function could not be injected here even if the undefined-first-write
+ * problem did not exist. This storage layer has no compile-time or run-time dependency on either
+ * symbol either way (`design.md` §2).
+ *
  * Applied entirely in-process, synchronously, while a row lock is held (`design.md` §3) — the
  * function itself must not perform I/O.
  *
@@ -254,7 +269,7 @@ export const TransactionHistoryEntrySchema = z.object({
  * function, but does not itself decide how they were unioned).
  */
 export type MergeEntriesFn = (
-  existing: TransactionHistoryEntry | undefined,
+  existing: TransactionHistoryEntry,
   incoming: TransactionHistoryEntry,
 ) => TransactionHistoryEntry;
 

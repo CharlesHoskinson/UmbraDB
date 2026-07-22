@@ -1,9 +1,18 @@
 # Proposal — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery
 
-> **Status:** Draft. This is the concrete implementation sprint that makes DB-backed wallet
-> persistence and recovery actually *work* end-to-end against the real Midnight wallet SDK, and
-> is what unblocks merging Sprint 7. It has **not yet** been through this repo's own three-persona
-> panel/Codex audit (`AGENTS.md`) — that is Phase 0 of `tasks.md`, not yet run.
+> **Status:** Implemented and audited (F9 status update). The envelope module, the adapter seam,
+> the Pg-only conformance suite, and the live preprod DB-sync + cold-boot recovery tests described
+> below are all implemented, and the live tiers were confirmed to pass against real public preprod
+> on 2026-07-22 (funding tx `b194e71d4d22ed09846cd88aab67c6bb4eec69ea6df5aead3bdb22bfe3493341`,
+> restored `progress.appliedId = 505701n` — `tasks.md` §1.1). This implementation was then put
+> through a 4-auditor cross-vendor panel (domain-correctness, adversarial, and release/process
+> personas per `AGENTS.md`), which returned 3 `BLOCK` verdicts plus several must-fix findings
+> (F1-F9, catalogued and fixed in the commit that added this status line — see `tasks.md`'s
+> per-task notes for exactly what changed and why). A fresh re-audit of that fix commit is the
+> pending next step (`tasks.md` §0.4/§6.5) — this proposal is no longer an unreviewed draft, but it
+> is also not yet re-audit-`PASS`ed on its current, fixed head. Findings the fix commit explicitly
+> deferred to Sprint 9, rather than silently folding in here, are recorded in `tasks.md`'s "Deferred
+> to Sprint 9" section.
 
 ## Why this sprint exists, and why it unblocks Sprint 7
 

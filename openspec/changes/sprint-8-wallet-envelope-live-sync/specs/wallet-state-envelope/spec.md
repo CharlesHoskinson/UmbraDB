@@ -93,9 +93,12 @@ attempt a best-effort restore of an unknown shape. This is the forward seam for 
 ### Requirement: a corrupt or non-JSON envelope payload is rejected with a typed error
 
 IF `decode` is given bytes that are not valid JSON, or valid JSON that does not satisfy the envelope
-schema (missing `envelopeVersion`, a non-string sub-wallet slot, etc.), THEN the system SHALL reject
-with a typed envelope error, not surface a raw `SyntaxError`/parse error and not return a malformed
-envelope.
+schema (missing `envelopeVersion`, a non-string sub-wallet slot, an unrecognized top-level field,
+etc.), THEN the system SHALL reject with a typed envelope error, not surface a raw
+`SyntaxError`/parse error and not return a malformed envelope. **F7 (fail-closed):** the envelope
+schema is strict at every object level — an unknown top-level field (or an unknown field inside
+`subWallets`) is rejected exactly like a missing/mistyped required field, never silently ignored
+and passed through.
 
 #### Scenario: Non-JSON bytes are rejected as a typed envelope error
 
@@ -108,6 +111,13 @@ envelope.
 - **WHEN** `decode` is given valid JSON that lacks `envelopeVersion` or carries a non-string
   sub-wallet slot
 - **THEN** the call SHALL reject with the typed envelope error, not return a malformed envelope
+
+#### Scenario: An unknown top-level field is rejected as a typed envelope error (F7)
+
+- **WHEN** `decode` is given otherwise well-formed JSON that additionally carries a top-level field
+  not part of the envelope schema
+- **THEN** the call SHALL reject with `EnvelopeCorruptError`, not silently ignore the unknown field
+  and return an otherwise-valid envelope
 
 ### Requirement: loading a never-saved wallet surfaces a typed not-found, not a silent empty result
 
@@ -124,15 +134,20 @@ snapshot is a distinct, observable condition, not an implicitly-empty wallet.
 
 ### Requirement: a sub-wallet absent from the envelope is skipped on restore
 
-WHERE a sub-wallet slot (`shielded`, `unshielded`, or `dust`) is absent/`null` in a saved envelope —
+WHERE a sub-wallet slot (`shielded`, `unshielded`, or `dust`) is `null` in a saved envelope —
 because that sub-wallet was not exercised, as in the preprod unshielded-only live tier
 (`design/environment/preprod-connection.md` "Sync cost"; `design.md` §1.1) — the restore path SHALL
 skip that sub-wallet, restoring only the sub-wallets whose strings are present, and SHALL NOT fail
-for the absent one.
+for the `null` one. **F7 wording fix:** "absent" throughout this requirement means the slot's JSON
+VALUE is `null` — the `shielded`/`unshielded`/`dust` KEY itself is never physically omitted from
+the envelope object; the envelope schema (`.strict()`, F7) requires all three keys present on
+every decode, and `encode` always emits all three explicitly. A JSON payload that omits one of the
+three keys outright (rather than setting it to `null`) is a malformed envelope and is rejected with
+`EnvelopeCorruptError`, not treated as an implicit `null`.
 
 #### Scenario: An unshielded-only envelope restores the unshielded sub-wallet and skips the others
 
-- **WHEN** an envelope with `unshielded` populated and `shielded`/`dust` absent/`null` is loaded and
+- **WHEN** an envelope with `unshielded` populated and `shielded`/`dust` set to `null` is loaded and
   restored
 - **THEN** the unshielded sub-wallet SHALL be restored from its string
 - **AND** the restore SHALL NOT reject or attempt to restore a shielded or dust sub-wallet
@@ -167,6 +182,16 @@ module under `src/` SHALL import a wallet-SDK package at runtime; the adapter is
   be returned by a subsequent `getAll()` through the adapter
 - **AND** no module under `src/` SHALL have imported a `@midnightntwrk/*` package at runtime to
   achieve this
+
+**Note (F10, non-normative):** `PgTransactionHistoryStorage.serialize()` — forwarded verbatim by
+the adapter's own `serialize()` — returns UmbraDB-shaped JSON (this storage layer's own documented
+bigint/Date tagging scheme), a diagnostic dump of `getAll()`'s output, not a re-encoding into the
+SDK's own entry shape. Postgres is the durable, authoritative store. The SDK core never calls
+`serialize()` on the injected storage — its `unshielded-wallet`/`facade` consumers call only
+`get`/`getAll`/`gotPending`/`gotFinalized`/`gotRejected` — so this method's specific output shape is
+never load-bearing for wallet sync, only for an operator-invoked dump. A Pg→InMemory (or other
+backend) migration path that might want to consume this output is an explicit Sprint 9 decision,
+not addressed by this capability (`design.md` §3.4).
 
 ### Requirement: the adapter round-trips SDK lifecycle detail so getAll yields schema-valid SDK entries
 

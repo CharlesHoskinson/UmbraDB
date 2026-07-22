@@ -68,7 +68,14 @@ export interface WalletStateEnvelope {
  *  here, but NOT checked for equaling {@link ENVELOPE_VERSION}. The version-VALUE check is a
  *  deliberately separate step in `decode` (below), so a well-formed envelope tagged with an
  *  unrecognized version can be rejected with the specific
- *  {@link EnvelopeVersionUnsupportedError} rather than lumped in with a generic shape failure. */
+ *  {@link EnvelopeVersionUnsupportedError} rather than lumped in with a generic shape failure.
+ *
+ *  **F7 fix (audit finding, fail-closed):** both object levels are `.strict()` -- an unknown
+ *  top-level field, or an unknown field inside `subWallets`, is now rejected exactly like a
+ *  missing/mistyped required field, rather than silently ignored and dropped by Zod's default
+ *  (non-strict) `z.object` behavior. This does NOT change the all-three-slots-required contract:
+ *  `shielded`/`unshielded`/`dust` remain required keys whose VALUE may be `null` -- `.strict()`
+ *  only affects EXTRA, unrecognized keys, never the documented ones. */
 const WalletStateEnvelopeShapeSchema = z.object({
   envelopeVersion: z.number().int().positive(),
   walletId: z.string().min(1).refine((s) => !hasPostgresUnsafeText(s), { message: `walletId ${POSTGRES_SAFE_TEXT_MESSAGE}` }),
@@ -77,8 +84,8 @@ const WalletStateEnvelopeShapeSchema = z.object({
     shielded: SubWalletSlotSchema,
     unshielded: SubWalletSlotSchema,
     dust: SubWalletSlotSchema,
-  }),
-});
+  }).strict(),
+}).strict();
 
 export type WalletStateEnvelopeErrorCode = "VERSION_UNSUPPORTED" | "CORRUPT";
 

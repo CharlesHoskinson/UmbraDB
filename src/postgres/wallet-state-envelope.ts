@@ -2,6 +2,7 @@ import type {
   CheckpointSequence, CheckpointStore, CheckpointSummary, SaveCheckpointOptions,
 } from "../interfaces/checkpoint-store.js";
 import { decode, encode, EnvelopeCorruptError, type WalletStateEnvelope } from "../interfaces/wallet-state-envelope.js";
+import { ValidationError } from "../interfaces/storage-errors.js";
 
 /**
  * Thin wrapper over an injected `CheckpointStore` (`src/interfaces/checkpoint-store.ts`) that
@@ -23,11 +24,31 @@ export class PgWalletStateEnvelopeStore {
    * bytes)` call, so the three sub-wallet strings are stored as one atomic unit -- either all
    * three are durable together or none are (`design.md` §1, "one save call persists the whole
    * bundle atomically").
-   * @throws {ValidationError} if `envelope` fails its schema (surfaced from `encode`).
+   *
+   * **F8 fix (audit finding, symmetric with the load-side check):** rejects BEFORE any encode/
+   * persist work happens if `envelope`'s own echoed `walletId`/`networkId` do not match the call
+   * args -- mirroring {@link load}'s own cross-check of the loaded envelope's echoed identity
+   * against the requested key. Without this, a caller could persist an envelope under one key
+   * while its own embedded identity silently claims another, and that mismatch would only ever
+   * surface later, on `load` (as `EnvelopeCorruptError`) -- this catches it at write time instead.
+   *
+   * @throws {ValidationError} if `envelope`'s own `walletId`/`networkId` do not match the call
+   *   args, or if `envelope` fails its schema (the latter surfaced from `encode`).
    */
   async save(
     walletId: string, networkId: string, envelope: WalletStateEnvelope, opts?: SaveCheckpointOptions,
   ): Promise<CheckpointSummary> {
+    if (envelope.walletId !== walletId || envelope.networkId !== networkId) {
+      throw new ValidationError(
+        `PgWalletStateEnvelopeStore.save: envelope's own (walletId, networkId) = `
+        + `(${JSON.stringify(envelope.walletId)}, ${JSON.stringify(envelope.networkId)}) does not match `
+        + `the requested (${JSON.stringify(walletId)}, ${JSON.stringify(networkId)})`,
+        [
+          { path: "walletId", message: `expected ${JSON.stringify(walletId)}, received ${JSON.stringify(envelope.walletId)}` },
+          { path: "networkId", message: `expected ${JSON.stringify(networkId)}, received ${JSON.stringify(envelope.networkId)}` },
+        ],
+      );
+    }
     const bytes = encode(envelope);
     return this.checkpointStore.save(walletId, networkId, bytes, opts);
   }

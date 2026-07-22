@@ -394,9 +394,15 @@ describe("PgTransactionHistoryStorage", () => {
   });
 
   describe("defensive: merge function result validation", () => {
+    // F1: the merge function is only ever called on a SECOND (or later) write to a hash -- a
+    // first write is persisted verbatim without invoking it at all (`MergeEntriesFn`'s own doc).
+    // This test therefore writes the hash once normally (existing===undefined, badMerge is never
+    // called, so this first write cannot itself throw), THEN writes it again so badMerge is
+    // actually exercised (existing!==undefined) and its hash-changing result is rejected.
     it("throws ValidationError if the injected merge function changes the entry's hash", async () => {
       const badMerge: MergeEntriesFn = (_existing, incoming) => ({ ...incoming, hash: "different-hash" });
       const s = store("wallet-bad-merge", badMerge);
+      await s.gotPending(entry("original-hash", ["a"])); // first write: badMerge not called
       await expect(s.gotFinalized(entry("original-hash", ["a"]))).rejects.toBeInstanceOf(ValidationError);
     });
   });
