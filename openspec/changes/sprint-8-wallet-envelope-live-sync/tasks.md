@@ -106,7 +106,15 @@ commit intentionally does NOT implement.
   — false; the raw SDK function operates on a different entry shape and assumes both merge operands
   are always defined (throws on the first write of a hash), so it cannot be injected here at all.
   Both tiers inject `referenceMergeEntries`, an UmbraDB-shaped function mirroring the SDK's
-  documented merge semantics.
+  documented merge semantics. **F1(c) parity test**
+  (`test/postgres/reference-merge-parity.test.ts`): a REAL runtime diff was achieved -- the facade
+  package's `dist` script built cleanly (after first building its two then-missing workspace
+  dependencies) well under the ~10 minute budget -- dynamically importing the real
+  `mergeWalletEntries`/`mergeUnshieldedSections` and diffing their output against
+  `referenceMergeEntries`'s on translated inputs (identifiers, scalar facts, lifecycle, per-section
+  merge), gated on `facadeMergeAvailable()` so it degrades to skipped (not failing) where the
+  sibling checkout is not built. An unconditional, dependency-free source-faithful rule-assertion
+  half of the same file is the required-gate-safe fallback/baseline (`design.md` §3.3).
   - **Acceptance:** `rg` finds no `@midnightntwrk/*` runtime import anywhere under `src/`; the
     adapter compiles against the real SDK types.
 - [x] 3.2 Lifecycle-detail round-trip (`design.md` §3.2, decision (i)): the adapter persists

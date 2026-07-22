@@ -493,8 +493,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "interfaces/checkpoint-store.ts"
     },
     {
@@ -504,8 +504,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointsequence",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointsequence"
     },
     {
@@ -515,8 +515,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_contenthash",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "contenthash"
     },
     {
@@ -526,8 +526,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_savecheckpointoptionsschema",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "savecheckpointoptionsschema"
     },
     {
@@ -537,8 +537,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_savecheckpointoptions",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "savecheckpointoptions"
     },
     {
@@ -548,8 +548,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_historyoptionsschema",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "historyoptionsschema"
     },
     {
@@ -559,8 +559,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_historyoptions",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "historyoptions"
     },
     {
@@ -570,8 +570,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointsummary",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointsummary"
     },
     {
@@ -581,8 +581,8 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointrecord",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointrecord"
     },
     {
@@ -592,8 +592,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_pruneresult",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "pruneresult"
     },
     {
@@ -603,8 +603,8 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointstoreerrorcode",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointstoreerrorcode"
     },
     {
@@ -614,8 +614,8 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointstoreerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointstoreerror"
     },
     {
@@ -625,8 +625,8 @@
       "source_location": "L83",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointnotfounderror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpointnotfounderror"
     },
     {
@@ -636,8 +636,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_checkpointnotfounderror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -647,8 +647,8 @@
       "source_location": "L96",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_chunkmissingerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "chunkmissingerror"
     },
     {
@@ -658,8 +658,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_chunkmissingerror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -669,8 +669,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_chunkintegrityerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "chunkintegrityerror"
     },
     {
@@ -680,8 +680,8 @@
       "source_location": "L106",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_chunkintegrityerror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -691,8 +691,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_manifestcorrupterror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "manifestcorrupterror"
     },
     {
@@ -702,8 +702,8 @@
       "source_location": "L114",
       "_origin": "ast",
       "id": "src_interfaces_checkpoint_store_manifestcorrupterror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -768,8 +768,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "storage-errors.ts"
     },
     {
@@ -779,8 +779,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_storageerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "storageerror"
     },
     {
@@ -790,8 +790,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_storageerror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -801,8 +801,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_sharedstorageerrorcode",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "sharedstorageerrorcode"
     },
     {
@@ -812,8 +812,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "validationerror"
     },
     {
@@ -823,8 +823,8 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_validationerror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -845,8 +845,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "serializationfailederror"
     },
     {
@@ -856,8 +856,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_serializationfailederror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -867,8 +867,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "connectionerror"
     },
     {
@@ -878,8 +878,8 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "src_interfaces_storage_errors_connectionerror_constructor",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".constructor()"
     },
     {
@@ -1461,8 +1461,8 @@
       "source_location": "L219",
       "_origin": "ast",
       "id": "src_interfaces_transaction_history_storage_transactionhistoryentry",
-      "community": 85,
-      "community_name": "translatePostgresError",
+      "community": 86,
+      "community_name": "TransactionHistoryEntry",
       "norm_label": "transactionhistoryentry"
     },
     {
@@ -1472,8 +1472,8 @@
       "source_location": "L230",
       "_origin": "ast",
       "id": "src_interfaces_transaction_history_storage_transactionhistoryentryschema",
-      "community": 84,
-      "community_name": "postgres/transaction-history-storage.ts",
+      "community": 86,
+      "community_name": "TransactionHistoryEntry",
       "norm_label": "transactionhistoryentryschema"
     },
     {
@@ -1582,8 +1582,8 @@
       "source_location": "L314",
       "_origin": "ast",
       "id": "src_interfaces_transaction_history_storage_transactionhistorystorage",
-      "community": 86,
-      "community_name": "TransactionHistoryEntry",
+      "community": 83,
+      "community_name": "TransactionHandle",
       "norm_label": "transactionhistorystorage"
     },
     {
@@ -1868,8 +1868,8 @@
       "source_location": "L219",
       "_origin": "ast",
       "id": "src_interfaces_transaction_lease_transactionleaselayer_withtransaction",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".withtransaction()"
     },
     {
@@ -2132,8 +2132,8 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarks_set",
-      "community": 83,
-      "community_name": "TransactionHandle",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": ".set()"
     },
     {
@@ -2143,8 +2143,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "src_interfaces_watermarks_watermarks_get",
-      "community": 83,
-      "community_name": "TransactionHandle",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": ".get()"
     },
     {
@@ -2187,8 +2187,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_postgres_abort_withabort",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "withabort()"
     },
     {
@@ -2198,8 +2198,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "postgres/checkpoint-store.ts"
     },
     {
@@ -2209,8 +2209,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_sha256",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "sha256()"
     },
     {
@@ -2220,8 +2220,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_tohex",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "tohex()"
     },
     {
@@ -2231,8 +2231,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_coercetosafenumber",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "coercetosafenumber()"
     },
     {
@@ -2242,8 +2242,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_manifestrow",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "manifestrow"
     },
     {
@@ -2253,8 +2253,8 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_chunkjoinrow",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "chunkjoinrow"
     },
     {
@@ -2264,8 +2264,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_aggregaterow",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "aggregaterow"
     },
     {
@@ -2275,8 +2275,8 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_splitchunks",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "splitchunks()"
     },
     {
@@ -2286,8 +2286,8 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_validatesaveoptions",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "validatesaveoptions()"
     },
     {
@@ -2297,8 +2297,8 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_validatehistoryoptions",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "validatehistoryoptions()"
     },
     {
@@ -2308,8 +2308,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_tosummary",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "tosummary()"
     },
     {
@@ -2319,8 +2319,8 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "pgcheckpointstore"
     },
     {
@@ -2341,8 +2341,8 @@
       "source_location": "L132",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_save",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".save()"
     },
     {
@@ -2352,8 +2352,8 @@
       "source_location": "L139",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_saveimpl",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".saveimpl()"
     },
     {
@@ -2363,8 +2363,8 @@
       "source_location": "L204",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_load",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".load()"
     },
     {
@@ -2374,8 +2374,8 @@
       "source_location": "L211",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_loadimpl",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".loadimpl()"
     },
     {
@@ -2385,8 +2385,8 @@
       "source_location": "L293",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_history",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".history()"
     },
     {
@@ -2396,8 +2396,8 @@
       "source_location": "L300",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_historyimpl",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".historyimpl()"
     },
     {
@@ -2407,8 +2407,8 @@
       "source_location": "L345",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_prune",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".prune()"
     },
     {
@@ -2418,8 +2418,8 @@
       "source_location": "L360",
       "_origin": "ast",
       "id": "src_postgres_checkpoint_store_pgcheckpointstore_pruneimpl",
-      "community": 0,
-      "community_name": "postgres/checkpoint-store.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": ".pruneimpl()"
     },
     {
@@ -2440,8 +2440,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_postgres_client_umbradbsql",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "umbradbsql"
     },
     {
@@ -2506,8 +2506,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_postgres_errors_exclusionviolationerror",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "exclusionviolationerror"
     },
     {
@@ -2517,8 +2517,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_postgres_errors_exclusionviolationerror_constructor",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": ".constructor()"
     },
     {
@@ -2638,8 +2638,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrate",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "migrate.ts"
     },
     {
@@ -2649,8 +2649,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_postgres_migrate_migration",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "migration"
     },
     {
@@ -2660,8 +2660,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "src_postgres_migrate_migration_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": ".up()"
     },
     {
@@ -2671,8 +2671,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_postgres_migrate_withreservedtransaction",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "withreservedtransaction()"
     },
     {
@@ -2682,8 +2682,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_postgres_migrate_migrations",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "migrations"
     },
     {
@@ -2693,8 +2693,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsoptions",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "runmigrationsoptions"
     },
     {
@@ -2704,8 +2704,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrations",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "runmigrations()"
     },
     {
@@ -2715,8 +2715,8 @@
       "source_location": "L83",
       "_origin": "ast",
       "id": "src_postgres_migrate_runmigrationsimpl",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "runmigrationsimpl()"
     },
     {
@@ -2726,8 +2726,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "000_schema.ts"
     },
     {
@@ -2737,8 +2737,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_postgres_migrations_000_schema_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "up()"
     },
     {
@@ -2748,8 +2748,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "001_temporal_kv.ts"
     },
     {
@@ -2759,8 +2759,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_postgres_migrations_001_temporal_kv_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "up()"
     },
     {
@@ -2770,8 +2770,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "002_checkpoint_store.ts"
     },
     {
@@ -2781,8 +2781,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_postgres_migrations_002_checkpoint_store_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "up()"
     },
     {
@@ -2792,8 +2792,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "003_watermarks.ts"
     },
     {
@@ -2803,8 +2803,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_postgres_migrations_003_watermarks_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "up()"
     },
     {
@@ -2814,8 +2814,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_postgres_migrations_004_transaction_history",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "004_transaction_history.ts"
     },
     {
@@ -2825,8 +2825,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_postgres_migrations_004_transaction_history_up",
-      "community": 98,
-      "community_name": "migrate.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "up()"
     },
     {
@@ -2891,8 +2891,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_postgres_temporal_kv_pgtemporalkv_constructor",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": ".constructor()"
     },
     {
@@ -3122,8 +3122,8 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "src_postgres_transaction_history_storage_encodestoredentry",
-      "community": 85,
-      "community_name": "translatePostgresError",
+      "community": 84,
+      "community_name": "postgres/transaction-history-storage.ts",
       "norm_label": "encodestoredentry()"
     },
     {
@@ -3166,8 +3166,8 @@
       "source_location": "L275",
       "_origin": "ast",
       "id": "src_postgres_transaction_history_storage_capitalize",
-      "community": 84,
-      "community_name": "postgres/transaction-history-storage.ts",
+      "community": 85,
+      "community_name": "translatePostgresError",
       "norm_label": "capitalize()"
     },
     {
@@ -3463,8 +3463,8 @@
       "source_location": "L205",
       "_origin": "ast",
       "id": "src_postgres_transaction_lease_pgtransactionleaselayer_constructor",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": ".constructor()"
     },
     {
@@ -3672,8 +3672,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_integration_cold_boot_recovery_integration_test",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "cold-boot-recovery.integration.test.ts"
     },
     {
@@ -3683,8 +3683,8 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "test_integration_cold_boot_recovery_integration_test_phasea_syncandpersistenvelope",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "phasea_syncandpersistenvelope()"
     },
     {
@@ -3694,9 +3694,64 @@
       "source_location": "L114",
       "_origin": "ast",
       "id": "test_integration_cold_boot_recovery_integration_test_phaseb_freshprocessrestoreandverify",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "phaseb_freshprocessrestoreandverify()"
+    },
+    {
+      "label": "facade-merge-loader.ts",
+      "file_type": "code",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "test_integration_live_fixtures_facade_merge_loader",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "facade-merge-loader.ts"
+    },
+    {
+      "label": "facadeDistIndexPath()",
+      "file_type": "code",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L32",
+      "_origin": "ast",
+      "id": "test_integration_live_fixtures_facade_merge_loader_facadedistindexpath",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "facadedistindexpath()"
+    },
+    {
+      "label": "unshieldedWalletDistIndexPath()",
+      "file_type": "code",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L36",
+      "_origin": "ast",
+      "id": "test_integration_live_fixtures_facade_merge_loader_unshieldedwalletdistindexpath",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "unshieldedwalletdistindexpath()"
+    },
+    {
+      "label": "facadeMergeAvailable()",
+      "file_type": "code",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L43",
+      "_origin": "ast",
+      "id": "test_integration_live_fixtures_facade_merge_loader_facademergeavailable",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "facademergeavailable()"
+    },
+    {
+      "label": "loadFacadeMerge()",
+      "file_type": "code",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L51",
+      "_origin": "ast",
+      "id": "test_integration_live_fixtures_facade_merge_loader_loadfacademerge",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "loadfacademerge()"
     },
     {
       "label": "midnight-wallet-sdk-loader.ts",
@@ -3705,8 +3760,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "midnight-wallet-sdk-loader.ts"
     },
     {
@@ -3716,8 +3771,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader_midnightwalletreporoot",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "midnightwalletreporoot()"
     },
     {
@@ -3727,8 +3782,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader_packagedistfile",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "packagedistfile()"
     },
     {
@@ -3738,8 +3793,8 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader_ledgerv8nodeentry",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "ledgerv8nodeentry()"
     },
     {
@@ -3749,8 +3804,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader_loadmidnightwalletsdk",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "loadmidnightwalletsdk()"
     },
     {
@@ -3760,8 +3815,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_midnight_wallet_sdk_loader_deriveunshieldedseed",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "deriveunshieldedseed()"
     },
     {
@@ -3771,8 +3826,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_preprod_fixtures",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "preprod-fixtures.ts"
     },
     {
@@ -3782,8 +3837,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_preprod_fixtures_firststatewhere",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "firststatewhere()"
     },
     {
@@ -3793,8 +3848,8 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "test_integration_live_fixtures_preprod_fixtures_buildunshieldedconfig",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "buildunshieldedconfig()"
     },
     {
@@ -4134,8 +4189,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_integration_preprod_db_sync_integration_test",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "preprod-db-sync.integration.test.ts"
     },
     {
@@ -4145,8 +4200,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "checkpoint-store.property.test.ts"
     },
     {
@@ -4156,8 +4211,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_sql_getsql",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "{ sql: getsql }"
     },
     {
@@ -4167,8 +4222,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_store",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "store()"
     },
     {
@@ -4178,8 +4233,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_property_test_freshwallet",
-      "community": 1,
-      "community_name": "postgres/transaction-lease.ts",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "freshwallet()"
     },
     {
@@ -4189,8 +4244,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "checkpoint-store.test.ts"
     },
     {
@@ -4200,8 +4255,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_sql_getsql_connectionuri",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "{ sql: getsql, connectionuri }"
     },
     {
@@ -4211,8 +4266,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_store",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "store()"
     },
     {
@@ -4222,8 +4277,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_truncateall",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "truncateall()"
     },
     {
@@ -4233,8 +4288,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_sha256",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "sha256()"
     },
     {
@@ -4244,8 +4299,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "test_postgres_checkpoint_store_test_rawconnection",
-      "community": 77,
-      "community_name": "storage-errors.ts",
+      "community": 78,
+      "community_name": "wallet-state-envelope.test.ts",
       "norm_label": "rawconnection()"
     },
     {
@@ -4425,14 +4480,36 @@
       "norm_label": "no-sdk-import-guard.test.ts"
     },
     {
+      "label": "reference-merge-parity.test.ts",
+      "file_type": "code",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "test_postgres_reference_merge_parity_test",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "reference-merge-parity.test.ts"
+    },
+    {
+      "label": "umbraEntry()",
+      "file_type": "code",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L57",
+      "_origin": "ast",
+      "id": "test_postgres_reference_merge_parity_test_umbraentry",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
+      "norm_label": "umbraentry()"
+    },
+    {
       "label": "reference-merge.ts",
       "file_type": "code",
       "source_file": "test/postgres/reference-merge.ts",
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_reference_merge",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "reference-merge.ts"
     },
     {
@@ -4442,8 +4519,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "test_postgres_reference_merge_isplainobject",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "isplainobject()"
     },
     {
@@ -4453,8 +4530,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "test_postgres_reference_merge_mergesections",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "mergesections()"
     },
     {
@@ -4464,8 +4541,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "test_postgres_reference_merge_referencemergeentries",
-      "community": 99,
-      "community_name": "cold-boot-recovery.integration.test.ts",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "referencemergeentries()"
     },
     {
@@ -4497,8 +4574,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "test_postgres_setup_stoptestdatabase",
-      "community": 75,
-      "community_name": "UmbraDBSql",
+      "community": 69,
+      "community_name": "pg-tx-history-adapter.ts",
       "norm_label": "stoptestdatabase()"
     },
     {
@@ -4849,8 +4926,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "transaction-history-storage.test.ts"
     },
     {
@@ -4860,8 +4937,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_sql_getsql",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "{ sql: getsql }"
     },
     {
@@ -4871,8 +4948,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_store",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "store()"
     },
     {
@@ -4882,8 +4959,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_txlayer",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "txlayer()"
     },
     {
@@ -4893,8 +4970,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_truncateall",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "truncateall()"
     },
     {
@@ -4904,8 +4981,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_entry",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "entry()"
     },
     {
@@ -4915,8 +4992,8 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_fake_tx",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "fake_tx"
     },
     {
@@ -4926,8 +5003,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_decodeserializedcontent",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "decodeserializedcontent()"
     },
     {
@@ -4937,8 +5014,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_decodeserializedentry",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "decodeserializedentry()"
     },
     {
@@ -4948,8 +5025,8 @@
       "source_location": "L493",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_insertrawrow",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "insertrawrow()"
     },
     {
@@ -4959,8 +5036,8 @@
       "source_location": "L598",
       "_origin": "ast",
       "id": "test_postgres_transaction_history_storage_test_makedeeplynested",
-      "community": 87,
-      "community_name": "CheckpointStore",
+      "community": 75,
+      "community_name": "UmbraDBSql",
       "norm_label": "makedeeplynested()"
     },
     {
@@ -5201,8 +5278,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test",
-      "community": 102,
-      "community_name": "watermarks.property.test.ts",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": "watermarks.property.test.ts"
     },
     {
@@ -5212,8 +5289,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_sql_getsql",
-      "community": 102,
-      "community_name": "watermarks.property.test.ts",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": "{ sql: getsql }"
     },
     {
@@ -5223,8 +5300,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_store",
-      "community": 102,
-      "community_name": "watermarks.property.test.ts",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": "store()"
     },
     {
@@ -5234,8 +5311,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_freshkey",
-      "community": 102,
-      "community_name": "watermarks.property.test.ts",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": "freshkey()"
     },
     {
@@ -5245,8 +5322,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "test_postgres_watermarks_property_test_arbitrarywatermarkvalue",
-      "community": 102,
-      "community_name": "watermarks.property.test.ts",
+      "community": 71,
+      "community_name": "postgres/watermarks.ts",
       "norm_label": "arbitrarywatermarkvalue"
     },
     {
@@ -9180,7 +9257,7 @@
       "label": "3.4 serialize() is a diagnostic dump, not a migration path (F10)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L205",
+      "source_location": "L226",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_3_4_serialize_is_a_diagnostic_dump_not_a_migration_path_f10",
       "community": 81,
@@ -9191,7 +9268,7 @@
       "label": "4. Live preprod DB-sync verification (nightly/labeled)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L221",
+      "source_location": "L242",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_4_live_preprod_db_sync_verification_nightly_labeled",
       "community": 81,
@@ -9202,7 +9279,7 @@
       "label": "5. Cold-boot recovery, and the cross-sub-wallet consistency contract",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L245",
+      "source_location": "L266",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_5_cold_boot_recovery_and_the_cross_sub_wallet_consistency_contract",
       "community": 81,
@@ -9213,7 +9290,7 @@
       "label": "6. Relationship to the future verifiable-snapshot-recovery feature",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L286",
+      "source_location": "L307",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_6_relationship_to_the_future_verifiable_snapshot_recovery_feature",
       "community": 81,
@@ -9224,7 +9301,7 @@
       "label": "7. Testing strategy (post-implementation)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L297",
+      "source_location": "L318",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_testing_strategy_post_implementation",
       "community": 81,
@@ -9235,7 +9312,7 @@
       "label": "7.1 Unit / property (Pg-only, required gate) \u2014 `test:conformance`",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L304",
+      "source_location": "L325",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_1_unit_property_pg_only_required_gate_test_conformance",
       "community": 81,
@@ -9246,7 +9323,7 @@
       "label": "7.2 Live preprod DB-sync (nightly/labeled) \u2014 `test:live`",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L337",
+      "source_location": "L358",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_2_live_preprod_db_sync_nightly_labeled_test_live",
       "community": 81,
@@ -9257,7 +9334,7 @@
       "label": "7.3 Cold-boot recovery (nightly/labeled) \u2014 `test:live`",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L345",
+      "source_location": "L366",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_3_cold_boot_recovery_nightly_labeled_test_live",
       "community": 81,
@@ -9268,7 +9345,7 @@
       "label": "7.4 Required-gate vs nightly split (binding)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L355",
+      "source_location": "L376",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_4_required_gate_vs_nightly_split_binding",
       "community": 81,
@@ -9829,7 +9906,7 @@
       "label": "4. Pg-only conformance suite (required merge gate) \u2014 `test:conformance`",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L132",
+      "source_location": "L140",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_4_pg_only_conformance_suite_required_merge_gate_test_conformance",
       "community": 92,
@@ -9840,7 +9917,7 @@
       "label": "5. Live preprod DB-sync + cold-boot tiers (nightly/labeled \u2014 NOT a required gate)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L154",
+      "source_location": "L162",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_5_live_preprod_db_sync_cold_boot_tiers_nightly_labeled_not_a_required_gate",
       "community": 92,
@@ -9851,7 +9928,7 @@
       "label": "6. Close-out",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L182",
+      "source_location": "L190",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_6_close_out",
       "community": 92,
@@ -9862,7 +9939,7 @@
       "label": "Deferred to Sprint 9 (Batch 3 \u2014 recorded as honest deferrals, NOT implemented here)",
       "file_type": "document",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L208",
+      "source_location": "L216",
       "_origin": "ast",
       "id": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_deferred_to_sprint_9_batch_3_recorded_as_honest_deferrals_not_implemented_here",
       "community": 92,
@@ -16767,6 +16844,18 @@
       "relation": "imports_from",
       "context": "import",
       "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "src_interfaces_transaction_history_storage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
       "source_file": "test/postgres/transaction-history-storage.property.test.ts",
       "source_location": "L5",
       "weight": 1.0,
@@ -17132,6 +17221,18 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "test_postgres_reference_merge",
+      "target": "src_interfaces_transaction_history_storage_transactionhistoryentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
       "target": "src_interfaces_transaction_history_storage_transactionhistoryentry",
       "confidence_score": 1.0
     },
@@ -24807,6 +24908,182 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_facade_merge_loader_facadedistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_facade_merge_loader_facademergeavailable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_facade_merge_loader_loadfacademerge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_facade_merge_loader_unshieldedwalletdistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_midnight_wallet_sdk_loader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader",
+      "target": "test_integration_live_fixtures_midnight_wallet_sdk_loader_midnightwalletreporoot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_integration_live_fixtures_facade_merge_loader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L33",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_facadedistindexpath",
+      "target": "test_integration_live_fixtures_midnight_wallet_sdk_loader_midnightwalletreporoot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_facademergeavailable",
+      "target": "test_integration_live_fixtures_facade_merge_loader_facadedistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L53",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_loadfacademerge",
+      "target": "test_integration_live_fixtures_facade_merge_loader_facadedistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_facademergeavailable",
+      "target": "test_integration_live_fixtures_facade_merge_loader_unshieldedwalletdistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_loadfacademerge",
+      "target": "test_integration_live_fixtures_facade_merge_loader_unshieldedwalletdistindexpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "test/integration/live-fixtures/facade-merge-loader.ts",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_integration_live_fixtures_facade_merge_loader_unshieldedwalletdistindexpath",
+      "target": "test_integration_live_fixtures_midnight_wallet_sdk_loader_midnightwalletreporoot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_integration_live_fixtures_facade_merge_loader_facademergeavailable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_integration_live_fixtures_facade_merge_loader_loadfacademerge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "test/integration/live-fixtures/midnight-wallet-sdk-loader.ts",
       "source_location": "L66",
       "weight": 1.0,
@@ -26055,6 +26332,41 @@
       "_origin": "ast",
       "source": "test_postgres_in_memory_transaction_history_storage_inmemorytransactionhistorystorage_write",
       "target": "test_postgres_in_memory_transaction_history_storage_inmemorytransactionhistorystorage_clearpendingbyidentifiers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_postgres_reference_merge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_postgres_reference_merge_parity_test_umbraentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "test/postgres/reference-merge-parity.test.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "test_postgres_reference_merge_parity_test",
+      "target": "test_postgres_reference_merge_referencemergeentries",
       "confidence_score": 1.0
     },
     {
@@ -30854,7 +31166,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L221",
+      "source_location": "L242",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_design_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -30865,7 +31177,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L245",
+      "source_location": "L266",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_design_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -30876,7 +31188,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L286",
+      "source_location": "L307",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_design_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -30887,7 +31199,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L297",
+      "source_location": "L318",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_design_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -30942,7 +31254,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L205",
+      "source_location": "L226",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_3_the_adapter_the_seam",
@@ -30953,7 +31265,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L304",
+      "source_location": "L325",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_testing_strategy_post_implementation",
@@ -30964,7 +31276,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L337",
+      "source_location": "L358",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_testing_strategy_post_implementation",
@@ -30975,7 +31287,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L345",
+      "source_location": "L366",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_testing_strategy_post_implementation",
@@ -30986,7 +31298,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md",
-      "source_location": "L355",
+      "source_location": "L376",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_design_7_testing_strategy_post_implementation",
@@ -31514,7 +31826,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L132",
+      "source_location": "L140",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_tasks_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -31525,7 +31837,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L154",
+      "source_location": "L162",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_tasks_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -31536,7 +31848,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L182",
+      "source_location": "L190",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_tasks_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -31547,7 +31859,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md",
-      "source_location": "L208",
+      "source_location": "L216",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openspec_changes_sprint_8_wallet_envelope_live_sync_tasks_tasks_sprint_8_walletstate_envelope_live_preprod_db_sync_cold_boot_recovery",
@@ -33113,5 +33425,5 @@
       "source_file": "openspec/changes/sprint-3-checkpoint-store/design.md"
     }
   ],
-  "built_at_commit": "684bade30176382e60e7ef5efdc130be1a38cb6d"
+  "built_at_commit": "09398a2daa38bdf40b710586b1ef72855f8729eb"
 }

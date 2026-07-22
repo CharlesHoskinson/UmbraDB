@@ -202,6 +202,27 @@ for production to inject a merge function whose contract assumes both operands a
 defined (mirroring the real SDK's own `mergeWalletEntries`), without ever risking a call with
 `existing===undefined`.
 
+**F1(c) parity test (`test/postgres/reference-merge-parity.test.ts`):** proves
+`referenceMergeEntries` mirrors `mergeWalletEntries`' documented semantics on SECOND-write
+fixtures (identifier union+dedupe; first-writer-wins scalar facts; incoming-wins lifecycle;
+per-section merge-when-both-present, present-side-otherwise). A REAL runtime diff was achieved for
+this fix, not just the source-faithful fallback: the facade package (`@midnightntwrk/wallet-sdk-
+facade`) has no `build` script, but its `dist` script (`tsc -b ./tsconfig.build.json`) built
+cleanly once its then-missing workspace dependencies (`@midnightntwrk/wallet-sdk-dust-wallet`,
+`@midnightntwrk/wallet-sdk-shielded`) were built first via the same script — well under the ~10
+minute budget. The test's `describe.skipIf(!facadeMergeAvailable())`-gated block dynamically
+imports the real `mergeWalletEntries` + `mergeUnshieldedSections` from that now-built dist
+(`test/integration/live-fixtures/facade-merge-loader.ts`, mirroring `midnight-wallet-sdk-loader.ts`'s
+own absolute-path/computed-specifier pattern) and diffs their output against
+`referenceMergeEntries`'s output on translated inputs — an actual equality assertion between the
+real SDK function and this project's own stand-in, not merely a resemblance argument. The
+UNCONDITIONAL half of the same test file (no external dependency) additionally encodes every rule
+as an explicit, source-cited assertion, so the parity claim still has a required-gate-safe
+guarantee in any environment where the sibling `midnight-wallet` checkout is not built (a fresh
+clone, CI) — that half degrades to being the sole evidence there, exactly as the "fall back to a
+source-faithful rule test" instruction anticipates for a facade-no-dist environment, even though in
+THIS pass the facade did build.
+
 ### 3.4 serialize() is a diagnostic dump, not a migration path (F10)
 
 `PgTransactionHistoryStorage.serialize()` -- forwarded verbatim by the adapter's own `serialize()`

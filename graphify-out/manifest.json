@@ -630,8 +630,8 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md": {
-    "mtime": 1784705816.0205595,
-    "ast_hash": "8dad771087b0daa5c8da876f6389d0dc",
+    "mtime": 1784707211.721205,
+    "ast_hash": "79f4e86c951a523a104887edeaee6a1d",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/proposal.md": {
@@ -645,8 +645,18 @@
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md": {
-    "mtime": 1784706634.2813623,
-    "ast_hash": "6a30c535559662816c806ba6fadcdfdc",
+    "mtime": 1784707241.8626547,
+    "ast_hash": "817c0628e01cf94554da04f2fdddf753",
+    "semantic_hash": ""
+  },
+  "test/integration/live-fixtures/facade-merge-loader.ts": {
+    "mtime": 1784707086.8293703,
+    "ast_hash": "53824e2d996e4c0777b27a586e6f872f",
+    "semantic_hash": ""
+  },
+  "test/postgres/reference-merge-parity.test.ts": {
+    "mtime": 1784707140.4870253,
+    "ast_hash": "d916aeace61a66c9bf78e0425df4dc69",
     "semantic_hash": ""
   }
 }
