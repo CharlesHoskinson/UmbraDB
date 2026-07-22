@@ -163,6 +163,27 @@ Sprint 8 (adapter + live preprod sync + cold-boot recovery) is the live-sync mil
 within the run, contingent on Sprint 7 clearing cleanly. Honestly reported: if Sprint 7's audit surfaces
 real blockers, Sprint 8 may start late — the log will show exactly where it got to.
 
+## Architecture confirmation — the SDK is memory-only; UmbraDB is the persistence layer (owner-confirmed, doc-verified)
+
+Verified against BOTH the real SDK source and the official docs:
+- **SDK source:** the ONLY `TransactionHistoryStorage` implementation shipped is
+  `InMemoryTransactionHistoryStorage` — its own doc comment: *"In-memory implementation…"*, backed by a
+  `Map<TransactionHash, T>`, with atomicity that relies on *"the single-threaded nature of JavaScript…
+  no external semaphore is needed."* A grep for any Postgres/SQLite/Disk/File/Mongo/Persistent
+  `TransactionHistoryStorage` across all SDK packages returns **nothing**. Every wallet construction
+  (testkit `wallet.ts`, `environment.ts`) uses `new InMemoryTransactionHistoryStorage(...)`.
+- **Docs (`sdks/official/wallet-developer-guide`):** the documented config for BOTH the hosted **Preprod
+  testnet** AND the local network sets `txHistoryStorage: new InMemoryTransactionHistoryStorage()`. So
+  even against real Preprod, the shipped storage is in-memory.
+- **Implication:** `txHistoryStorage` is a pluggable configuration slot; the SDK's only backend is
+  volatile (process restart loses all tx-history). The SDK's `serialize()`/`restore()` is a whole-blob
+  snapshot mechanism, NOT a live persistent/queryable store. **This is exactly why UmbraDB exists:**
+  `PgTransactionHistoryStorage` (Sprint 7) implements the same interface with a persistent, queryable,
+  concurrency-safe Postgres backend and slots into `txHistoryStorage` to replace the in-memory default.
+  It also validates the **cold-boot recovery** milestone (Sprint 8): the memory-only SDK cannot recover
+  state after a restart — UmbraDB's Postgres store + the CheckpointStore WalletState envelope is what
+  makes recovery-from-DB possible at all.
+
 ### Sprint 7 — transaction-history-storage
 - Sonnet 5 implementer dispatched (self-contained scope: interface + migration + PgTransactionHistoryStorage
   + unit/property tests + in-repo InMemory oracle + Pg-only conformance). Baseline before: 151 pass / 4
