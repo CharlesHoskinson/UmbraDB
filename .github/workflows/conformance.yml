@@ -1,0 +1,46 @@
+name: Conformance trust gate
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: conformance-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # F5 (audit finding): the Pg-only conformance suite (`test/postgres/**`, `test/integration/
+    # pg-tx-history-adapter.test.ts`) uses testcontainers (`@testcontainers/postgresql`), which
+    # starts its OWN disposable Postgres container via the Docker daemon already present on
+    # ubuntu-latest runners -- no `services: postgres` block is needed or used. This is the
+    # required merge gate; it never runs the env-gated live tier (`test:live`), which needs a real
+    # preprod network, a funded seed, and a built midnight-wallet checkout none of which are
+    # available (or wanted) in CI (`design.md` §7.4).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Pg-only conformance suite (test:conformance)
+        # UMBRADB_LIVE_PREPROD is deliberately left unset here -- the two live/cold-boot
+        # integration tests are gated behind it (`test/integration/live-fixtures/preprod-
+        # fixtures.ts`'s LIVE_PREPROD_ENABLED) and self-skip via `describe.skipIf`, so this
+        # command alone is exactly the Pg-only required gate, never the live tier.
+        run: npm run test:conformance

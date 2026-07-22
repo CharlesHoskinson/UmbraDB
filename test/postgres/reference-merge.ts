@@ -42,9 +42,14 @@ function mergeSections(
  * `InMemoryTransactionHistoryStorage` in every test that uses it (both constructed with THIS
  * SAME function), so a sequential-equivalence assertion between the two backends is actually
  * comparing persistence behavior, not two different merge policies.
+ *
+ * **F1: `existing` is always defined here** — both storage backends call this function ONLY when
+ * a stored entry already exists for the hash, and persist a first write verbatim without ever
+ * calling this function (mirroring the real SDK's `mergeWalletEntries`' own both-present
+ * assumption; see `MergeEntriesFn`'s doc). There is deliberately no `existing === undefined`
+ * branch here any more.
  */
 export const referenceMergeEntries: MergeEntriesFn = (existing, incoming) => {
-  if (existing === undefined) return incoming;
   const identifiers = Array.from(new Set([...existing.identifiers, ...incoming.identifiers]));
   const result: TransactionHistoryEntry = {
     hash: incoming.hash,

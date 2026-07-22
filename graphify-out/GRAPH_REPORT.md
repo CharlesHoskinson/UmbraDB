@@ -1,27 +1,26 @@
-# Graph Report - UmbraDB  (2026-07-21)
+# Graph Report - umbradb-sprint8  (2026-07-22)
 
 ## Corpus Check
-- 98 files · ~143,824 words
+- 129 files · ~186,249 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 775 nodes · 1178 edges · 85 communities (35 shown, 50 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.8)
+- 1096 nodes · 1821 edges · 103 communities (51 shown, 52 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.76)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d1b4dfe2`
+- Built from commit: `09398a2d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- postgres/checkpoint-store.ts
+- postgres/transaction-lease.ts
 - interfaces/temporal-kv.ts
-- postgres/temporal-kv.ts
 - ADDED Requirements
 - scoped-review-manifest
 - Storage Algebra Lean Formalization — Approved Design and Status
-- package.json
+- devDependencies
 - postgres.js driver choice
 - openspec-explore/SKILL.md
 - Tier 1 / Tier 2 Postgres schema split
@@ -48,7 +47,7 @@
 - Law T3: temporal-projection equivalence (getAt)
 - Law T4: dual addressing agreement
 - Law T5: history intervals never overlap
-- TemporalKV Algebra
+- UmbraDB
 - listKeys streaming/order requirement
 - Global Constraints
 - Migrations idempotent and ordered requirement
@@ -83,15 +82,33 @@
 - Top-level null value application-level guard
 - Proposal — Sprint 7: Transaction History Storage (Wallet Integration Surface)
 - complete flag explicit-write requirement
+- pg-tx-history-adapter.ts
 - CheckpointStore cancellation scope decision (pre-check only)
-- postgres/transaction-lease.ts
+- postgres/watermarks.ts
 - ADDED Requirements
 - pull_request_template.md
 - AGENTS.md
-- watermarks.test.ts
-- UmbraDB
+- UmbraDBSql
+- ADDED Requirements
+- wallet-state-envelope.test.ts
+- transaction-history-storage.property.test.ts
+- Autonomous run log
+- Design — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery
+- interfaces/transaction-history-storage.ts
+- TransactionHandle
+- postgres/transaction-history-storage.ts
+- translatePostgresError
+- TransactionHistoryEntry
+- CheckpointStore
 - Storage Algebra Lean M3a Watermarks Sprint
+- UmbraDB dev environment — master runbook
+- Sprint 7 — Midnight preprod toolchain inventory & build checklist
 - Design — Sprint 5: Lean M3a Watermarks W1
+- Tasks — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery
+- Midnight infra verification checklist
+- Proposal — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery
+- Preprod connection — endpoints, wallet, faucet
+- Environment changelog
 - Proposal — Sprint 5: Lean M3a Watermarks W1
 - Tasks — Sprint 5: Lean M3a Watermarks W1
 - ADDED Requirements
@@ -101,28 +118,28 @@
 - Tasks — Sprint 6: Lean M3b CheckpointStore C1
 
 ## God Nodes (most connected - your core abstractions)
-1. `TransactionHandle` - 22 edges
-2. `UmbraDBSql` - 21 edges
-3. `translatePostgresError()` - 21 edges
-4. `resolveTransaction()` - 17 edges
-5. `withAbort()` - 16 edges
-6. `StorageError` - 15 edges
-7. `ValidationError` - 15 edges
-8. `PgTemporalKV` - 15 edges
-9. `PgTransactionLeaseLayer` - 14 edges
-10. `Storage Algebra Lean Formalization — Approved Design and Status` - 14 edges
+1. `TransactionHandle` - 38 edges
+2. `UmbraDBSql` - 32 edges
+3. `translatePostgresError()` - 26 edges
+4. `TransactionHistoryEntry` - 25 edges
+5. `ValidationError` - 24 edges
+6. `resolveTransaction()` - 21 edges
+7. `withAbort()` - 20 edges
+8. `PgTransactionHistoryStorage` - 19 edges
+9. `StorageError` - 18 edges
+10. `PgTransactionLeaseLayer` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Correctness rule: verify external claims against real source` --rationale_for--> `kv_current/kv_history temporal-table design`  [INFERRED]
   openspec/config.yaml → design/design.md
-- `getAt single-statement UNION ALL race fix` --references--> `kv_current/kv_history temporal-table design`  [EXTRACTED]
-  openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design.md
-- `Migrations as TypeScript functions (schema-configurability fix)` --references--> `kv_current/kv_history temporal-table design`  [EXTRACTED]
-  openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md → design/design.md
-- `save() fixed-size chunking algorithm` --references--> `Content-addressed checkpoint chunker`  [EXTRACTED]
-  openspec/changes/sprint-3-checkpoint-store/design.md → design/design.md
-- `Chunk reclamation grace-window requirement` --references--> `Content-addressed checkpoint chunker`  [EXTRACTED]
-  openspec/changes/sprint-3-checkpoint-store/specs/checkpoint-store/spec.md → design/design.md
+- `safeString()` --calls--> `hasPostgresUnsafeText()`  [EXTRACTED]
+  test/postgres/wallet-state-envelope.property.test.ts → src/interfaces/temporal-kv.ts
+- `Command` --references--> `EntryContent`  [EXTRACTED]
+  test/postgres/transaction-history-storage.property.test.ts → src/interfaces/transaction-history-storage.ts
+- `ReplayableStorage` --references--> `TransactionHistoryEntry`  [EXTRACTED]
+  test/postgres/transaction-history-storage.property.test.ts → src/interfaces/transaction-history-storage.ts
+- `InMemoryTransactionHistoryStorage` --implements--> `TransactionHistoryStorage`  [EXTRACTED]
+  test/postgres/in-memory-transaction-history-storage.ts → src/interfaces/transaction-history-storage.ts
 
 ## Import Cycles
 - None detected.
@@ -133,19 +150,15 @@
 - **Modules composing the Sprint 2 transaction-handle registry** — sprint2_design_transaction_handle_registry, sprint1_design_pgtemporalkv_put, sprint3_design_torn_read_fix, sprint4_design_composing_txlease [EXTRACTED 1.00]
 - **Pre-check-only withAbort cancellation pattern across sprints** — sprint1_design_listkeys_cursor, sprint2_design_withtransaction, sprint3_design_cancellation_scope_decision, sprint4_design_cancellation [INFERRED 0.85]
 
-## Communities (85 total, 50 thin omitted)
+## Communities (103 total, 52 thin omitted)
 
-### Community 0 - "postgres/checkpoint-store.ts"
-Cohesion: 0.07
-Nodes (30): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+22 more)
+### Community 1 - "postgres/transaction-lease.ts"
+Cohesion: 0.06
+Nodes (38): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, LeaseFaultError, LeaseNotHeldError, LeaseTimeoutError, Rollback, TransactionFaultError (+30 more)
 
-### Community 1 - "interfaces/temporal-kv.ts"
-Cohesion: 0.05
-Nodes (33): ConnectionError, SerializationFailedError, SharedStorageErrorCode, StorageError, ValidationError, AssertExact, hasPostgresUnsafeText(), HistoryUnavailableError (+25 more)
-
-### Community 2 - "postgres/temporal-kv.ts"
+### Community 2 - "interfaces/temporal-kv.ts"
 Cohesion: 0.10
-Nodes (32): RFC-8259, AsOf, ExpectedVersionSchema, JsonValue, JsonValueSchema, Key, KeySchema, Namespace (+24 more)
+Nodes (30): AsOf, AssertExact, ExpectedVersionSchema, hasPostgresUnsafeText(), HistoryUnavailableError, JsonValue, jsonValueHasUnsafeText(), JsonValueSchema (+22 more)
 
 ### Community 3 - "ADDED Requirements"
 Cohesion: 0.08
@@ -159,9 +172,9 @@ Nodes (8): Cleanup, scoped-review-manifest, Step 0 — Skip check, Step 1 — Fr
 Cohesion: 0.04
 Nodes (44): 10. Sprint 2 transaction/lease proposal, 11.1 Repository evidence, 11.2 External primary sources, 11. Evidence matrix, 12. Milestone status, 13. Approved implementation decisions, 1. Executive conclusion, 2.1 Historical implementation baseline (+36 more)
 
-### Community 6 - "package.json"
-Cohesion: 0.07
-Nodes (29): fast-check, dependencies, postgres, zod, devDependencies, fast-check, @testcontainers/postgresql, typedoc (+21 more)
+### Community 6 - "devDependencies"
+Cohesion: 0.06
+Nodes (35): effect, fast-check, @midnightntwrk/wallet-sdk-abstractions, dependencies, postgres, zod, devDependencies, effect (+27 more)
 
 ### Community 8 - "openspec-explore/SKILL.md"
 Cohesion: 0.12
@@ -183,9 +196,9 @@ Nodes (34): Purpose, Requirement: A caller-supplied transaction handle is honore
 Cohesion: 0.15
 Nodes (12): Adversarial test matrix, Approved semantic decisions, Completed baseline, Executable pruning, Explicit non-goals, Extensional T5, Implemented source layout, Lookup classification (+4 more)
 
-### Community 33 - "TemporalKV Algebra"
-Cohesion: 0.10
-Nodes (23): Superseded — see `Formal/STORAGE_ALGEBRA.md`, crdt-lean Dependency Refutation, CheckpointStore Algebra, ckpt_manifest_chunks Junction Table, Law C1 — Join-Semilattice Chunk Writes, Law C2 — GC Reachability Closure, Law L1 — Lease Mutual Exclusion, Law T1 — Gapless Monotonicity (+15 more)
+### Community 33 - "UmbraDB"
+Cohesion: 0.05
+Nodes (44): Superseded — see `Formal/STORAGE_ALGEBRA.md`, crdt-lean Dependency Refutation, CheckpointStore Algebra, ckpt_manifest_chunks Junction Table, Law C1 — Join-Semilattice Chunk Writes, Law C2 — GC Reachability Closure, Law L1 — Lease Mutual Exclusion, Law T1 — Gapless Monotonicity (+36 more)
 
 ### Community 35 - "Global Constraints"
 Cohesion: 0.25
@@ -211,13 +224,17 @@ Nodes (3): prune retainCount validation requirement, Top-level null value applic
 Cohesion: 0.29
 Nodes (6): Impact, Non-goals, Proposal — Sprint 7: Transaction History Storage (Wallet Integration Surface), What changes, Why, Why this sprint is numbered 7, not 5
 
+### Community 69 - "pg-tx-history-adapter.ts"
+Cohesion: 0.08
+Nodes (36): TransactionHistoryStatus, phaseA_syncAndPersistEnvelope(), phaseB_freshProcessRestoreAndVerify(), facadeDistIndexPath(), facadeMergeAvailable(), loadFacadeMerge(), unshieldedWalletDistIndexPath(), deriveUnshieldedSeed() (+28 more)
+
 ### Community 70 - "CheckpointStore cancellation scope decision (pre-check only)"
 Cohesion: 0.06
 Nodes (32): Advisory-lock class registry (classes 1/2/3), Module → Postgres module mapping table, Postgres advisory-lock writer lease (corrected design), CheckpointNotFoundError, CheckpointStore interface, CheckpointWalletStateStore (production adapter), Global cross-wallet chunk GC reclamation fix, WalletStateStore (project abstraction) (+24 more)
 
-### Community 71 - "postgres/transaction-lease.ts"
-Cohesion: 0.13
-Nodes (22): Lease, LeaseAcquireOptions, LeaseAcquireOptionsSchema, TransactionOptions, TransactionOptionsSchema, abortError(), CONNECTION_FAILURE_CODES, isConnectionFailure() (+14 more)
+### Community 71 - "postgres/watermarks.ts"
+Cohesion: 0.17
+Nodes (11): RFC-8259, WatermarkKey, WatermarkKind, Watermarks, WatermarkValue, WatermarkValueSchema, resolveTransaction(), PgWatermarks (+3 more)
 
 ### Community 72 - "ADDED Requirements"
 Cohesion: 0.11
@@ -227,21 +244,81 @@ Nodes (18): ADDED Requirements, formal-watermarks, Requirement: Command traces c
 Cohesion: 0.50
 Nodes (3): Change summary, Mandatory Codex audit, Validation
 
-### Community 75 - "watermarks.test.ts"
-Cohesion: 0.08
-Nodes (18): assertNoConflictingSearchPath(), assertValidSchemaName(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, Migration, migrations, runMigrations() (+10 more)
+### Community 75 - "UmbraDBSql"
+Cohesion: 0.06
+Nodes (23): assertNoConflictingSearchPath(), assertValidSchemaName(), createClient(), UmbraDBConnectionOptions, UmbraDBSql, ExclusionViolationError, Migration, migrations (+15 more)
 
-### Community 84 - "UmbraDB"
-Cohesion: 0.08
-Nodes (21): OpenSpec Change, Custom Node/TypeScript Benchmark Harness, Performance, Architecture, Design, Formal verification, Getting started, Layout (+13 more)
+### Community 76 - "ADDED Requirements"
+Cohesion: 0.05
+Nodes (36): ADDED Requirements, Requirement: a cold boot resumes without a full resync and preserves tx-history continuity, Requirement: a corrupt or non-JSON envelope payload is rejected with a typed error, Requirement: a live-synced transaction materializes as a Postgres row observable via getAll, Requirement: a sub-wallet absent from the envelope is skipped on restore, Requirement: an unrecognized envelopeVersion is rejected, never best-effort restored, Requirement: each sub-wallet resumes from its own last-known point; the envelope bundles for atomicity only, Requirement: encode and decode are lossless inverses (+28 more)
+
+### Community 78 - "wallet-state-envelope.test.ts"
+Cohesion: 0.05
+Nodes (53): CheckpointNotFoundError, CheckpointRecord, CheckpointSequence, CheckpointStore, CheckpointStoreError, CheckpointStoreErrorCode, CheckpointSummary, ChunkIntegrityError (+45 more)
+
+### Community 79 - "transaction-history-storage.property.test.ts"
+Cohesion: 0.12
+Nodes (16): EntryContent, applyCommand(), arbitraryCommand, badKeyValue, Command, GOOD_LEAF_KEYS, goodLeaf, goodNestedObject (+8 more)
+
+### Community 80 - "Autonomous run log"
+Cohesion: 0.11
+Nodes (17): Architecture confirmation — the SDK is memory-only; UmbraDB is the persistence layer (owner-confirmed, doc-verified), Audit-check guardrails ("don't get this wrong" — owner directive), Autonomous run log, Design council convened (verifiable-snapshot feature, branch feature/verifiable-snapshot), Design council verdicts (verifiable-snapshot) + revision plan, Env test-failure fix (owner: "fix the env failures as well") — diagnosed, fix planned, Live-sync milestone — feasibility + timing (owner asks), MILESTONE: live preprod wallet sync PROVEN (de-risk agent, SUCCESS) (+9 more)
+
+### Community 81 - "Design — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery"
+Cohesion: 0.11
+Nodes (17): 1.1 Envelope shape, 1. Envelope decision: (a) one versioned envelope — DECIDED, 2. Module layout and dependency direction, 3.1 Field mapping (write path), 3.2 Lifecycle-detail fidelity — the correctness-gate open question, 3.3 No runtime SDK import in core, 3.4 serialize() is a diagnostic dump, not a migration path (F10), 3. The adapter (the seam) (+9 more)
+
+### Community 82 - "interfaces/transaction-history-storage.ts"
+Cohesion: 0.12
+Nodes (15): EntryContentSchema, EntryLifecycleSchema, EntryLifecycleStatus, EntrySectionsSchema, FinalizedLifecycle, FinalizedLifecycleSchema, HashSchema, IdentifierSchema (+7 more)
+
+### Community 83 - "TransactionHandle"
+Cohesion: 0.21
+Nodes (5): TemporalKV, TransactionHistoryReader, TransactionHistoryStorage, TransactionHistoryWriter, TransactionHandle
+
+### Community 84 - "postgres/transaction-history-storage.ts"
+Cohesion: 0.25
+Nodes (14): EntryLifecycle, assertStoredEntryShape(), decodeContent(), decodeRow(), decodeSections(), encodeContent(), encodeSections(), encodeStoredEntry() (+6 more)
+
+### Community 85 - "translatePostgresError"
+Cohesion: 0.27
+Nodes (4): translatePostgresError(), capitalize(), PgTransactionHistoryStorage, rowToEntry()
+
+### Community 86 - "TransactionHistoryEntry"
+Cohesion: 0.32
+Nodes (5): TransactionHistoryEntry, TransactionHistoryEntrySchema, abortErrorLike(), capitalize(), InMemoryTransactionHistoryStorage
 
 ### Community 88 - "Storage Algebra Lean M3a Watermarks Sprint"
 Cohesion: 0.25
 Nodes (7): Adversarial examples, Audited semantic decisions, Explicit non-goals, Source layout, Storage Algebra Lean M3a Watermarks Sprint, Theorem gate, Verification matrix
 
+### Community 89 - "UmbraDB dev environment — master runbook"
+Cohesion: 0.22
+Nodes (8): Build / run (from source — all public, no ghcr auth), Credentials, Host, Midnight repos (cloned under ~/repos), Shell / PATH persistence, Tooling (all rootless / user-space), UmbraDB dev environment — master runbook, Wallet SDK install (public-npm workaround — IMPORTANT)
+
+### Community 90 - "Sprint 7 — Midnight preprod toolchain inventory & build checklist"
+Cohesion: 0.22
+Nodes (8): A. System / host toolchain (shared), B. midnight-node (from source → preprod), C. midnight-indexer (GraphQL WS the wallet syncs against), Credentials summary, D. proof-server (from source — corrects earlier "ghcr-only" finding), E. midnight-wallet SDK, Key version decision (resolved), Sprint 7 — Midnight preprod toolchain inventory & build checklist
+
 ### Community 91 - "Design — Sprint 5: Lean M3a Watermarks W1"
 Cohesion: 0.29
 Nodes (6): 1. Executable carrier, 2. Commands and interpretation, 3. Laws, 4. Trust and reachability, 5. Refinement boundary, Design — Sprint 5: Lean M3a Watermarks W1
+
+### Community 92 - "Tasks — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery"
+Cohesion: 0.20
+Nodes (9): 0. Specification freeze, 1. Vendor/pin manifest (for the nightly live tier), 2. Envelope module (Pg-only — required gate), 3. Adapter seam (Pg-only for its own tier — required gate), 4. Pg-only conformance suite (required merge gate) — `test:conformance`, 5. Live preprod DB-sync + cold-boot tiers (nightly/labeled — NOT a required gate), 6. Close-out, Deferred to Sprint 9 (Batch 3 — recorded as honest deferrals, NOT implemented here) (+1 more)
+
+### Community 93 - "Midnight infra verification checklist"
+Cohesion: 0.29
+Nodes (6): A. Toolchain & binaries (all self-serve from public source), B. Preprod connectivity (public endpoints, verified live), C. Our wallet, D. Operations to verify (the requested end-to-end), E. Our from-source node (prove the build works as a real node), Midnight infra verification checklist
+
+### Community 94 - "Proposal — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery"
+Cohesion: 0.29
+Nodes (6): Impact, Non-goals (explicitly out of scope), Proposal — Sprint 8: WalletState Envelope + Live Preprod DB-Sync + Cold-Boot Recovery, Scope of Sprint 8 (functional DB-backed persistence + recovery), What changes, Why this sprint exists, and why it unblocks Sprint 7
+
+### Community 95 - "Preprod connection — endpoints, wallet, faucet"
+Cohesion: 0.33
+Nodes (5): Faucet (get tNIGHT), Our preprod wallet, Preprod connection — endpoints, wallet, faucet, Public preprod endpoints (all verified live), Sync cost (CORRECTED — no block-height "birthday" for the unshielded wallet)
 
 ### Community 100 - "Proposal — Sprint 5: Lean M3a Watermarks W1"
 Cohesion: 0.33
@@ -272,24 +349,24 @@ Cohesion: 0.33
 Nodes (5): 0. Specification freeze, 1. Chunk-identity projection, 2. Compatible chunk maps, 3. Close-out, Tasks — Sprint 6: Lean M3b CheckpointStore C1
 
 ## Knowledge Gaps
-- **351 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+346 more)
+- **477 isolated node(s):** `name`, `version`, `private`, `type`, `node` (+472 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **50 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **52 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `translatePostgresError()` connect `postgres/temporal-kv.ts` to `postgres/checkpoint-store.ts`, `interfaces/temporal-kv.ts`, `watermarks.test.ts`, `postgres/transaction-lease.ts`?**
-  _High betweenness centrality (0.007) - this node is a cross-community bridge._
-- **Why does `TransactionHandle` connect `postgres/temporal-kv.ts` to `interfaces/temporal-kv.ts`, `watermarks.test.ts`, `postgres/transaction-lease.ts`?**
-  _High betweenness centrality (0.007) - this node is a cross-community bridge._
-- **Why does `ValidationError` connect `interfaces/temporal-kv.ts` to `postgres/checkpoint-store.ts`, `postgres/temporal-kv.ts`, `watermarks.test.ts`, `postgres/transaction-lease.ts`?**
-  _High betweenness centrality (0.006) - this node is a cross-community bridge._
+- **Why does `TransactionHandle` connect `TransactionHandle` to `postgres/transaction-lease.ts`, `interfaces/temporal-kv.ts`, `postgres/watermarks.ts`, `UmbraDBSql`, `interfaces/transaction-history-storage.ts`, `postgres/transaction-history-storage.ts`, `translatePostgresError`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `ValidationError` connect `wallet-state-envelope.test.ts` to `postgres/transaction-lease.ts`, `interfaces/temporal-kv.ts`, `pg-tx-history-adapter.ts`, `postgres/watermarks.ts`, `UmbraDBSql`, `transaction-history-storage.property.test.ts`, `postgres/transaction-history-storage.ts`, `TransactionHistoryEntry`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `UmbraDBSql` connect `UmbraDBSql` to `postgres/transaction-lease.ts`, `interfaces/temporal-kv.ts`, `pg-tx-history-adapter.ts`, `postgres/watermarks.ts`, `wallet-state-envelope.test.ts`, `postgres/transaction-history-storage.ts`, `translatePostgresError`, `CheckpointStore`?**
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `private` to the rest of the system?**
-  _351 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `postgres/checkpoint-store.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07247223845704266 - nodes in this community are weakly interconnected._
+  _477 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `postgres/transaction-lease.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.06247086247086247 - nodes in this community are weakly interconnected._
 - **Should `interfaces/temporal-kv.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.05357142857142857 - nodes in this community are weakly interconnected._
-- **Should `postgres/temporal-kv.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09643483343074226 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09869375907111756 - nodes in this community are weakly interconnected._
+- **Should `ADDED Requirements` be split into smaller, more focused modules?**
+  _Cohesion score 0.07692307692307693 - nodes in this community are weakly interconnected._
