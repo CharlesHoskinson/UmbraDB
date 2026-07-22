@@ -24,29 +24,66 @@ history to retain every version unconditionally): see §2's rewritten DDL,
 pass also fixed §3's manifest-prune off-by-one and §6's `wallet_state`
 scope/§9 contradiction, both below.
 
-## 0. How this reconciles with the Tier-2 (indexer) Postgres decision
+## 0. Status of the once-planned Tier-2 (indexer-fork) design
 
-The 2026-07-17 storage-architecture-reconciliation
-(`docs/notes/2026-07-17-storage-architecture-reconciliation.md`) split
-storage into Tier 1 (client wallet/checkpoint persistence, was Mongo) and
-Tier 2 (chain-mirror/indexer/analytics, forks the official indexer's Postgres
-schema, TimescaleDB for analytics). This change moves Tier 1 onto Postgres
-too. Both tiers end up on **one Postgres instance, two schemas**
-(`tier1_wallet` and whatever the Tier-2 fork uses, e.g. `indexer`) — not a
-merged schema. Tier 1 tables are NOT part of the forked official indexer
-schema and must not be added to it.
+An earlier note (2026-07-17) proposed splitting storage into Tier 1 (this
+project's own client wallet/checkpoint persistence — what §§1-10 below
+actually build) and a Tier 2 (chain-mirror/indexer/analytics, planned to fork
+the official Midnight indexer's own Postgres schema wholesale, plus
+TimescaleDB for analytics). That Tier-2 plan was never built: no migration,
+module, or openspec change anywhere in this repo implements it, and the
+source rationale document it was meant to point to
+(`docs/notes/2026-07-17-storage-architecture-reconciliation.md`) was never
+actually committed — it does not exist anywhere in this repo's git history.
+A repo-wide search turns up no other reference to it outside this file and
+`design/proposal.md`.
 
-**This is a hard requirement, not a tidiness preference — a real name
-collision was confirmed against the actual upstream indexer schema**
-(`midnight-indexer/indexer-common/migrations/postgres/001_initial.sql`): the
-real indexer creates a table literally named `wallets` (line 135), in the
-default `public` schema (it enables no extensions and issues no `CREATE
-SCHEMA`/`search_path` statements anywhere). Our own Tier 1 has a `wallet_state`
-table (§6) — different name today, but the indexer's own schema shows the
-`public` schema is not reserved or namespaced by convention on this project,
-so a future rename on either side could collide silently. Task 0.5 MUST
-create the `tier1_wallet` schema explicitly and set `search_path` for every
-Tier-1 connection (`postgres.js`'s `postgres(url, { connection: { search_path:
+**It is superseded, in substance, by `design/full-chain-storage-design.md`**
+(`feature/full-chain-storage`, commit `cb80f96`, currently under 3-reviewer
+design-council audit — not yet merged). That design starts from the same
+underlying need (durable, indexer-independent chain data) but replaces the
+blunt "fork the whole indexer schema" premise with a per-data-category
+build-vs-defer judgment validated against a live devnet + indexer: it found
+the indexer already durably, relationally archives most chain-data
+categories (blocks, transactions, zswap/unshielded/dust ledger events,
+bridge, governance, SPO) with no pruning, so blanket-duplicating that schema
+was never actually justified. It builds only the categories the indexer
+genuinely lacks (a content-addressed raw blob store, a full block tree with
+no cascade-delete on reorg, verifier-key metadata) — see its §6 for the full
+per-category table.
+
+That design's own §9 explicitly leaves one question open for the design
+council rather than resolving it unilaterally: whether its new chain-archive
+tables belong alongside Tier 1's existing schema (a "Tier 1.5") or should be
+coordinated with some future indexer-adjacent tier. This note does not
+pre-empt that ruling — it only retires the specific, unbuilt "fork the whole
+indexer schema" plan, which the new design's live research shows was not the
+right shape for the need it was meant to serve.
+
+**One real, distinct need the new design explicitly does not cover:
+TimescaleDB-style time-series analytics.** `full-chain-storage-design.md`
+states plainly that it is "a survives-the-indexer substrate, not an
+analytics replica." If a genuine need for time-series/analytical queries
+over chain data (as opposed to archival/recovery) materializes later, that
+is still open and undecided — flagged here as a deferred future
+consideration, not silently dropped along with the rest of the old Tier-2
+prose.
+
+**One fact from the original Tier-2 note is worth keeping regardless of any
+of the above, reframed as general guidance rather than something specific to
+that plan: a real table-name collision was confirmed against the actual
+upstream indexer schema.** The real indexer
+(`midnight-indexer/indexer-common/migrations/postgres/001_initial.sql:135`)
+creates a table literally named `wallets` in the default `public` schema —
+it enables no extensions and issues no `CREATE SCHEMA`/`search_path`
+statement anywhere. This project's own Tier 1 has a `wallet_state` table
+(§6) — different name today, but the indexer's schema shows `public` is not
+reserved or namespaced by convention on this project, so a future rename on
+either side could collide silently. **Any future work that puts a Postgres
+connection anywhere near indexer-adjacent chain data — the tables above
+included — should follow Task 0.5's existing discipline**: create an
+explicit schema for the new tables and set `search_path` for every
+connection (`postgres.js`'s `postgres(url, { connection: { search_path:
 'tier1_wallet' } })` or an explicit `sql\`SET search_path TO tier1_wallet\``
 per connection) rather than relying on table-name distinctiveness alone.
 

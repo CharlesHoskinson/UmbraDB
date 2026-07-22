@@ -37,19 +37,24 @@ conformance test suites the Mongo ones do (and clears the state-equivalence
 bar in `design.md` §10), rewire `counter-cli-additions/*.ts` to the new
 provider, then remove: `midnight-mongo-store`, `examples/storage/Mongo*.ts`,
 the `mongodb`/`mongodb-memory-server` npm dependencies, `mongod` from
-`flake.nix`, the `mongod`/`midnight-mongod-ready` systemd units, and the
-already-decided-but-not-yet-built Tier-2 indexer's Postgres usage stays as
-planned (this change is scoped to Tier 1 only; see `design.md` §0 for how the
-two reconcile — they will end up sharing one Postgres instance, separate
-schemas).
+`flake.nix`, the `mongod`/`midnight-mongod-ready` systemd units. This change
+is scoped to Tier 1 (client wallet/checkpoint persistence) only; see
+`design.md` §0 for the current status of the once-planned, never-built Tier-2
+(indexer-fork) design and how it relates to the newer
+`feature/full-chain-storage` design.
 
-Explicitly NOT in this change: any change to the not-yet-built Tier 2
-(chain-indexer/analytics) design, which already targets Postgres+TimescaleDB
-by forking the official indexer schema — that decision stands unmodified.
-Not a FerretDB or any other Mongo-wire-protocol compatibility layer (evaluated
-and rejected, see `design.md` §1). Not a data migration (no real data
-exists yet to migrate — this is a from-scratch rebuild, run side-by-side with
-the Mongo package until cutover).
+Explicitly NOT in this change: any chain-mirror/indexer-archive storage work.
+The 2026-07-17 note's "fork the official indexer schema wholesale +
+TimescaleDB" plan was never built and has no other artifact anywhere in this
+repo referencing it (see `design.md` §0) — it is not something this change
+carries forward or commits to. `feature/full-chain-storage` (currently under
+design-council review) is the active design for durable, indexer-independent
+chain data; TimescaleDB-style time-series analytics remains an open, deferred
+future consideration not addressed by either design. Not a FerretDB or any
+other Mongo-wire-protocol compatibility layer (evaluated and rejected, see
+`design.md` §1). Not a data migration (no real data exists yet to migrate —
+this is a from-scratch rebuild, run side-by-side with the Mongo package until
+cutover).
 
 ## Impact
 
@@ -69,7 +74,7 @@ the Mongo package until cutover).
   actual, currently-blocking pain point); one fewer runtime service
   (`mongod.service`) in the self-healing systemd stack; native ACID
   transactions remove the standalone-vs-replset detection branch; Postgres is
-  already required for the Tier-2 indexer, so this converges the environment
+  already the official Midnight indexer's own database technology, so this converges the environment
   onto a single database technology.
 - **Risk:** `TemporalKV.getAt` (point-in-time reads) has no native Postgres
   analogue — the current-table + trigger-populated history-table design is
