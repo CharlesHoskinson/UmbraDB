@@ -146,11 +146,11 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-
   <header class="reveal">
     <div class="eyebrow">UmbraDB · Release program</div>
     <h1>The road to <span>1.0.0</span> <span class="lo mono">← 0.1.0</span></h1>
-    <p class="lede">A local, single-writer, PostgreSQL-backed temporal &amp; content-addressed store for Midnight. Twenty gate items, adjudicated by a Fable-5 council and split into five audited OpenSpec changes. The headline finding: the thing standing between here and 1.0.0 isn&rsquo;t a feature — it&rsquo;s a frozen public surface to version.</p>
+    <p class="lede">A local, single-writer, PostgreSQL-backed temporal &amp; content-addressed store for Midnight. Twenty gate items across five OpenSpec changes. The one that matters: what stands between here and 1.0.0 isn&rsquo;t a feature — it&rsquo;s a frozen public surface to version.</p>
     <div class="meta">
       <span class="m">Scope <b>5 primitives + wallet envelope</b></span>
       <span class="m">Gate items <b>20</b></span>
-      <span class="m">OpenSpec changes <b>5 · validated ✓</b></span>
+      <span class="m">OpenSpec changes <b>5</b></span>
       <span class="m">Non-goals <b>not an ORM · not distributed</b></span>
     </div>
   </header>
@@ -179,8 +179,8 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-
   <section class="reveal" style="animation-delay:.1s">
     <div class="sec-head"><span class="sec-num">02</span><h2>Where it stands today</h2></div>
     <div class="status">
-      <div class="st"><span class="dot done"></span><div class="t"><b>Roadmap adjudicated</b><span>5-agent research swarm → Fable-5 council → this document.</span></div></div>
-      <div class="st"><span class="dot done"></span><div class="t"><b>5 OpenSpec changes drafted</b><span>Fable + Opus audited each; <span class="mono">openspec validate --strict</span> green. Uncommitted, for your review.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>Scope locked</b><span>Five primitives + wallet envelope; three unmerged tracks deferred past 1.0.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>Five OpenSpec changes drafted</b><span>Proposal, EARS spec, tasks, acceptance. <span class="mono">openspec validate --strict</span> green; uncommitted.</span></div></div>
       <div class="st"><span class="dot done"></span><div class="t"><b>Data-flow visualizer shipped</b><span>Live on GitHub Pages, linked from the README.</span></div></div>
       <div class="st"><span class="dot run"></span><div class="t"><b>Preprod stack syncing</b><span>cardano-node + db-sync rebuilding from genesis, in line with the flake.</span></div></div>
     </div>
@@ -279,20 +279,19 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-
   </section>
 
   <section class="reveal">
-    <div class="sec-head"><span class="sec-num">06</span><h2>Where the council overruled the swarm</h2>
-      <p class="sec-sub">The research agents flagged these as P0. Independent Fable-5 + Opus adjudication downgraded them — worth knowing so they don&rsquo;t creep back onto the blocker list.</p>
+    <div class="sec-head"><span class="sec-num">06</span><h2>What&rsquo;s deliberately not a blocker</h2>
+      <p class="sec-sub">These look like P0s but aren&rsquo;t. Called out so they don&rsquo;t creep back onto the blocker list.</p>
     </div>
     <div class="ov">
       <div class="ovr"><div class="h"><span class="mono">save()</span> idempotency &nbsp;<em>P0 → P1 / doc</em></div><p>A lost-ack retry produces a benign identical-content duplicate under load-latest semantics — not corruption. Its real deadline is &ldquo;with Sprint 9&rdquo;; grouping it with the genuinely silent-divergence G5 dilutes P0.</p></div>
       <div class="ovr"><div class="h">Perf hot-path fixes &nbsp;<em>P0 → baseline-only</em></div><p>Batching and N+1 fixes matter, but no perf <em>number</em> gates 1.0 — only that a baseline exists. The batching must merely precede the baseline it&rsquo;s measured against.</p></div>
-      <div class="ovr"><div class="h">Dedup oracle · plaintext keys &nbsp;<em>High → docs obligation</em></div><p>&ldquo;High&rdquo; is the severity of an <em>excluded</em> deployment. Under the single-trusted-writer model both channels require being the writer; the 1.0 obligation is documentation, not code. (The report also mislabeled fixed-size 4&nbsp;MiB chunking as content-defined.)</p></div>
+      <div class="ovr"><div class="h">Dedup oracle · plaintext keys &nbsp;<em>High → docs obligation</em></div><p>&ldquo;High&rdquo; is the severity of an <em>excluded</em> deployment. Under the single-trusted-writer model both channels require being the writer; the 1.0 obligation is documentation, not code. Fixed-size 4&nbsp;MiB chunking (not content-defined) narrows it further.</p></div>
     </div>
   </section>
 
   <footer class="reveal">
-    <div><b>Source</b> &nbsp; /root/umbradb-v1-research/ROADMAP-v1.0.0-CONSOLIDATED.md &nbsp;·&nbsp; 5 facet reports + council/A·B·C</div>
-    <div><b>Changes</b> &nbsp; openspec/changes/v1.0.0-{api-surface, durable-checkpoint-cursor, recovery-testing, perf-baseline, infosec-signoff} &nbsp;·&nbsp; uncommitted, <span class="mono">validate --strict</span> green</div>
-    <div><b>Method</b> &nbsp; scrapling research swarm → Fable-5 council → author · Fable audit · Opus audit · revise</div>
+    <div><b>Changes</b> &nbsp; openspec/changes/v1.0.0-{api-surface, durable-checkpoint-cursor, recovery-testing, perf-baseline, infosec-signoff}</div>
+    <div><b>Status</b> &nbsp; <span class="mono">openspec validate --strict</span> green · uncommitted · UmbraDB 0.1.0 → 1.0.0</div>
   </footer>
 
 </div>
