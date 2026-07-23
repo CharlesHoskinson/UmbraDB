@@ -35,6 +35,30 @@ single writer lease, and a boring, well-understood storage engine everyone alrea
 gives you all of that directly, with real ACID transactions instead of a replica-set-gated
 approximation of them.
 
+## Full-chain storage — validated live against public Preprod (AC-8)
+
+UmbraDB's **full-chain-storage** capability (Tier-1.5: a chain-scoped `chain_archive` schema that
+archives every block and `pallet_midnight` transaction as a recovery source of last resort) has
+been cross-validated **end-to-end against Midnight's live public Preprod network** — the final
+acceptance gate (AC-8) for the feature.
+
+`ChainArchiveSyncService` ingests a contiguous height range from the hosted Preprod node
+(`rpc.preprod.midnight.network`) and indexer (`indexer.preprod.midnight.network/api/v4/graphql`),
+and every archived block's `(height, block_hash, parent_hash, state_root, extrinsics_root)` and
+every transaction's `(hash, raw)` is cross-validated against values independently queried from the
+live network — any mismatch is a hard failure. See
+`test/integration/chain-archive-preprod-cloud-crossval.integration.test.ts` (gated behind
+`UMBRADB_LIVE_PREPROD_CLOUD=1`): a contiguous 30-block range + its transactions verify green
+against the real chain.
+
+A reproducible from-source Preprod stack for local runs lives in `nix/midnight-env/` — a Nix flake
+pinning `cardano-node` 11.0.1, `cardano-db-sync` 13.7.1.0, **`midnight-node` 1.0.1 (the Ledger-8
+line Preprod/Mainnet actually run)**, indexer 4.3.3 and proof-server 8.1.0, and it provisions the
+Ledger-8 node's *mandatory* TLS connection to the db-sync Postgres automatically
+(`design/db-sync-tls-feasibility.md`). Note: the 2.x/Ledger-9 node line is a fresh-chain-only dev
+line and cannot join Preprod (it expects ledger-state v18; the preprod genesis is v13, with no
+8→9 migration).
+
 ## Getting started
 
 Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations

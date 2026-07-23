@@ -99,6 +99,12 @@ DBPASS=$(cat "$HOME/.midnight-pg-password")
     --pool-limit 35 \
     --bootnodes /dns/bootnode-1.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWQxxUgq7ndPfAaCFNbAxtcKYxrAzTxDfRGNktF75SxdX5 \
     --bootnodes /dns/bootnode-2.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWNrUBs22FfmgjqFMa9ZqKED2jnxwsXWw5E4q2XVwN35TJ \
+    # Preprod publishes only 2 bootnodes and this host is behind NAT (no inbound peers), so the
+    # sync is inherently bursty. Pin both bootnodes as reserved to hold the connections longer
+    # and widen the peer slots -- best-effort continuity; a true full sync is still multi-hour.
+    --reserved-nodes /dns/bootnode-1.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWQxxUgq7ndPfAaCFNbAxtcKYxrAzTxDfRGNktF75SxdX5 \
+    --reserved-nodes /dns/bootnode-2.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWNrUBs22FfmgjqFMa9ZqKED2jnxwsXWw5E4q2XVwN35TJ \
+    --in-peers 25 --out-peers 25 \
     --no-private-ip \
     > "$LOG_DIR/midnight-node.log" 2>&1 < /dev/null &
   disown -h
