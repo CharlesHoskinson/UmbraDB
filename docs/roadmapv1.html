@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UmbraDB — Road to 1.0.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+:root{
+  --bg:#0d0f14; --panel:#141821; --panel2:#1a1f2a; --ink:#e7e7e3; --muted:#9aa0ad; --faint:#6a7180;
+  --line:rgba(255,255,255,0.09); --line2:rgba(255,255,255,0.055);
+  --accent:#4bb6c9; --accent-soft:rgba(75,182,201,0.14); --accent-line:rgba(75,182,201,0.32);
+  --good:#6fb08e; --warn:#d69b57; --block:#dd6b73; --defer:#878da0;
+  --mono:ui-monospace,'Cascadia Code','JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  --sans:-apple-system,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;
+  --maxw:900px;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f3f4f6; --panel:#ffffff; --panel2:#eceef2; --ink:#171a21; --muted:#565c68; --faint:#8a909c;
+    --line:rgba(20,24,34,0.13); --line2:rgba(20,24,34,0.07);
+    --accent:#127f93; --accent-soft:rgba(18,127,147,0.10); --accent-line:rgba(18,127,147,0.30);
+    --good:#3f8a67; --warn:#a96f26; --block:#c34a52; --defer:#6a7080;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d0f14; --panel:#141821; --panel2:#1a1f2a; --ink:#e7e7e3; --muted:#9aa0ad; --faint:#6a7180;
+  --line:rgba(255,255,255,0.09); --line2:rgba(255,255,255,0.055);
+  --accent:#4bb6c9; --accent-soft:rgba(75,182,201,0.14); --accent-line:rgba(75,182,201,0.32);
+  --good:#6fb08e; --warn:#d69b57; --block:#dd6b73; --defer:#878da0;
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f6; --panel:#ffffff; --panel2:#eceef2; --ink:#171a21; --muted:#565c68; --faint:#8a909c;
+  --line:rgba(20,24,34,0.13); --line2:rgba(20,24,34,0.07);
+  --accent:#127f93; --accent-soft:rgba(18,127,147,0.10); --accent-line:rgba(18,127,147,0.30);
+  --good:#3f8a67; --warn:#a96f26; --block:#c34a52; --defer:#6a7080;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;font-size:16px}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:clamp(28px,6vw,72px) clamp(18px,5vw,40px) 120px}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--mono);font-weight:600;font-size:clamp(30px,6.4vw,52px);line-height:1.04;
+  letter-spacing:-.02em;margin:.5rem 0 0;text-wrap:balance}
+h1 .lo{color:var(--faint)}
+.lede{color:var(--muted);font-size:clamp(15px,2.4vw,18px);max-width:62ch;margin:1.1rem 0 0;text-wrap:pretty}
+.meta{display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:22px}
+.meta .m{font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--panel)}
+.meta .m b{color:var(--ink);font-weight:600}
+
+section{margin-top:clamp(44px,7vw,72px)}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.sec-num{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.05em}
+h2{font-size:clamp(20px,3.4vw,26px);font-weight:640;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sec-sub{color:var(--muted);font-size:14.5px;margin:6px 0 0;max-width:64ch}
+
+/* thesis */
+.thesis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:20px 20px 22px;position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.85}
+.card .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.card h3{margin:.5rem 0 .4rem;font-size:16.5px;font-weight:640;letter-spacing:-.01em;line-height:1.25}
+.card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.55}
+.card.block::before{background:var(--block)}
+.card.key::before{background:var(--accent)}
+.card.safe::before{background:var(--good)}
+
+/* status banner */
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.st{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 16px;display:flex;gap:12px;align-items:flex-start}
+.st .dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none;box-shadow:0 0 0 4px var(--accent-soft)}
+.st .dot.done{background:var(--good);box-shadow:0 0 0 4px rgba(111,176,142,.16)}
+.st .dot.run{background:var(--accent)}
+.st .t{font-size:13.5px;line-height:1.4}
+.st .t b{display:block;font-weight:620;letter-spacing:-.005em}
+.st .t span{color:var(--muted);font-size:12.5px}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:2px 0 26px;padding-bottom:22px;border-bottom:1px solid var(--line2)}
+.lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);font-family:var(--mono);letter-spacing:.02em}
+.chip{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:6px;border:1px solid transparent;white-space:nowrap}
+.chip.blocker{color:var(--block);background:rgba(221,107,115,.12);border-color:rgba(221,107,115,.3)}
+.chip.keystone{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.chip.required{color:var(--good);background:rgba(111,176,142,.10);border-color:rgba(111,176,142,.28)}
+.chip.docs{color:var(--defer);background:rgba(135,141,160,.12);border-color:rgba(135,141,160,.28)}
+.eff{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);width:20px;text-align:center;flex:none}
+
+/* group */
+.group{margin-top:26px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+.group-head{display:flex;align-items:center;gap:12px;padding:15px 18px;background:var(--panel2);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.group-head .gl{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--accent);
+  border:1px solid var(--accent-line);border-radius:6px;padding:2px 8px;background:var(--accent-soft)}
+.group-head .gt{font-weight:640;font-size:15.5px;letter-spacing:-.01em}
+.group-head .gc{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.group-head .gc .ok{color:var(--good)}
+.row{display:grid;grid-template-columns:46px 1fr auto;gap:14px;align-items:baseline;padding:14px 18px;border-top:1px solid var(--line2)}
+.row:first-of-type{border-top:none}
+.row .id{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink)}
+.row .body .rt{font-weight:600;font-size:14.5px;letter-spacing:-.005em}
+.row .body .rr{color:var(--muted);font-size:13px;margin-top:2px;line-height:1.5}
+.row .tags{display:flex;align-items:center;gap:8px;justify-self:end;white-space:nowrap}
+@media(max-width:560px){
+  .row{grid-template-columns:40px 1fr;gap:10px}
+  .row .tags{grid-column:1/-1;justify-self:start;margin-top:2px}
+}
+
+/* critical path */
+.path{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:20px}
+.node{font-family:var(--mono);font-size:12.5px;padding:7px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);letter-spacing:.02em}
+.node.blk{color:var(--block);border-color:rgba(221,107,115,.32)}
+.node.key{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.node.tag{color:var(--good);border-color:rgba(111,176,142,.34);background:rgba(111,176,142,.10);font-weight:600}
+.arr{color:var(--faint);font-family:var(--mono);font-size:13px}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);font-weight:600;padding:0 14px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:13px 14px;border-bottom:1px solid var(--line2);vertical-align:top;color:var(--muted)}
+.tbl td:first-child{color:var(--ink);font-weight:560}
+.tbl td .to{font-family:var(--mono);font-size:11.5px;color:var(--accent);white-space:nowrap}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:8px 6px}
+
+/* overrides */
+.ov{display:grid;gap:12px}
+.ovr{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:11px;padding:15px 18px}
+.ovr .h{font-weight:620;font-size:14.5px}
+.ovr .h em{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--warn)}
+.ovr p{margin:.35rem 0 0;color:var(--muted);font-size:13px;line-height:1.55}
+
+footer{margin-top:72px;padding-top:26px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px;font-family:var(--mono);line-height:1.8}
+footer b{color:var(--muted);font-weight:600}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line)}
+
+.reveal{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.reveal{animation:none;opacity:1;transform:none}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+  <header class="reveal">
+    <div class="eyebrow">UmbraDB · Release program</div>
+    <h1>The road to <span>1.0.0</span> <span class="lo mono">← 0.1.0</span></h1>
+    <p class="lede">A local, single-writer, PostgreSQL-backed temporal &amp; content-addressed store for Midnight. Twenty gate items, adjudicated by a Fable-5 council and split into five audited OpenSpec changes. The headline finding: the thing standing between here and 1.0.0 isn&rsquo;t a feature — it&rsquo;s a frozen public surface to version.</p>
+    <div class="meta">
+      <span class="m">Scope <b>5 primitives + wallet envelope</b></span>
+      <span class="m">Gate items <b>20</b></span>
+      <span class="m">OpenSpec changes <b>5 · validated ✓</b></span>
+      <span class="m">Non-goals <b>not an ORM · not distributed</b></span>
+    </div>
+  </header>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <div class="sec-head"><span class="sec-num">01</span><h2>The thesis</h2></div>
+    <div class="thesis">
+      <div class="card key">
+        <div class="k">Keystone</div>
+        <h3>Freeze an API, not ship a feature</h3>
+        <p>The package is <span class="mono">private:true</span> with no <span class="mono">exports</span>/<span class="mono">types</span> and no <span class="mono">index.ts</span> — nothing is versionable yet. 1.0.0 = the five primitives behind a frozen, documented surface.</p>
+      </div>
+      <div class="card block">
+        <div class="k">One real blocker</div>
+        <h3>The cursor can outrun durable data</h3>
+        <p><span class="mono">CheckpointStore.save()</span> can&rsquo;t join a caller transaction, so a watermark can commit ahead of the checkpoint it points at → a silent gap on crash-resume. Everything else is P1 or docs.</p>
+      </div>
+      <div class="card safe">
+        <div class="k">Security posture</div>
+        <h3>No code blocker under the trust model</h3>
+        <p>Single trusted writer holds. The InfoSec gate is a threat-model doc + a supply-chain CI gate. The cross-wallet dedup &ldquo;oracle&rdquo; is a documentation obligation; keyed chunking is 1.1.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.1s">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Where it stands today</h2></div>
+    <div class="status">
+      <div class="st"><span class="dot done"></span><div class="t"><b>Roadmap adjudicated</b><span>5-agent research swarm → Fable-5 council → this document.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>5 OpenSpec changes drafted</b><span>Fable + Opus audited each; <span class="mono">openspec validate --strict</span> green. Uncommitted, for your review.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>Data-flow visualizer shipped</b><span>Live on GitHub Pages, linked from the README.</span></div></div>
+      <div class="st"><span class="dot run"></span><div class="t"><b>Preprod stack syncing</b><span>cardano-node + db-sync rebuilding from genesis, in line with the flake.</span></div></div>
+    </div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.12s">
+    <div class="sec-head"><span class="sec-num">03</span><h2>The 1.0.0 gate</h2>
+      <p class="sec-sub">Twenty items in six tracks. Each track is one audited OpenSpec change. Everything here is required to tag; the ordering that follows is the critical path, not this list.</p>
+    </div>
+    <div class="legend">
+      <span class="lg"><span class="chip blocker">Blocker</span> data-loss class</span>
+      <span class="lg"><span class="chip keystone">Keystone</span> unblocks the freeze</span>
+      <span class="lg"><span class="chip required">Required</span> to tag</span>
+      <span class="lg"><span class="chip docs">Docs</span> documentation only</span>
+      <span class="lg"><span class="eff">S</span>/<span class="eff">M</span>/<span class="eff">L</span> effort</span>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><span class="gl">A</span><span class="gt">Release contract</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-api-surface</span></div>
+      <div class="row"><span class="id">G1</span><div class="body"><div class="rt">Public API surface</div><div class="rr">A barrel <span class="mono">index.ts</span>, <span class="mono">exports</span>/<span class="mono">types</span>, drop <span class="mono">private</span>, ship <span class="mono">.d.ts</span>, install smoke test.</div></div><div class="tags"><span class="eff">M</span><span class="chip keystone">Keystone</span></div></div>
+      <div class="row"><span class="id">G2</span><div class="body"><div class="rt">SemVer policy + CHANGELOG</div><div class="rr">The stability promise is part of what &ldquo;1.0&rdquo; means.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G3</span><div class="body"><div class="rt">Frozen error-code catalog</div><div class="rr">Add a <span class="mono">retryable</span> field; strip the <span class="mono">chain_archive</span> codes so an unshipped feature can&rsquo;t freeze the surface.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G4</span><div class="body"><div class="rt">Contract docs</div><div class="rr">Durability, forward-only migration, cancellation, save-retry, lease limits, backup — with 1.1 format headroom.</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G20</span><div class="body"><div class="rt">Freeze the Lean cut-line</div><div class="rr">Lock <span class="mono">{T3,T5,W1,C1}</span> with a written deferral of the rest.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><span class="gl">B</span><span class="gt">Durable composition</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-durable-checkpoint-cursor</span></div>
+      <div class="row"><span class="id">G5</span><div class="body"><div class="rt">Co-transactional <span class="mono">save()</span></div><div class="rr">The one true correctness blocker. Cursor must not commit ahead of durable data; changes <span class="mono">save()</span>&rsquo;s signature, so it lands <em>before</em> the API freeze.</div></div><div class="tags"><span class="eff">M</span><span class="chip blocker">Blocker</span></div></div>
+      <div class="row"><span class="id">G6</span><div class="body"><div class="rt">Durability startup probe</div><div class="rr">Assert <span class="mono">fsync</span>/<span class="mono">synchronous_commit</span>; detect a transaction pooler.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G7</span><div class="body"><div class="rt">Server-side timeouts</div><div class="rr">statement / lock / idle-in-transaction + a bounded migration lock — bounded failure is a precondition for deterministic recovery tests.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G8</span><div class="body"><div class="rt">Contract-integrity fixes</div><div class="rr">Validate <span class="mono">walletId</span>/<span class="mono">networkId</span>; JSON depth bound; stop <span class="mono">withLease</span> swallowing release errors.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><span class="gl">C</span><span class="gt">Recovery testing</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-recovery-testing · long pole</span></div>
+      <div class="row"><span class="id">G9</span><div class="body"><div class="rt">Crash-injection / cold-start in CI</div><div class="rr">Process-kill &amp; Postgres-kill mid-save; watermark-never-ahead under <span class="mono">synchronous_commit</span> on <em>and</em> off. Today the recovery test self-skips in CI.</div></div><div class="tags"><span class="eff">L</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G10</span><div class="body"><div class="rt">Full-sync soak</div><div class="rr">A realistic run at a declared envelope, with GC passes and load-under-concurrent-prune.</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G11</span><div class="body"><div class="rt">Differential-equivalence, rescoped</div><div class="rr">P3 + a fault-schedule-vs-fault-free check, in-repo — do <em>not</em> import a foreign consumer (breaks the indexer-agnostic boundary).</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G12</span><div class="body"><div class="rt">Live round-trip, rescoped</div><div class="rr">A manual pre-tag Preprod evidence run: sync-to-tip → kill → cold-start → resume.</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><span class="gl">D</span><span class="gt">Performance baseline</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-perf-baseline</span></div>
+      <div class="row"><span class="id">G13</span><div class="body"><div class="rt">Perf-correctness fixes first</div><div class="rr"><span class="mono">save</span> UNNEST batching, <span class="mono">history()</span> N+1 → GROUP BY, <span class="mono">kv_current fillfactor=90</span>. Land before the baseline.</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G14</span><div class="body"><div class="rt">Record a baseline + ceilings</div><div class="rr">GC anti-join measured to a declared scale envelope. Only the baseline&rsquo;s <em>existence</em> gates — no perf number does.</div></div><div class="tags"><span class="eff">M</span><span class="chip required">Required</span></div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><span class="gl">E</span><span class="gt">Security posture</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-infosec-signoff</span></div>
+      <div class="row"><span class="id">G15</span><div class="body"><div class="rt">SECURITY.md / threat model</div><div class="rr">Single trusted writer; schema ≠ boundary; shared chunk pool; <em>no at-rest encryption</em> as a binding deployer precondition.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G16</span><div class="body"><div class="rt">Dedup interface-doc rewrite</div><div class="rr">Carry the cross-wallet dedup side-channel caveat where the API advertises it.</div></div><div class="tags"><span class="eff">S</span><span class="chip docs">Docs</span></div></div>
+      <div class="row"><span class="id">G17</span><div class="body"><div class="rt">TLS caveat + VerifyFull</div><div class="rr">Surface <span class="mono">Require</span>=encryption-only; de-stub the VerifyFull path; keep the localhost default.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G18</span><div class="body"><div class="rt">Supply-chain CI gate</div><div class="rr"><span class="mono">npm ci</span>, blocking audit, ignore-scripts, gitleaks, Trivy on both pinned digests, flake-lock freeze.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+      <div class="row"><span class="id">G19</span><div class="body"><div class="rt">Committed seed → generator</div><div class="rr">Replace the checked-in Preview secret with a generator / <span class="mono">.example</span> + gitleaks allowlist.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Critical path</h2>
+      <p class="sec-sub">Order is set by dependencies, not priority. The keystone signature change comes first; the test suite is the long pole; the API freeze waits until <span class="mono">save()</span> is final.</p>
+    </div>
+    <div class="path">
+      <span class="node blk">G5 · co-tx save</span><span class="arr">→</span>
+      <span class="node">G6·G7·G8</span><span class="arr">→</span>
+      <span class="node">G13</span><span class="arr">→</span>
+      <span class="node">G14 baseline</span><span class="arr">→</span>
+      <span class="node">G9·G10·G11 <span style="opacity:.7">long pole</span></span><span class="arr">→</span>
+      <span class="node key">G1–G4 freeze</span><span class="arr">→</span>
+      <span class="node">G15–G19</span><span class="arr">→</span>
+      <span class="node">G20·G12</span><span class="arr">→</span>
+      <span class="node">RC</span><span class="arr">→</span>
+      <span class="node">Preprod evidence</span><span class="arr">→</span>
+      <span class="node tag">1.0.0</span>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Deferred — out of 1.0.0</h2>
+      <p class="sec-sub">Consciously pushed out. Each enlarges scope rather than completing it; none blocks the tag.</p>
+    </div>
+    <div class="tblwrap">
+      <table class="tbl">
+        <thead><tr><th>Item</th><th>Target</th><th>Why it waits</th></tr></thead>
+        <tbody>
+          <tr><td>Full-chain archival storage</td><td><span class="to">1.1 · headline</span></td><td>Preprod-validated, but a scope extension that enlarges the frozen surface. Strip its error classes from 1.0 first.</td></tr>
+          <tr><td>Verifiable-snapshot · torrent bootstrap</td><td><span class="to">1.2+</span></td><td>Design-only; no implementation yet.</td></tr>
+          <tr><td>Lease fencing / connection routing</td><td><span class="to">1.0.x</span></td><td>Not exploitable in the single-process model; becomes a blocker the moment multi-process is supported.</td></tr>
+          <tr><td>Idempotent <span class="mono">save()</span> (key + UNIQUE)</td><td><span class="to">with Sprint 9</span></td><td>A lost-ack retry yields a benign identical-content duplicate, not corruption. Excluded from auto-retry until it ships.</td></tr>
+          <tr><td>Keyed / encrypted chunk addressing</td><td><span class="to">1.1</span></td><td>Co-designed with the encryption seam; per-wallet ciphertext also closes the dedup oracle.</td></tr>
+          <tr><td>Two-role least-privilege Postgres</td><td><span class="to">post-1.0</span></td><td>Document the topology now, implement later.</td></tr>
+          <tr><td>GIN tuning · partitioning · streaming load</td><td><span class="to">post-1.0</span></td><td>Documented ceilings, not correctness gaps.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Where the council overruled the swarm</h2>
+      <p class="sec-sub">The research agents flagged these as P0. Independent Fable-5 + Opus adjudication downgraded them — worth knowing so they don&rsquo;t creep back onto the blocker list.</p>
+    </div>
+    <div class="ov">
+      <div class="ovr"><div class="h"><span class="mono">save()</span> idempotency &nbsp;<em>P0 → P1 / doc</em></div><p>A lost-ack retry produces a benign identical-content duplicate under load-latest semantics — not corruption. Its real deadline is &ldquo;with Sprint 9&rdquo;; grouping it with the genuinely silent-divergence G5 dilutes P0.</p></div>
+      <div class="ovr"><div class="h">Perf hot-path fixes &nbsp;<em>P0 → baseline-only</em></div><p>Batching and N+1 fixes matter, but no perf <em>number</em> gates 1.0 — only that a baseline exists. The batching must merely precede the baseline it&rsquo;s measured against.</p></div>
+      <div class="ovr"><div class="h">Dedup oracle · plaintext keys &nbsp;<em>High → docs obligation</em></div><p>&ldquo;High&rdquo; is the severity of an <em>excluded</em> deployment. Under the single-trusted-writer model both channels require being the writer; the 1.0 obligation is documentation, not code. (The report also mislabeled fixed-size 4&nbsp;MiB chunking as content-defined.)</p></div>
+    </div>
+  </section>
+
+  <footer class="reveal">
+    <div><b>Source</b> &nbsp; /root/umbradb-v1-research/ROADMAP-v1.0.0-CONSOLIDATED.md &nbsp;·&nbsp; 5 facet reports + council/A·B·C</div>
+    <div><b>Changes</b> &nbsp; openspec/changes/v1.0.0-{api-surface, durable-checkpoint-cursor, recovery-testing, perf-baseline, infosec-signoff} &nbsp;·&nbsp; uncommitted, <span class="mono">validate --strict</span> green</div>
+    <div><b>Method</b> &nbsp; scrapling research swarm → Fable-5 council → author · Fable audit · Opus audit · revise</div>
+  </footer>
+
+</div>
+</body>
+</html>
