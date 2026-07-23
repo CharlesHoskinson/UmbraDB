@@ -85,6 +85,7 @@ h2{font-size:clamp(20px,3.4vw,26px);font-weight:640;letter-spacing:-.01em;margin
 .chip.keystone{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
 .chip.required{color:var(--good);background:rgba(111,176,142,.10);border-color:rgba(111,176,142,.28)}
 .chip.docs{color:var(--defer);background:rgba(135,141,160,.12);border-color:rgba(135,141,160,.28)}
+.chip.done{color:var(--good);background:rgba(111,176,142,.16);border-color:rgba(111,176,142,.36)}
 .eff{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);width:20px;text-align:center;flex:none}
 
 /* group */
@@ -179,10 +180,10 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-
   <section class="reveal" style="animation-delay:.1s">
     <div class="sec-head"><span class="sec-num">02</span><h2>Where it stands today</h2></div>
     <div class="status">
-      <div class="st"><span class="dot done"></span><div class="t"><b>Scope locked</b><span>Five primitives + wallet envelope; three unmerged tracks deferred past 1.0.</span></div></div>
-      <div class="st"><span class="dot done"></span><div class="t"><b>Five OpenSpec changes drafted</b><span>Proposal, EARS spec, tasks, acceptance. <span class="mono">openspec validate --strict</span> green; uncommitted.</span></div></div>
-      <div class="st"><span class="dot done"></span><div class="t"><b>Data-flow visualizer shipped</b><span>Live on GitHub Pages, linked from the README.</span></div></div>
-      <div class="st"><span class="dot run"></span><div class="t"><b>Preprod stack syncing</b><span>cardano-node + db-sync rebuilding from genesis, in line with the flake.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>G5 merged</b><span>Co-transactional <span class="mono">save()</span> — the one true correctness blocker — landed on main. 1 of 20 gate items done.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>Five OpenSpec changes committed</b><span>On main, governed by the implementation guideline + lessons log.</span></div></div>
+      <div class="st"><span class="dot done"></span><div class="t"><b>Supply-chain + reproducibility</b><span>SBOM inventory + SLSA assessment added; environment pinned via the nix flake.</span></div></div>
+      <div class="st"><span class="dot run"></span><div class="t"><b>Preprod stack ~55% synced</b><span>Safely paused; resumable from disk, no re-sync.</span></div></div>
     </div>
   </section>
 
@@ -209,7 +210,7 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-
 
     <div class="group">
       <div class="group-head"><span class="gl">B</span><span class="gt">Durable composition</span><span class="gc mono"><span class="ok">✓</span> v1.0.0-durable-checkpoint-cursor</span></div>
-      <div class="row"><span class="id">G5</span><div class="body"><div class="rt">Co-transactional <span class="mono">save()</span></div><div class="rr">The one true correctness blocker. Cursor must not commit ahead of durable data; changes <span class="mono">save()</span>&rsquo;s signature, so it lands <em>before</em> the API freeze.</div></div><div class="tags"><span class="eff">M</span><span class="chip blocker">Blocker</span></div></div>
+      <div class="row"><span class="id">G5</span><div class="body"><div class="rt">Co-transactional <span class="mono">save()</span></div><div class="rr">The one true correctness blocker. Cursor must not commit ahead of durable data; changes <span class="mono">save()</span>&rsquo;s signature, so it lands <em>before</em> the API freeze.</div></div><div class="tags"><span class="eff">M</span><span class="chip done">✓ Merged</span></div></div>
       <div class="row"><span class="id">G6</span><div class="body"><div class="rt">Durability startup probe</div><div class="rr">Assert <span class="mono">fsync</span>/<span class="mono">synchronous_commit</span>; detect a transaction pooler.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
       <div class="row"><span class="id">G7</span><div class="body"><div class="rt">Server-side timeouts</div><div class="rr">statement / lock / idle-in-transaction + a bounded migration lock — bounded failure is a precondition for deterministic recovery tests.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
       <div class="row"><span class="id">G8</span><div class="body"><div class="rt">Contract-integrity fixes</div><div class="rr">Validate <span class="mono">walletId</span>/<span class="mono">networkId</span>; JSON depth bound; stop <span class="mono">withLease</span> swallowing release errors.</div></div><div class="tags"><span class="eff">S</span><span class="chip required">Required</span></div></div>
