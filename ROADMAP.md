@@ -138,6 +138,12 @@ dedicated research pass before any tooling choice is locked in.
   to correlate a slow application-level call down to the SQL and query
   plan that caused it.
 
+**Sprint 9** (`sprint-9-cleanup-perf-connection`) is this milestone's next planned change: retry/
+idempotency semantics for transient connection errors, a finality-vs-per-address-cursor
+correctness split, a noise-floor-aware benchmark gate, and storage-client hygiene, folding in
+Sprint 8's D8-1..D8-4 audit deferrals. Its plan is written and gate-confirmed (Opus
+correctness-audit CONFIRM verdict, 2026-07-21); implementation has not started.
+
 ## Milestone 5 — Cutover
 
 Per `design/tasks.md` §§9–10: rewire real call sites onto UmbraDB, run a
@@ -156,6 +162,45 @@ A 1.0.0 tag requires all of:
 - [ ] Performance benchmark baseline recorded, with no regression against
   it introduced by anything landed after the baseline was set.
 - [ ] Live round-trip against a real network (Milestone 5) succeeds.
+
+## Beyond 1.0.0 — additional tracks in progress
+
+These sit outside the 1.0.0 checklist above (they extend scope rather than complete it) and are
+**not yet merged into `main`**. Listed here for visibility; each has its own branch and review
+history.
+
+- **Full-chain archival storage** (`design/full-chain-storage-design.md` on
+  `feature/full-chain-storage-implementation`, branched from `main` after Sprint 8). A
+  content-addressed, indexer-independent archive for raw block/tx/blob payloads — a new
+  `chain_archive` schema and migration lineage (`blocks`, `transactions`, `bridge_observations`,
+  `chain_blobs`/`chain_blob_roles`, `verifier_key_observations`, height-range partitioning with a
+  documented rollover procedure) plus a `chain-archive-sync` ingestion service (node-RPC and
+  indexer-GraphQL sources, transaction replay decoding against the real ledger WASM package). The
+  design went through four audited revisions (v1–v4) before implementation; the implementation
+  itself has been through a 3-reviewer sprint-fix round and a Codex GPT-5.6 Sol audit-fix round
+  (most recently closing findings 1–7, with the full test suite passing locally and two
+  preprod-gated suites self-skipping outside that environment). Substantial and reviewed, but
+  still unmerged, still on its own branch, and not confirmed to have cleared a final review round.
+- **Verifiable wallet-state snapshot root-of-trust** (`design/verifiable-snapshot-design.md`, on
+  `fix/verifiable-snapshot-v2`, previously `feature/verifiable-snapshot`). A design for
+  authenticating wallet-state snapshots against on-chain data (liveness/anti-rollback beacons,
+  manifest authentication, historical restore). **Design only — no implementation exists yet.**
+  At v9 after eight rounds of adversarial design-council review; the document itself says it is
+  "ready for a ninth review pass before implementation begins."
+- **BitTorrent-based alternative retrieval / bootstrap trust**
+  (`design/network-torrent-bootstrap-design.md`, on `feature/network-torrent`). A design for an
+  `rqbit`-based BitTorrent retrieval path plus a PKI-rooted bootstrap-trust scheme, meant to
+  compose with full-chain archival storage above rather than define its own blob schema.
+  **Design only — no implementation exists yet.** One design-council review round complete (a v1
+  draft sent back unanimously for rework, since revised); not yet re-reviewed.
+- **Committee-certification research** (`research/mithril-committee-certification`). A research
+  note (explicitly not a design-council-ready proposal) evaluating whether a Mithril-style
+  threshold-signature committee certification, using Midnight's own consensus committee, could
+  fill the cold-bootstrap trust gap between the two designs above. Informational only; identifies
+  a real blocker (Midnight does not currently persist per-epoch committee stake weight) and does
+  not recommend adoption.
+- **Nix dev-environment flake** (`nix/midnight-env/`, on an unmerged, not-yet-pushed feature
+  branch). See [Getting started](README.md#getting-started) in the README for what it provides.
 
 ## Non-goals
 
