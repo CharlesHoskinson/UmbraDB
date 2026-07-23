@@ -87,7 +87,7 @@ count of `defect-escape` + `gate-miss` + `rework-cause` entries — the trend-an
 | G2  | SemVer stability policy + CHANGELOG |  | ☐ open | — |
 | G3  | Frozen error-code catalog (retryable); strip chain_archive |  | ☐ open | — |
 | G4  | Contract docs (durability/migration/cancellation/lease/…) |  | ☐ open | — |
-| G5  | Co-transactional watermark+data (THE blocker) |  | ☐ open | — |
+| G5  | Co-transactional watermark+data (THE blocker) | release run | ☑ CLOSED (merged `e5fcdaa`) | LL-002, LL-003 |
 | G6  | Durability startup probe |  | ☐ open | — |
 | G7  | Server-side timeouts (statement/lock/idle/migration) |  | ☐ open | — |
 | G8  | Contract-integrity fixes (id validation, JSON depth bound, withLease) |  | ☐ open | — |
@@ -108,25 +108,164 @@ count of `defect-escape` + `gate-miss` + `rework-cause` entries — the trend-an
 
 | Friction class | Count | LL-IDs |
 |---|---|---|
-| Independence / confirmation-bias (NONE role framed, wrong mode) | 0 | — |
+| Independence / confirmation-bias (NONE role framed, wrong mode) | 2 | LL-002, LL-003 |
 | Stale-graph / freshness-gate / manifest-skew | 0 | — |
 | Codex graphify ~25-min stall | 0 | — |
 | Self-skip counted as pass | 0 | — |
-| Vacuous / negative-control-missing test caught | 0 | — |
+| Vacuous / negative-control-missing test caught | 1 | LL-002 |
 | Boundary breach attempt (indexer-agnostic) | 0 | — |
 | Scope creep / deferred-code / frozen-surface widening caught | 0 | — |
 | Bounded-repair exhaustion (≤3) / thrash | 0 | — |
-| Tooling incompatibility (typescript-eslint+TS7, Bun+mongodb, WSL path trap, …) | 0 | — |
+| Tooling incompatibility (typescript-eslint+TS7, Bun+mongodb, WSL path trap, …) | 1 | LL-001 |
+| Codex audit-lane reasoning-effort latency (xhigh default) | 1 | LL-004 |
 
 ---
 
 ## Event log (append-only; newest at bottom)
 
-*No events yet. First entry begins LL-001. Do not delete or rewrite prior entries.*
+*First events land here from the G5 (co-transactional `save()`) close-out. Do not delete or rewrite
+prior entries.*
 
-<!-- LL-001 — <title>
-   (copy the entry template above)
--->
+### LL-001 — Implementer wrote G5 test files into the main checkout instead of the isolated worktree
+- Date:            2026-07-23
+- Phase:           code
+- Class:           agent-workflow-friction
+- Gate item(s):    G5 (durable-checkpoint-cursor); Stage 2–4 worktree isolation (guideline §1)
+- What happened:   During G5 green-phase, the implementer lane created test files against the shared
+  main checkout `/root/UmbraDB` rather than its assigned isolated worktree
+  `/root/UmbraDB-durable-cursor`. Caught in the same session; the files were relocated into the
+  worktree and the main checkout was confirmed clean and untouched (left at `46b6011`, with the
+  Preprod sync still running against it). Net effect on `main`: none.
+- Evidence:        `impl/G5-stage4-selfverify.md` Handoff note ("Main checkout /root/UmbraDB left clean
+  at 46b6011 (untouched; a Preprod sync runs against it)"); the G5 work landed only on
+  `impl/v1.0.0-durable-checkpoint-cursor`.
+- Second story:    the run drives several parallel lanes across many similarly-named `/root/UmbraDB-*`
+  worktrees plus a live main checkout hosting the Preprod sync; agent shells reset cwd between calls
+  so writes use absolute paths, and the canonical `/root/UmbraDB` path is the low-friction default
+  when the worktree cwd is not reasserted per command. Writing there was the sensible default given
+  that context, not a disregard of the isolation rule.
+- Contributing factors: many near-identical worktree paths; agent shell cwd resets between calls
+  (absolute paths required); a live canonical main checkout that reads as "the" repo; no pre-write
+  guard asserting the destination resolves under the assigned worktree.
+- Gate/condition implicated: guideline §1 Stage 2–4 (red/green/self-verify in an isolated worktree);
+  memory notes "Write tool WSL path trap" and "Agent fleets: worktrees + file reports".
+- Impact:          no shipped-unverified code, no main contamination — self-corrected same session;
+  minor rework to relocate the files. Severity: low.
+- Fix (mitigative):    moved the stray test files into `/root/UmbraDB-durable-cursor`; verified main
+  clean at `46b6011`; G5 completed entirely within the worktree.
+- Prevention (preventative): add a Stage-2 pre-write precondition to the implementer manifest that the
+  destination path's realpath must resolve under the assigned worktree (reject writes that land in the
+  shared main checkout), and reassert `cd <worktree>` at the head of each lane command. Strengthens
+  guideline §1 Stage 2–4 worktree-isolation.
+- Action owner:    implementer-lane / release-run / G5-green   Due: 2026-07-24 (before G6 green)     Tracking: LL-001
+- Guideline change for iteration 2: add to §1 Stage 2 a "destination realpath must be under the
+  assigned worktree" write-precondition.
+
+### LL-002 — A7 watermark-participation negative control did not fire; survived fix-round-1, caught by round-2 cold cross-vendor Codex
+- Date:            2026-07-23
+- Phase:           audit
+- Class:           rework-cause
+- Gate item(s):    G5; acceptance A6/A7; `test/postgres/save-and-advance.test.ts:57-63,73-85` guarding
+  `src/postgres/save-and-advance.ts:66` (`watermarks.set(..., tx)`)
+- What happened:   A7's injected failure (an out-of-range `1n` cursor) is rejected client-side by
+  `WatermarkValueSchema` in `PgWatermarks.set` before any SQL is issued, so the same
+  `ValidationError`/rollback observable occurs whether or not `watermarks.set` rides the combinator's
+  shared tx — the negative control could not detect loss of watermark participation. Five
+  Claude-family audit lanes (spec-compliance, code-quality, security, release-differential, QA) all
+  returned PASS; the gap survived fix-round-1 and was caught only by the round-2 cold cross-vendor
+  Codex lane (gpt-5.6-sol, NONE-mode) via an independent mutation trace (dropping `tx` at
+  `save-and-advance.ts:66`).
+- Evidence:        `audit/G5/CONSOLIDATED.md` finding B2; `audit/G5/codex-cold.md` finding #2
+  (independently re-derived mutation trace).
+- Second story:    each Claude-family lane correctly verified that the production code was sound (`tx`
+  IS passed to both writes) and that A7 observably failed-and-rolled-back exactly as the acceptance
+  text asks; the subtle point — that the failure fires client-side before SQL, making the control
+  vacuous w.r.t. tx participation — needs a specific mutation the same-vendor lanes, sharing priors and
+  reading the same acceptance wording, did not independently run (QA's mutation probe patched a
+  different line, `checkpoint-store.ts:215`).
+- Contributing factors: same-vendor monoculture across five lanes; the test's rollback observable is
+  correct-but-insufficient; the injected fault is client-side, not server-side after SQL.
+- Gate/condition implicated: guideline §1 Stage 6–9 independent audit + mandatory cross-vendor cold
+  lane; acceptance A6/A7 wording.
+- Impact:          one extra fix + re-audit round (rework); no shipped defect — caught pre-merge and
+  the production code was already correct. Severity: medium (evidentiary gap on a durability-critical
+  gate).
+- Fix (mitigative):    strengthened A6/A7 per B2 — a mid-transaction external-connection assertion that
+  the watermark row is not visible before the combinator commit (mirrors the proven A2 pattern), the
+  chosen strongest/cheapest option; landed with the G5 test tightening (`03ebf0e` region).
+- Prevention (preventative): keep the mandatory cross-vendor cold (Codex NONE-mode) lane
+  **non-optional for hard classes** (co-transactional / durability / crash-ordering). The systemic
+  signal is that all five same-vendor lanes PASSed while the one independent cross-vendor lane caught
+  it — independence pays off. Strengthens guideline §1 Stage 6–9 cross-vendor-cold-lane condition.
+- Action owner:    adversarial-persona / Codex-GPT-5.6-Sol / round-2   Due: 2026-07-23 (closed at G5 merge)     Tracking: LL-002
+- Guideline change for iteration 2: none — mitigative fix; reaffirm the existing mandatory
+  cross-vendor cold lane and record in §5.5 that it was load-bearing on G5.
+
+### LL-003 — Two contract-doc statements contradicting Laws T1/W1 shipped past the same-vendor lanes, caught cold cross-vendor
+- Date:            2026-07-23
+- Phase:           audit
+- Class:           defect-escape
+- Gate item(s):    G5; A10 deliverable (`docs/checkpoint-store-contract.md`);
+  `Formal/STORAGE_ALGEBRA.md` Laws T1, W1
+- What happened:   two normative statements in the A10 contract doc contradicted the formal storage
+  algebra: (1) a W1 claim that "watermarks.set / TemporalKV.put upserts are version-bumping"
+  (`docs/checkpoint-store-contract.md:64`), contradicted by `watermarks.ts:76-81` (last-write-wins,
+  no version column) and Law W1 ("no version, no history, no fold... keeps only last"); and (2) a
+  parallel T1 misstatement. Both passed the doc-accuracy checks of the five Claude-family lanes and
+  were caught by the cold cross-vendor Codex lane, which re-derived each claim against the source and
+  the formal laws.
+- Evidence:        `audit/G5/CONSOLIDATED.md` finding B3 + `audit/G5/codex-cold.md` finding #5 (W1);
+  fix commits `9bd7e88` ("fix contract-doc T1 claim") and `03ebf0e` ("fix contract-doc W1 claim");
+  wording nit `a36c313`.
+- Second story:    the A10 doc test (`checkpoint-store-contract-doc.test.ts`) checks for the presence
+  of the right tokens/cross-references, not the truth of each sentence against the algebra; the
+  same-vendor lanes treated the token-level A10 test passing plus a plausible reading of the prose as
+  sufficient, whereas the independent lane re-derived each factual claim against `watermarks.ts` and
+  `STORAGE_ALGEBRA.md`.
+- Contributing factors: A10 test is presence-based, not truth-based; the false claims are individually
+  plausible and locally consistent; same-vendor lanes shared the doc-centric reading of the acceptance
+  wording.
+- Gate/condition implicated: guideline §1 Stage 6–9 independent audit; A10 acceptance; the doc-accuracy
+  check class.
+- Impact:          two factually-wrong statements would have shipped in a durability-critical gate's own
+  deliverable; caught pre-merge, one-line fixes each. Severity: medium (doc defect-escape past five
+  lanes).
+- Fix (mitigative):    corrected both statements (T1 in `9bd7e88`, W1 in `03ebf0e`), version-duplication
+  wording tidied in `a36c313`; A10 doc test re-run green.
+- Prevention (preventative): strengthen the doc-accuracy audit-persona brief to require every
+  normative claim in a contract doc be checked-and-verified against the cited formal law / source line
+  (truth check, not token-presence), and keep the cross-vendor cold lane for the same reason as LL-002.
+- Action owner:    adversarial-persona / Codex-GPT-5.6-Sol / round-2   Due: 2026-07-23 (closed at G5 merge)     Tracking: LL-003
+- Guideline change for iteration 2: add to the doc-accuracy check a "every normative claim
+  cited-and-verified against source/formal-law line" requirement.
+
+### LL-004 — Codex audit-lane default `xhigh` reasoning slowed the cold cross-vendor pass
+- Date:            2026-07-23
+- Phase:           audit
+- Class:           agent-workflow-friction
+- Gate item(s):    G5; guideline §1 Stage 6–9 cross-vendor cold lane
+- What happened:   the cold cross-vendor Codex lane, at its default `xhigh` reasoning effort, ran
+  slower than the audit-lane budget allowed. Mitigated by lowering the reasoning effort to `high` and
+  capping the run at 20 minutes (`timeout 1200 codex exec`). The lane then completed and returned its
+  BLOCKED verdict, still catching B1/B2/B3.
+- Evidence:        `audit/G5/codex-cold.md` header ("MODEL: gpt-5.6-sol (reasoning effort: high)");
+  guideline §1 Stage 6–9 cap ("`timeout 1200 codex exec`").
+- Second story:    `xhigh` is Codex's thorough default and reasonable for adversarial depth, but on a
+  delta-scoped single-gate audit it over-invests time relative to the marginal findings; `high` plus a
+  hard 20-min cap preserved the independent findings at a workable latency.
+- Contributing factors: Codex default reasoning effort is `xhigh`; no per-lane time budget pinned at
+  first dispatch; single-gate delta scope does not need `xhigh` depth.
+- Gate/condition implicated: guideline §1 Stage 6–9 (cold cross-vendor lane, 20-min cap); memory
+  "Codex auditor graphify stall" (adjacent Codex-lane latency class).
+- Impact:          audit-lane latency only; no correctness impact — the `high`-effort run still caught
+  all three blockers. Severity: low.
+- Fix (mitigative):    set Codex reasoning effort to `high` and cap at 20 min via
+  `timeout 1200 codex exec` for the G5 cold lane.
+- Prevention (preventative): bake "`reasoning=high` + `timeout 1200`" as the standing
+  cross-vendor-cold-lane default in the audit brief (already the guideline §1 cap), and carry the
+  standing "skip graphify" directive per memory to avoid the ~25-min stall class.
+- Action owner:    adversarial-persona / Codex-GPT-5.6-Sol / round-2   Due: 2026-07-23 (applied for G5; standing for G6–G8)     Tracking: LL-004
+- Guideline change for iteration 2: none — codifies the existing §1 cap as the lane default.
 
 ---
 

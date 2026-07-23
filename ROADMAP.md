@@ -150,6 +150,19 @@ Per `design/tasks.md` §§9–10: rewire real call sites onto UmbraDB, run a
 live round-trip against a real network, then remove the storage engine
 UmbraDB replaces from the environment it originated in.
 
+## v1.0.0 program status (2026-07-23)
+
+The 1.0.0 release is now driven as a gated, per-item program. The five OpenSpec changes for it are
+committed under `openspec/changes/v1.0.0-*` (`api-surface`, `durable-checkpoint-cursor`,
+`recovery-testing`, `perf-baseline`, `infosec-signoff`) and governed by
+[`docs/v1-implementation-guideline.md`](docs/v1-implementation-guideline.md) (per-gate
+verify → red/green/self-verify in an isolated worktree → independent audit including a mandatory
+cold cross-vendor lane → merge). Of the 20 gate items, **G5 — co-transactional `save()`
+(the durable-checkpoint-cursor keystone) — is merged** (`e5fcdaa`); the remaining 19 are tracked in
+the roadmap page [`docs/roadmapv1.html`](docs/roadmapv1.html), with the critical path running
+G6 → G7 → G8 next. The blameless lessons log is `docs/v1-lessons-learned.md`; the current
+resume-from-cold checkpoint is `docs/notes/2026-07-23-resume-checkpoint.md`.
+
 ## 1.0.0 acceptance checklist
 
 A 1.0.0 tag requires all of:
