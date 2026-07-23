@@ -150,6 +150,21 @@ in `CREATE EXTENSION` DDL serialization, a cursor-cancellation gap in `postgres.
 connection-reservation wait with no timeout or abort handling, among others. That's the whole
 point of running it this way instead of shipping on the first green test run.
 
+Beyond the merged modules above, further work is active but **not yet merged into `main`** — see
+[`ROADMAP.md`](ROADMAP.md) for current status on each:
+
+- **Full-chain archival storage** (a `chain_archive` schema/migration lineage, content-addressed
+  raw block/tx/blob storage independent of the indexer, plus a chain-archive-sync ingestion
+  service): implemented on `feature/full-chain-storage-implementation`, through several
+  design-council and Codex GPT-5.6 Sol audit-fix rounds, but still unmerged and not yet
+  through a final review round.
+- **Verifiable wallet-state snapshot root-of-trust** (`design/verifiable-snapshot-design.md`):
+  design-only, no implementation yet, at v9 after eight design-council review rounds, on
+  `fix/verifiable-snapshot-v2`.
+- **BitTorrent-based alternative retrieval / bootstrap trust**
+  (`design/network-torrent-bootstrap-design.md`): design-only, no implementation yet, one
+  design-council review round in, on `feature/network-torrent`.
+
 ## Formal verification
 
 Lean M1 is complete for the abstract per-key TemporalKV history model. The
@@ -216,6 +231,14 @@ npm run typecheck        # tsc --noEmit
 npm test                 # vitest run — spins up Postgres via Testcontainers, needs Docker
 npm run docs:storage     # generate API reference (TypeDoc) into docs/api/storage/
 ```
+
+A Nix flake at `nix/midnight-env/` composes pinned upstream Midnight flakes (`midnight-ledger`,
+`midnight-wallet`, `midnight-dapp-connector-api`) with pinned Cardano release binaries
+(`cardano-node`, `cardano-db-sync`), a pinned `midnight-node` release binary, and PostgreSQL into
+one reproducible `devShell`, plus `start-stack`/`stop-stack`/`backup-state`/`restore-state` apps
+for standing up and snapshotting a full local Midnight+Cardano stack. It's intended to become the
+recommended path for environment setup, but it is still in development on an unmerged feature
+branch and not yet part of `main` — the steps above remain the supported path until it lands.
 
 ```typescript
 import { createClient } from "./src/postgres/client.js";
