@@ -59,6 +59,12 @@ Ledger-8 node's *mandatory* TLS connection to the db-sync Postgres automatically
 line and cannot join Preprod (it expects ledger-state v18; the preprod genesis is v13, with no
 8→9 migration).
 
+The from-source stack has been run **fully synced to the live Preprod tip** locally: a self-hosted
+ 1.0.1 caught up to the live finalized head (block ~1.78M, 14 peers, ),
+and the wallet/cold-boot recovery path is green against it —  and
+ both sync the funded preprod wallet, persist its state envelope to UmbraDB
+Postgres, and restore it in a fresh process without a full resync.
+
 ## Getting started
 
 Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
