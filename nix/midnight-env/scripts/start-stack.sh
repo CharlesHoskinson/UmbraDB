@@ -73,6 +73,7 @@ nohup cardano-db-sync \
   --config "$CONFIG_DIR/db-sync-config.json" \
   --socket-path "$CARDANO_DATA/db/node.socket" \
   --state-dir "$CARDANO_DATA/db-sync-state" \
+  --schema-dir "$(dirname "$(command -v cardano-db-sync)")/../share/cardano-db-sync/schema" \
   > "$LOG_DIR/cardano-db-sync.log" 2>&1 < /dev/null &
 disown -h
 echo "    cardano-db-sync started, logging to $LOG_DIR/cardano-db-sync.log"
@@ -90,7 +91,11 @@ DBPASS=$(cat "$HOME/.midnight-pg-password")
   export DB_SYNC_POSTGRES_CONNECTION_STRING="postgresql://midnight:${DBPASS}@127.0.0.1:5432/cexplorer"
   export CARDANO_SECURITY_PARAMETER=2160
   export CFG_PRESET=preprod
-  nohup midnight-node \
+  # Preprod publishes only 2 bootnodes and this host is behind NAT (no inbound peers), so the
+  # sync is inherently bursty. Pin both bootnodes as reserved to hold the connections longer
+  # and widen the peer slots -- best-effort continuity; a true full sync is still multi-hour.
+  # setsid + </dev/null + & + disown fully detaches the node so step [4/4] proceeds.
+  setsid midnight-node \
     --chain res/preprod/chain-spec-raw.json \
     --base-path "$MIDNIGHT_NODE_DATA" \
     --name midnight-preprod-node \
@@ -99,15 +104,12 @@ DBPASS=$(cat "$HOME/.midnight-pg-password")
     --pool-limit 35 \
     --bootnodes /dns/bootnode-1.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWQxxUgq7ndPfAaCFNbAxtcKYxrAzTxDfRGNktF75SxdX5 \
     --bootnodes /dns/bootnode-2.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWNrUBs22FfmgjqFMa9ZqKED2jnxwsXWw5E4q2XVwN35TJ \
-    # Preprod publishes only 2 bootnodes and this host is behind NAT (no inbound peers), so the
-    # sync is inherently bursty. Pin both bootnodes as reserved to hold the connections longer
-    # and widen the peer slots -- best-effort continuity; a true full sync is still multi-hour.
     --reserved-nodes /dns/bootnode-1.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWQxxUgq7ndPfAaCFNbAxtcKYxrAzTxDfRGNktF75SxdX5 \
     --reserved-nodes /dns/bootnode-2.preprod.midnight.network/tcp/30333/ws/p2p/12D3KooWNrUBs22FfmgjqFMa9ZqKED2jnxwsXWw5E4q2XVwN35TJ \
     --in-peers 25 --out-peers 25 \
     --no-private-ip \
-    > "$LOG_DIR/midnight-node.log" 2>&1 < /dev/null &
-  disown -h
+    < /dev/null > "$LOG_DIR/midnight-node.log" 2>&1 &
+  disown
 )
 echo "    midnight-node 1.0.1 started, logging to $LOG_DIR/midnight-node.log"
 
