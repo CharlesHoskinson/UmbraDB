@@ -43,4 +43,15 @@ jobs:
         # integration tests are gated behind it (`test/integration/live-fixtures/preprod-
         # fixtures.ts`'s LIVE_PREPROD_ENABLED) and self-skip via `describe.skipIf`, so this
         # command alone is exactly the Pg-only required gate, never the live tier.
+        #
+        # Additional suites that ALWAYS self-skip in CI (reported as SKIPPED in the summary --
+        # never silently counted as passed; Sol-audit fix round, Finding 4):
+        #   - test/integration/chain-archive-sync.integration.test.ts needs a live local
+        #     Midnight devnet (node RPC :9944 + indexer :8088), which this workflow does NOT
+        #     provision;
+        #   - test/integration/chain-archive-replay-decode.integration.test.ts needs a built
+        #     sibling midnight-wallet checkout (ledger-v8 WASM) plus a captured indexer SQLite
+        #     DB, neither of which exists in CI.
+        # A green CI run therefore says NOTHING about those suites beyond clean collection --
+        # they must be run in a dev environment with the devnet/checkout present.
         run: npm run test:conformance

@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "declaration": false
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "chain-archive-sync/**/*.ts"]
 }

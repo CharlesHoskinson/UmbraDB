@@ -35,6 +35,40 @@ export class ClockRegressionError extends StorageError {
 }
 
 /**
+ * Sprint-fix round Fix 4 (MEDIUM): the chain-archive schema (`src/postgres/migrations/
+ * chain_archive/001_chain_archive_core.ts`) raises SQLSTATE `23514` (check_violation) from
+ * several of its OWN invariants, entirely unrelated to temporal-kv's clock-regression CHECK --
+ * before this fix, EVERY `23514` fell through to `ClockRegressionError` below unconditionally,
+ * which actively misled anyone debugging a genuine chain-archive data-integrity failure into
+ * thinking it was a clock/NTP issue. `translatePostgresError` now branches on the error's own
+ * `.constraint_name` (Postgres reports which named constraint fired; see that function's own
+ * comment for the full routing table) to tell these apart. Two categories:
+ *
+ *   - `ChainArchiveInvariantError`: one of chain-archive's own hand-written `RAISE EXCEPTION ...
+ *     USING CONSTRAINT = '...'` triggers fired (see the migration's `chain_blob_roles_completeness`/
+ *     `blocks_finalized_monotonic`/`chain_blob_roles_removal_guard` constraint names) -- a
+ *     malformed blob-role write, or a genuine attempt to un-finalize a previously-finalized
+ *     block. These are cross-write invariants a plain CHECK constraint cannot express on its own,
+ *     which is why they're triggers rather than CHECKs in the first place.
+ *   - `ChainArchiveCheckViolationError`: an ordinary table `CHECK` constraint on one of
+ *     chain-archive's own tables fired (status/kind enum values, hash-length checks, nonnegative
+ *     checks, the `(scope = 'contract') = (contract_address IS NOT NULL)` tie, etc.) --
+ *     recognized by the constraint name's table-name prefix (Postgres auto-names an unlabeled
+ *     CHECK `<table>_<column>_check` or `<table>_check[N]`, confirmed empirically against a real
+ *     Postgres 17 instance while implementing this fix).
+ */
+export class ChainArchiveInvariantError extends StorageError {
+  readonly code = "CHAIN_ARCHIVE_INVARIANT_VIOLATION" as const;
+  constructor(message: string, readonly constraintName: string, cause?: unknown) { super(message, cause); }
+}
+
+/** See `ChainArchiveInvariantError`'s own doc above -- the ordinary-table-CHECK counterpart. */
+export class ChainArchiveCheckViolationError extends StorageError {
+  readonly code = "CHAIN_ARCHIVE_CHECK_VIOLATION" as const;
+  constructor(message: string, readonly constraintName: string, cause?: unknown) { super(message, cause); }
+}
+
+/**
  * Catch-all for a real driver/database error (has a SQLSTATE or Node network `.code`) that
  * doesn't match any of this module's specific translations. **Added after a cross-vendor
  * re-audit found the interface's own Requirement ("a raw postgres.js error object SHALL NOT
@@ -61,6 +95,39 @@ export class UnrecognizedPostgresError extends StorageError {
  *  application bug as though it were a Postgres error would hide it, not translate it. */
 interface PgDriverError extends Error {
   code: string;
+  /** The name of the specific constraint that fired, when Postgres reports one -- present for a
+   *  genuine table `CHECK`/`UNIQUE`/etc. constraint violation, and for a `RAISE EXCEPTION ...
+   *  USING CONSTRAINT = '...'` that explicitly sets it (Fix 4, see `ChainArchiveInvariantError`'s
+   *  own doc above). `undefined` for a plain `RAISE EXCEPTION` with no `CONSTRAINT` clause.
+   *  postgres.js surfaces this as `constraint_name` (verified against its own wire-protocol field
+   *  table, `node_modules/postgres/src/connection.js`), not the `.constraint` name Postgres's own
+   *  C client (`libpq`) uses -- easy to get wrong, confirmed by testing both against a real
+   *  Postgres 17 instance while implementing this fix. */
+  constraint_name?: string;
+}
+
+/** Chain-archive's own known constraint/trigger names that raise SQLSTATE `23514`
+ *  (`src/postgres/migrations/chain_archive/001_chain_archive_core.ts`) -- the three hand-written
+ *  cross-write invariants (triggers, not plain CHECKs). */
+const CHAIN_ARCHIVE_INVARIANT_CONSTRAINT_NAMES = new Set([
+  "chain_blob_roles_completeness",
+  "blocks_finalized_monotonic",
+  "chain_blob_roles_removal_guard",
+]);
+
+/** Every table chain-archive's own migration defines a plain `CHECK` constraint on -- Postgres
+ *  auto-names an unlabeled CHECK `<table>_<column>_check` or `<table>_check[N]`, so a leading-
+ *  prefix match against this list (checked before the `_` that would otherwise also match, e.g.
+ *  a hypothetical `blocks_something_else` table this schema doesn't have) is what tells these
+ *  apart from `kv_history_range` (temporal-kv's own, explicitly-named, unrelated CHECK) and from
+ *  any future, not-yet-anticipated 23514 source elsewhere in this codebase. */
+const CHAIN_ARCHIVE_CHECK_TABLE_PREFIXES = [
+  "blocks_", "transactions_", "bridge_observations_", "chain_blobs_", "chain_blob_roles_",
+  "verifier_key_observations_",
+];
+
+function isChainArchiveCheckConstraintName(constraintName: string): boolean {
+  return CHAIN_ARCHIVE_CHECK_TABLE_PREFIXES.some((prefix) => constraintName.startsWith(prefix));
 }
 
 /**
@@ -183,8 +250,24 @@ export function translatePostgresError(
       return new ExclusionViolationError(`transaction key reuse (UB001) with no key context: ${err.message}`, err);
     case "23P01":
       return new ExclusionViolationError(err.message, err);
-    case "23514":
+    case "23514": {
+      // Fix 4: constraint-name-aware routing -- see `ChainArchiveInvariantError`'s own doc above
+      // for the full reasoning. `err.constraint_name` is `undefined` for a plain RAISE EXCEPTION
+      // with no CONSTRAINT clause and for any 23514 source this file doesn't yet know about --
+      // both fall through to the historical `ClockRegressionError` default, preserving prior
+      // behavior for anything not explicitly enumerated here (defense in depth: a future 23514
+      // source elsewhere in this codebase that forgets to update this routing table fails toward
+      // the PRE-Fix-4 behavior, not toward silently swallowing/misrouting a brand-new error kind
+      // no one has looked at yet).
+      const constraintName = err.constraint_name;
+      if (constraintName !== undefined && CHAIN_ARCHIVE_INVARIANT_CONSTRAINT_NAMES.has(constraintName)) {
+        return new ChainArchiveInvariantError(err.message, constraintName, err);
+      }
+      if (constraintName !== undefined && isChainArchiveCheckConstraintName(constraintName)) {
+        return new ChainArchiveCheckViolationError(err.message, constraintName, err);
+      }
       return new ClockRegressionError(err.message, err);
+    }
     // Added for Sprint 2 (openspec/changes/sprint-2-transaction-lease/design.md §5):
     // withTransaction reuses this shared table for these two, unlike the two CONTEXTUAL 57014
     // cases (lease-acquisition timeout, transaction timeout), which are handled directly in
