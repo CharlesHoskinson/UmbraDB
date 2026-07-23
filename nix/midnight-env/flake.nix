@@ -1,5 +1,5 @@
 {
-  description = "Reproducible dev environment for the Midnight Network + Cardano dependency chain (node, indexer, proof-server, wallet-sdk, cardano-node, cardano-db-sync, PostgreSQL), with backup/restore for synced chain state.";
+  description = "Reproducible PREPROD dev environment for the Midnight Network + Cardano dependency chain (midnight-node 1.0.1 = Ledger 8; db-sync served over TLS) (node, indexer, proof-server, wallet-sdk, cardano-node, cardano-db-sync, PostgreSQL), with backup/restore for synced chain state.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
