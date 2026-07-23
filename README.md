@@ -65,6 +65,16 @@ and the wallet/cold-boot recovery path is green against it —  and
  both sync the funded preprod wallet, persist its state envelope to UmbraDB
 Postgres, and restore it in a fresh process without a full resync.
 
+## Data-flow visualizer
+
+An interactive, animated walkthrough of how data moves through the Cardano → Midnight stack that
+UmbraDB ingests from (cardano-node → cardano-db-sync → midnight-node → indexer → UmbraDB) is
+published via GitHub Pages:
+
+**▶ [Cardano → Midnight Data-Flow Visualizer](https://charleshoskinson.github.io/UmbraDB/visualizations/cardano-midnight-flow.html)**
+
+Source: [`docs/visualizations/cardano-midnight-flow.html`](docs/visualizations/cardano-midnight-flow.html) — a single self-contained page (React + ReactFlow inlined, no build step, no external requests).
+
 ## Getting started
 
 Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
