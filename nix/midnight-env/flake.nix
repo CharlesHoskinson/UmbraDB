@@ -2,8 +2,12 @@
   description = "Reproducible PREPROD dev environment for the Midnight Network + Cardano dependency chain (midnight-node 1.0.1 = Ledger 8; db-sync served over TLS) (node, indexer, proof-server, wallet-sdk, cardano-node, cardano-db-sync, PostgreSQL), with backup/restore for synced chain state.";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    # Pinned to the EXACT rev already recorded in flake.lock (was the rolling
+    # `nixos-unstable` / default branch). Frozen so `nix flake update` cannot
+    # silently move it; the pin is explicit in source, not only in the lock.
+    # Same rev == same packages: this repin does not change the resolved stack.
+    nixpkgs.url = "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163"; # was nixos-unstable
+    flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b"; # was default branch
 
     # Midnight components: compose their own upstream flakes, pinned to the exact
     # commits this environment was built and verified against. Update these pins
@@ -113,7 +117,7 @@
 
         mkScript = name: text: pkgs.writeShellApplication {
           inherit name text;
-          runtimeInputs = [ pkgs.coreutils pkgs.gnutar pkgs.gzip pkgs.rsync postgresql docker cardano-node-bin midnight-node-bin ];
+          runtimeInputs = [ pkgs.coreutils pkgs.gnutar pkgs.gzip pkgs.rsync pkgs.openssl postgresql docker cardano-node-bin midnight-node-bin ];
         };
 
         docker = pkgs.docker;
@@ -133,6 +137,7 @@
             docker
             pkgs.jq
             pkgs.rsync
+            pkgs.openssl # so start-stack's TLS-cert step resolves openssl from the pinned nixpkgs, not host PATH
           ];
           shellHook = ''
             echo "Midnight dev environment (UmbraDB/nix/midnight-env)"
