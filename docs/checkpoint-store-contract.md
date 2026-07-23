@@ -2,7 +2,7 @@
 
 This document is the checkable contract for composing a **checkpoint write** with a **sync-cursor
 advance** (a watermark). It is authoritative for callers of `PgCheckpointStore.save`,
-`PgWatermarks.set`, and the `saveAndAdvance` combinator. It is cross-referenced from
+`PgWatermarks.set`, and the `saveAndAdvance` combinator. It cites
 `Formal/STORAGE_ALGEBRA.md` **Law W1** (watermarks are last-write-wins; monotonicity is explicitly
 *not* a law there — ordering safety is a composition contract, stated here, not an algebraic
 guarantee of `set`).
@@ -55,10 +55,13 @@ case references a checkpoint that was not persisted.
 
 ## 3. Replay convergence is judged on CURRENT state
 
-Because `watermarks.set` / `TemporalKV.put` upserts are version-bumping, a watermark-behind replay
-re-applies already-durable writes and so produces **spurious history rows and version gaps** versus
-a fault-free run. Replay convergence is therefore defined on **current state**, not on history
-chains:
+Because `TemporalKV.put` upserts are **version-bumping** (each write appends a new version to that
+key's history), while `watermarks.set` is **last-write-wins overwrite with no version and no
+history** (Law W1 — `src/postgres/watermarks.ts` writes a single-row `ON CONFLICT … DO UPDATE`
+upsert), a watermark-behind replay re-applies already-durable writes and so produces **spurious
+`kv_history` rows and version gaps in TemporalKV** versus a fault-free run — the watermark row
+itself carries no such lineage; it is simply overwritten again to the same value. Replay
+convergence is therefore defined on **current state**, not on history chains:
 
 > Two runs converge iff their **current** state matches — the `kv_current` values, the latest
 > complete checkpoint payload, and the watermark values — explicitly excluding `kv_history` rows

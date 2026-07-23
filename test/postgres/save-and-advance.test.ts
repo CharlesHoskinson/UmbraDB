@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
+import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { ValidationError } from "../../src/interfaces/storage-errors.js";
-import type { WatermarkValue } from "../../src/interfaces/watermarks.js";
+import type {
+  WatermarkKey,
+  WatermarkKind,
+  Watermarks,
+  WatermarkValue,
+} from "../../src/interfaces/watermarks.js";
 import { PgCheckpointStore } from "../../src/postgres/checkpoint-store.js";
 import type { UmbraDBSql } from "../../src/postgres/client.js";
 import { saveAndAdvance } from "../../src/postgres/save-and-advance.js";
@@ -15,9 +21,15 @@ import { registerSuiteLifecycle, TEST_SCHEMA } from "./setup.js";
  * atomically" (`openspec/changes/v1.0.0-durable-checkpoint-cursor/specs/durable-composition/spec.md`).
  */
 
-const { sql: getSql } = registerSuiteLifecycle();
+const { sql: getSql, connectionUri } = registerSuiteLifecycle();
 
 const KIND = "ckpt-cursor";
+
+/** An independent physical connection, used to observe cross-transaction visibility (mirrors the
+ *  A2 mid-tx pattern in checkpoint-store-cotx.test.ts). */
+async function rawConnection(): Promise<postgres.Sql> {
+  return postgres(connectionUri(), { max: 1, connection: { search_path: TEST_SCHEMA } });
+}
 
 function deps(): {
   checkpoints: PgCheckpointStore;
@@ -42,11 +54,52 @@ describe("saveAndAdvance — co-transactional checkpoint + cursor (G5, A6–A7)"
     await truncateAll(getSql());
   });
 
-  it("A6: a successful saveAndAdvance makes both the checkpoint and the cursor durable together", async () => {
+  it("A6: a successful saveAndAdvance makes both the checkpoint and the cursor durable together, with the cursor written INSIDE the combinator's transaction", async () => {
     const d = deps();
     const data = randomBytes(140);
-    const summary = await saveAndAdvance(d, "w1", "n1", data, { kind: KIND, key: "w1", value: "1" });
+
+    // Teeth for the combinator's atomicity: prove the watermark advance runs on the SAME
+    // transaction handle the combinator opened, not on the pool's autocommit connection. A spy
+    // Watermarks delegates `set` to the real one (on the combinator's `tx`) and then, while still
+    // INSIDE saveAndAdvance's single transaction and BEFORE its one COMMIT (control has not yet
+    // returned to `withTransaction`'s commit point), asks a wholly independent physical connection
+    // whether it can see the watermark row. It MUST NOT: the write is uncommitted. If `set` were
+    // invoked WITHOUT `tx` (regression: `watermarks.set(...)` dropped its `tx` at
+    // save-and-advance.ts:66), the write would land on the pool's autocommit connection, already
+    // committed and therefore visible from this external connection — flipping the value to 1 and
+    // failing the assertion below. This mirrors the proven A2 mid-tx visibility pattern.
+    const raw = await rawConnection();
+    let externalWatermarkRowsMidTx = -1;
+    const midTxCheckingWatermarks: Watermarks = Object.create(d.watermarks);
+    midTxCheckingWatermarks.set = async function set(
+      kind: WatermarkKind,
+      key: WatermarkKey,
+      value: WatermarkValue,
+      opts?: Parameters<Watermarks["set"]>[3],
+    ): Promise<void> {
+      await d.watermarks.set(kind, key, value, opts);
+      const rows = await raw<{ one: number }[]>`
+        SELECT 1 AS one FROM ${raw(TEST_SCHEMA)}.watermarks WHERE kind = ${kind} AND key = ${key}
+      `;
+      externalWatermarkRowsMidTx = rows.length;
+    };
+
+    let summary: Awaited<ReturnType<typeof saveAndAdvance>>;
+    try {
+      summary = await saveAndAdvance(
+        { ...d, watermarks: midTxCheckingWatermarks },
+        "w1",
+        "n1",
+        data,
+        { kind: KIND, key: "w1", value: "1" },
+      );
+    } finally {
+      await raw.end();
+    }
     expect(summary.sequence).toBe(1);
+    // The watermark row was invisible to the external connection until the combinator's COMMIT:
+    // proof `set` participated in the combinator's transaction rather than committing on its own.
+    expect(externalWatermarkRowsMidTx).toBe(0);
 
     // load returns the just-saved checkpoint...
     const loaded = await d.checkpoints.load("w1", "n1");

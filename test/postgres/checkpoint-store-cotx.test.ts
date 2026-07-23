@@ -43,6 +43,29 @@ async function rawConnection(): Promise<postgres.Sql> {
   return postgres(connectionUri(), { max: 1, connection: { search_path: TEST_SCHEMA } });
 }
 
+/**
+ * A dedicated single-connection pool whose postgres.js `debug` hook (`connection.js` calls
+ * `options.debug(id, string, params, types)` once per statement dispatched to the server) counts
+ * every statement issued on it. Backs a `PgCheckpointStore` for the A5 rejection cases so we can
+ * assert **zero statements were issued** directly — a genuine pool-level query spy, strictly
+ * stronger than the empty-tables proxy: it fires on ANY statement (a stray SELECT included), not
+ * only ones that leave a durable row. `types.bigint` matches `createClient` so the store's own
+ * `bigint` column handling is identical to production.
+ */
+async function spyPool(): Promise<{ sql: UmbraDBSql; issued: () => number; end: () => Promise<void> }> {
+  let count = 0;
+  const sql = postgres(connectionUri(), {
+    max: 1,
+    connection: { search_path: TEST_SCHEMA },
+    types: { bigint: postgres.BigInt },
+    debug: () => {
+      count += 1;
+    },
+  });
+  Object.defineProperty(sql, "umbradbSchema", { value: TEST_SCHEMA, enumerable: false });
+  return { sql: sql as unknown as UmbraDBSql, issued: () => count, end: () => sql.end() };
+}
+
 const FAKE_TX = { __brand: "TransactionHandle", id: "fake-never-issued" } as unknown as TransactionHandle;
 
 describe("PgCheckpointStore.save — co-transactional opts.tx (G5, A1–A5)", () => {
@@ -122,33 +145,52 @@ describe("PgCheckpointStore.save — co-transactional opts.tx (G5, A1–A5)", ()
     expect(Buffer.from(loaded.data).equals(data)).toBe(true);
   });
 
-  it("A5: a fabricated tx handle rejects with TransactionHandleInvalidError, issuing no statement", async () => {
-    const s = store();
+  it("A5: a fabricated tx handle rejects with TransactionHandleInvalidError, issuing NO statement (pool query-count spy is zero)", async () => {
     const sql = getSql();
-    await expect(
-      s.save("w1", "n1", randomBytes(30), { tx: FAKE_TX }),
-    ).rejects.toBeInstanceOf(TransactionHandleInvalidError);
+    const spy = await spyPool();
+    try {
+      const s = new PgCheckpointStore(spy.sql, new PgTransactionLeaseLayer(spy.sql), TEST_SCHEMA);
+      const before = spy.issued();
+      await expect(
+        s.save("w1", "n1", randomBytes(30), { tx: FAKE_TX }),
+      ).rejects.toBeInstanceOf(TransactionHandleInvalidError);
+      // Directly: resolveTransaction rejects the fabricated handle BEFORE any statement is
+      // dispatched to the server on the store's own pool -- not merely "the tables stayed empty".
+      expect(spy.issued() - before).toBe(0);
+    } finally {
+      await spy.end();
+    }
+    // Corroborating durable state (observed from the shared pool): nothing was written anywhere.
     const chunks = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_chunks`;
     const manifests = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_manifests`;
     expect(chunks).toHaveLength(0);
     expect(manifests).toHaveLength(0);
   });
 
-  it("A5: a stale (already-ended) tx handle rejects with TransactionHandleInvalidError, issuing no statement", async () => {
-    const layer = txLayer();
-    const s = store();
+  it("A5: a stale (already-ended) tx handle rejects with TransactionHandleInvalidError, issuing NO statement (pool query-count spy is zero)", async () => {
     const sql = getSql();
-    let endedHandle!: TransactionHandle;
-    await layer.withTransaction(async (tx) => {
-      endedHandle = tx;
-    });
-    await expect(
-      s.save("w1", "n1", randomBytes(30), { tx: endedHandle }),
-    ).rejects.toBeInstanceOf(TransactionHandleInvalidError);
+    const spy = await spyPool();
+    try {
+      const layer = new PgTransactionLeaseLayer(spy.sql);
+      const s = new PgCheckpointStore(spy.sql, layer, TEST_SCHEMA);
+      let endedHandle!: TransactionHandle;
+      await layer.withTransaction(async (tx) => {
+        endedHandle = tx;
+      });
+      // Snapshot AFTER the setup transaction so its own BEGIN/COMMIT is excluded; the count then
+      // measures ONLY what the rejecting save issues.
+      const before = spy.issued();
+      await expect(
+        s.save("w1", "n1", randomBytes(30), { tx: endedHandle }),
+      ).rejects.toBeInstanceOf(TransactionHandleInvalidError);
+      expect(spy.issued() - before).toBe(0);
+    } finally {
+      await spy.end();
+    }
     const manifests = await sql`SELECT 1 FROM ${sql(TEST_SCHEMA)}.ckpt_manifests`;
     expect(manifests).toHaveLength(0);
     // A rolled-back/absent claim consumes no sequence: the next real save still gets sequence 1.
-    const summary = await s.save("w1", "n1", randomBytes(5));
+    const summary = await store().save("w1", "n1", randomBytes(5));
     expect(summary.sequence).toBe(1);
   });
 });
