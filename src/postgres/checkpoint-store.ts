@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ISql } from "postgres";
 import { ValidationError } from "../interfaces/storage-errors.js";
 import {
   CheckpointNotFoundError,
@@ -16,7 +17,7 @@ import {
   type PruneResult,
   type SaveCheckpointOptions,
 } from "../interfaces/checkpoint-store.js";
-import type { TransactionLeaseLayer } from "../interfaces/transaction-lease.js";
+import type { TransactionHandle, TransactionLeaseLayer } from "../interfaces/transaction-lease.js";
 import { withAbort } from "./abort.js";
 import type { UmbraDBSql } from "./client.js";
 import { translatePostgresError } from "./errors.js";
@@ -78,12 +79,15 @@ function splitChunks(data: Uint8Array, chunkSize: number): Buffer[] {
 }
 
 function validateSaveOptions(opts: SaveCheckpointOptions | undefined): {
-  chunkSize?: number; label?: string; signal?: AbortSignal;
+  chunkSize?: number; label?: string; signal?: AbortSignal; tx?: TransactionHandle;
 } {
-  const { signal, ...rest } = opts ?? {};
+  // `signal` and `tx` are live handles intersected onto SaveCheckpointOptions, not data fields in
+  // SaveCheckpointOptionsSchema (which stays byte-unchanged) -- strip both before safeParse and
+  // thread them back through, exactly as `signal` was already handled.
+  const { signal, tx, ...rest } = opts ?? {};
   const parsed = SaveCheckpointOptionsSchema.safeParse(rest);
   if (!parsed.success) throw ValidationError.fromZod("PgCheckpointStore.save opts", parsed.error);
-  return { ...parsed.data, signal };
+  return { ...parsed.data, signal, tx };
 }
 
 function validateHistoryOptions(opts: HistoryOptions | undefined): {
@@ -112,10 +116,14 @@ function toSummary(row: ManifestRow, byteLength: number, chunkCount: number): Ch
  * (`openspec/changes/sprint-3-checkpoint-store/design.md` §2/§6). Does not run migrations itself
  * — call `runMigrations` (`migrate.ts`) before constructing this against a fresh database.
  *
- * `save`/`prune` deliberately do NOT accept a `tx` option (`src/interfaces/checkpoint-store.ts`'s
- * own interface doc) — this adapter composes `TransactionLeaseLayer.withTransaction` internally
- * for every method, using `resolveTransaction` to get the real transaction-scoped `sql`
- * (`design.md` §8). `load`/`history` also run inside their own `withTransaction` call, at
+ * `save` accepts an optional `opts.tx` transaction handle: when supplied it issues every statement
+ * on the caller's transaction (resolved via `resolveTransaction`) and opens no `withTransaction`
+ * of its own, so the checkpoint co-commits with whatever else the caller wrote (e.g. a watermark
+ * advance via `saveAndAdvance`); when absent it composes `TransactionLeaseLayer.withTransaction`
+ * internally exactly as before. `prune` deliberately still does NOT accept a `tx` option — it, and
+ * `load`/`history`, compose `withTransaction` internally for every call, using `resolveTransaction`
+ * to get the real transaction-scoped `sql` (`design.md` §8). `load`/`history` also run inside their
+ * own `withTransaction` call, at
  * REPEATABLE READ, so their multi-statement reads observe one consistent snapshot immune to a
  * concurrently-committing `prune` (`design.md` §4/§5/§8's torn-read fix).
  *
@@ -138,17 +146,18 @@ export class PgCheckpointStore implements CheckpointStore {
 
   private async saveImpl(
     walletId: string, networkId: string, data: Uint8Array,
-    opts: { chunkSize?: number; label?: string },
+    opts: { chunkSize?: number; label?: string; tx?: TransactionHandle },
   ): Promise<CheckpointSummary> {
     const chunkSize = opts.chunkSize ?? DEFAULT_CHUNK_SIZE;
     const chunks = splitChunks(data, chunkSize);
     const chunkHashes = chunks.map(sha256);
     const manifestHash = sha256(Buffer.concat(chunkHashes));
 
-    try {
-      return await this.txLayer.withTransaction(async (tx) => {
-        const sql = resolveTransaction(tx);
-
+    // The write path, parameterised over which transaction-scoped `sql` it runs on -- byte-for-
+    // byte the statements this method has always issued (chunk upsert -> seq alloc -> manifest
+    // insert -> junction inserts). Both branches below run exactly this; only the transaction it
+    // executes in differs.
+    const runOnTx = async (sql: ISql<{ bigint: bigint }>): Promise<CheckpointSummary> => {
         // Dedup upsert (design/design.md §3, unchanged): the ON CONFLICT ... DO UPDATE refresh
         // of created_at is load-bearing for prune's grace-window TOCTOU safety (design.md §3),
         // not just a convenience -- a plain DO NOTHING would defeat the grace window on every
@@ -195,7 +204,27 @@ export class PgCheckpointStore implements CheckpointStore {
         }
 
         return toSummary(manifest, data.byteLength, chunks.length);
-      });
+    };
+
+    // opts.tx: join the caller's transaction. Resolve the handle OUTSIDE the translate-try so a
+    // stale/fabricated handle throws TransactionHandleInvalidError before any statement issues
+    // (A5) -- the same ordering PgWatermarks.set uses. The caller's withTransaction owns
+    // BEGIN/COMMIT; this issues none, so the checkpoint commits or rolls back with the caller's
+    // transaction (e.g. co-committed with a watermark advance by saveAndAdvance). Query rejections
+    // are translated to the frozen typed error classes here, never allowed to escape raw (C4).
+    if (opts.tx !== undefined) {
+      const sql = resolveTransaction(opts.tx);
+      try {
+        return await runOnTx(sql);
+      } catch (err) {
+        throw translatePostgresError(err);
+      }
+    }
+
+    // Default path (no tx): byte-for-byte the prior behaviour -- own internal transaction, then
+    // the same local error translation.
+    try {
+      return await this.txLayer.withTransaction((tx) => runOnTx(resolveTransaction(tx)));
     } catch (err) {
       throw translatePostgresError(err);
     }

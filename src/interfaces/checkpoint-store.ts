@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { StorageError, ValidationError } from "./storage-errors.js";
+import type { TransactionHandle } from "./transaction-lease.js";
 
 /** Sequence numbers are monotonic per (walletId, networkId) and start at 1. */
 export type CheckpointSequence = number;
@@ -15,6 +16,15 @@ export const SaveCheckpointOptionsSchema = z.object({
 });
 export type SaveCheckpointOptions = z.infer<typeof SaveCheckpointOptionsSchema> & {
   signal?: AbortSignal;
+  /**
+   * An in-flight transaction handle (from {@link TransactionLeaseLayer.withTransaction}) to run
+   * this `save` inside. When supplied, `save` issues every one of its statements on that
+   * transaction instead of opening its own, so the checkpoint commits or rolls back atomically
+   * with everything else the caller wrote in it (co-transactional composition — see
+   * {@link CheckpointStore.save}). A live handle, like `signal`, is intersected on rather than
+   * declared in {@link SaveCheckpointOptionsSchema}: it is not a serialisable data field.
+   */
+  tx?: TransactionHandle;
 };
 
 export const HistoryOptionsSchema = z.object({
@@ -130,14 +140,23 @@ export class ManifestCorruptError extends CheckpointStoreError {
  * manifest write or deletion, so a concurrent `save` in another wallet can never resurrect a
  * reference to a chunk mid-reclamation.
  *
- * Each method is an atomic unit of work; implementations compose the Transaction/Lease layer
- * internally to make manifest + chunk writes all-or-nothing. That plumbing never appears in
- * this interface — `save`/`prune` deliberately do NOT accept a `tx` option (§1.3).
+ * Each method is an atomic unit of work. With no `opts.tx`, implementations compose the
+ * Transaction/Lease layer internally to make manifest + chunk writes all-or-nothing. `save`
+ * additionally accepts an `opts.tx` transaction handle so a caller can compose the checkpoint
+ * write into a larger transaction (e.g. co-committing a checkpoint and its sync cursor via
+ * `saveAndAdvance`); on that path it issues no `BEGIN`/`COMMIT` of its own and joins the caller's
+ * transaction instead. `prune`/`load`/`history` remain internal-transaction-only.
  */
 export interface CheckpointStore {
   /**
+   * With no `opts.tx`, opens and commits its own internal transaction. With `opts.tx`, issues
+   * every statement on the caller's transaction — the checkpoint then commits or rolls back
+   * atomically with everything else in that transaction.
    * @throws {ValidationError} if `opts` fails {@link SaveCheckpointOptionsSchema} — rejects
    *   before any chunking/hashing work happens.
+   * @throws {TransactionHandleInvalidError} if `opts.tx` is supplied but does not resolve to a
+   *   live transaction (reused after its transaction ended, or fabricated) — rejects before any
+   *   statement is issued.
    */
   save(walletId: string, networkId: string, data: Uint8Array, opts?: SaveCheckpointOptions): Promise<CheckpointSummary>;
 

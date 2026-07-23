@@ -290,7 +290,11 @@ JSON-representable, which an earlier `WatermarkValueSchema` draft (a
 `z.record(z.string(), z.unknown())` shape admitting non-JSON-safe values
 like nested `bigint`/`undefined`/`Date`) did NOT guarantee; fixed by
 rebuilding `WatermarkValueSchema` on the shared `JsonValueSchema`
-(`src/interfaces/watermarks.ts`, already applied).
+(`src/interfaces/watermarks.ts`, already applied). Because monotonicity is
+deliberately *not* a law here, the cursor-vs-data **ordering** safety that
+this last-write-wins `set` does not itself provide is specified as a
+composition contract — see `docs/checkpoint-store-contract.md`, which cites
+this law.
 
 ---
 
