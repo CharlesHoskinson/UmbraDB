@@ -190,10 +190,18 @@ export async function up(sql: ISql, schema: string): Promise<void> {
         WHERE blob_hash = p_blob_hash AND role = p_role
         FOR SHARE
       ) THEN
+        -- v5 audit fix (sprint-fix round Fix 4) -- the added CONSTRAINT = 'chain_blob_roles_completeness'
+        -- clause below is new: a RAISE EXCEPTION (unlike a real table CHECK constraint violation)
+        -- does NOT otherwise populate the error's constraint_name field at all (empirically
+        -- confirmed against a real Postgres 17 instance -- without this clause, postgres.js
+        -- reports constraint_name: undefined for this error), which is exactly what let the
+        -- shared error translator (src/postgres/errors.ts) previously have no way to tell this
+        -- chain-archive-specific 23514 apart from temporal-kv's own kv_history_range CHECK and
+        -- mislabel it ClockRegressionError. Naming this exception's constraint explicitly fixes
+        -- that at the source.
         RAISE EXCEPTION 'blob % referenced by %.% has no chain_blob_roles row for role %'
           , encode(p_blob_hash, 'hex'), p_table, p_column, p_role
-          USING ERRCODE = '23514'; -- check_violation: a classification-completeness failure,
-                                    -- not a generic runtime error
+          USING ERRCODE = '23514', CONSTRAINT = 'chain_blob_roles_completeness';
       END IF;
     END;
     $fn$
@@ -328,10 +336,15 @@ export async function up(sql: ISql, schema: string): Promise<void> {
     CREATE FUNCTION ${sql(schema)}.blocks_enforce_finalized_monotonic() RETURNS trigger LANGUAGE plpgsql AS $fn$
     BEGIN
       IF OLD.finalized AND NOT NEW.finalized THEN
+        -- sprint-fix round Fix 4: the added CONSTRAINT = 'blocks_finalized_monotonic' clause lets
+        -- src/postgres/errors.ts's translator tell this apart from temporal-kv's unrelated
+        -- kv_history_range 23514 -- see chain_archive_assert_blob_role's own comment above for
+        -- the full empirical finding this fix is based on (a RAISE EXCEPTION does not otherwise
+        -- populate constraint_name).
         RAISE EXCEPTION
           'cannot un-finalize block %/% (height %): finalized is monotonic under GRANDPA finality semantics'
           , NEW.net, encode(NEW.block_hash, 'hex'), NEW.height
-          USING ERRCODE = '23514'; -- check_violation, matching the CHECK this trigger extends
+          USING ERRCODE = '23514', CONSTRAINT = 'blocks_finalized_monotonic'; -- check_violation, matching the CHECK this trigger extends
       END IF;
       RETURN NEW;
     END;
@@ -668,10 +681,13 @@ export async function up(sql: ISql, schema: string): Promise<void> {
       END;
 
       IF v_in_use THEN
+        -- sprint-fix round Fix 4: the added CONSTRAINT = 'chain_blob_roles_removal_guard' clause
+        -- follows the same constraint-name-aware error-translation rationale as
+        -- chain_archive_assert_blob_role's own comment above.
         RAISE EXCEPTION
           'cannot remove/change chain_blob_roles row (blob %, role %): still referenced by a live row'
           , encode(p_blob_hash, 'hex'), p_role
-          USING ERRCODE = '23514';
+          USING ERRCODE = '23514', CONSTRAINT = 'chain_blob_roles_removal_guard';
       END IF;
     END;
     $fn$

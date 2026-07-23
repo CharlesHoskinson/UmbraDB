@@ -38,10 +38,37 @@ export class NodeRpcError extends Error {
   }
 }
 
+/** Fix 3 (sprint-fix round, MEDIUM): a typed error for the specific "HTTP 200 but the body isn't
+ *  valid JSON" case (e.g. a proxy/load-balancer's HTML error page returned with a 2xx status) --
+ *  raised instead of letting `res.json()`'s bare, context-free `SyntaxError` propagate, which
+ *  gave no indication of which request/URL/method failed. */
+export class NodeRpcParseError extends Error {
+  constructor(message: string, readonly url: string, readonly method: string, readonly cause?: unknown) {
+    super(message);
+    this.name = "NodeRpcParseError";
+  }
+}
+
+/** Fix 3: raised by `getHeightOf` when the node's `header.number` field is missing or does not
+ *  decode to a safe integer -- previously `parseInt(header.number, 16)` silently produced `NaN`
+ *  in that case, which then made `syncOnce`'s loop-bounds check (`startHeight > NaN` is always
+ *  `false`) silently no-op the entire sync attempt while still reporting success. */
+export class NodeRpcInvalidHeightError extends Error {
+  constructor(message: string, readonly blockHash: string | undefined, readonly rawNumber: unknown) {
+    super(message);
+    this.name = "NodeRpcInvalidHeightError";
+  }
+}
+
 export interface NodeRpcClientOptions {
   url: string;
   fetchImpl?: typeof fetch;
+  /** Per-request timeout in milliseconds -- a hung/black-holed node otherwise stalls the entire
+   *  sync service indefinitely with no way to recover (Fix 3). Default: 20_000. */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 let nextId = 1;
 
@@ -50,10 +77,12 @@ let nextId = 1;
 export class NodeRpcClient {
   private readonly url: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(opts: NodeRpcClientOptions) {
     this.url = opts.url;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   private async call<T>(method: string, params: unknown[]): Promise<T> {
@@ -64,6 +93,7 @@ export class NodeRpcClient {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
       throw new NodeRpcError(`${method}: request to ${this.url} failed`, err);
@@ -71,7 +101,14 @@ export class NodeRpcClient {
     if (!res.ok) {
       throw new NodeRpcError(`${method}: HTTP ${res.status} from ${this.url}`);
     }
-    const body = (await res.json()) as { result?: T; error?: { code: number; message: string } };
+    let body: { result?: T; error?: { code: number; message: string } };
+    try {
+      body = (await res.json()) as { result?: T; error?: { code: number; message: string } };
+    } catch (err) {
+      throw new NodeRpcParseError(
+        `${method}: response body from ${this.url} was not valid JSON`, this.url, method, err,
+      );
+    }
     if (body.error !== undefined) {
       throw new NodeRpcError(`${method}: RPC error ${body.error.code}: ${body.error.message}`);
     }
@@ -96,9 +133,23 @@ export class NodeRpcClient {
   }
 
   /** Convenience: resolves a hash to its height via `getHeader` -- the RPC surface has no
-   *  direct "height of this hash" call, so this is the standard two-hop lookup. */
+   *  direct "height of this hash" call, so this is the standard two-hop lookup.
+   *
+   *  Fix 3 (sprint-fix round, MEDIUM): explicitly validates the decoded height is a safe integer
+   *  before returning it -- a malformed/missing `header.number` previously produced a silent
+   *  `NaN` here, which made `syncOnce`'s own `startHeight > targetTipHeight` bounds check
+   *  (`startHeight > NaN` is always `false`) silently skip the entire sync attempt while
+   *  `syncOnce` still returned a normal-looking success result. */
   async getHeightOf(blockHash: string): Promise<number> {
     const header = await this.getHeader(blockHash);
-    return parseInt(header.number, 16);
+    const height = parseInt(header.number, 16);
+    if (!Number.isSafeInteger(height)) {
+      throw new NodeRpcInvalidHeightError(
+        `chain_getHeader returned a malformed/missing "number" field for blockHash=${blockHash}: ` +
+        `${JSON.stringify(header.number)} did not decode to a safe integer`,
+        blockHash, header.number,
+      );
+    }
+    return height;
   }
 }

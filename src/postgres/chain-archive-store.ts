@@ -4,6 +4,7 @@ import {
   BlobMissingError,
   BlockNotFoundError,
   Hex32Schema,
+  type BlockBundle,
   type BlockMeta,
   type BlockRecord,
   type BridgeObservationRecord,
@@ -14,9 +15,15 @@ import {
   type VerifierKeyObservationRecord,
 } from "../interfaces/chain-archive-store.js";
 import { ValidationError } from "../interfaces/storage-errors.js";
-import type { JSONValue } from "postgres";
+import type { JSONValue, TransactionSql } from "postgres";
 import type { UmbraDBSql } from "./client.js";
 import { translatePostgresError } from "./errors.js";
+
+/** The `sql` handle `UmbraDBSql.begin(async (tx) => ...)` hands its callback -- used to type the
+ *  shared row-insert helpers below so they can run either as their own standalone transaction
+ *  (`putBlock`/`putTransactions`/`putBridgeObservations`, unchanged public call sites) or
+ *  composed together inside ONE transaction (`putBlockBundle`, Fix 1). */
+type ChainArchiveTx = TransactionSql<{ bigint: bigint }>;
 
 function sha256Hex(data: Uint8Array): Hex32 {
   return createHash("sha256").update(data).digest("hex");
@@ -142,6 +149,118 @@ export class PgChainArchiveStore implements ChainArchiveStore {
     }
   }
 
+  /** Shared by `putBlock` (standalone, its own transaction) and `putBlockBundle` (composed
+   *  alongside the transactions/bridge-observations insert in ONE transaction, Fix 1). The
+   *  terminal `blocks` insert is `ON CONFLICT (net, height, block_hash) DO NOTHING` -- re-running
+   *  this against an already-committed row (a retry after the row durably committed but a LATER
+   *  step in the caller's own sequence failed/crashed) is a safe no-op rather than a
+   *  duplicate-key error. */
+  private async insertBlockRow(
+    tx: ChainArchiveTx, block: BlockRecord,
+  ): Promise<{ headerBlobHash: Hex32; bodyBlobHash?: Hex32 }> {
+    const headerHashHex = sha256Hex(block.headerBytes);
+    const headerHash = hexToBuf(headerHashHex);
+    await tx`
+      INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
+      VALUES (${headerHash}, ${Buffer.from(block.headerBytes)})
+      ON CONFLICT (hash) DO NOTHING
+    `;
+    await tx`
+      INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
+      VALUES (${headerHash}, 'block_header')
+      ON CONFLICT (blob_hash, role) DO NOTHING
+    `;
+
+    let bodyHash: Buffer | null = null;
+    let bodyHashHex: Hex32 | undefined;
+    if (block.bodyBytes !== undefined) {
+      bodyHashHex = sha256Hex(block.bodyBytes);
+      bodyHash = hexToBuf(bodyHashHex);
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
+        VALUES (${bodyHash}, ${Buffer.from(block.bodyBytes)})
+        ON CONFLICT (hash) DO NOTHING
+      `;
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
+        VALUES (${bodyHash}, 'block_body')
+        ON CONFLICT (blob_hash, role) DO NOTHING
+      `;
+    }
+
+    await tx`
+      INSERT INTO ${tx(this.schema)}.blocks
+        (net, block_hash, height, parent_hash, state_root, extrinsics_root, author,
+         header_blob_hash, body_blob_hash, is_canonical, status, finalized)
+      VALUES
+        (${block.net}, ${hexToBuf(block.blockHash)}, ${block.height},
+         ${hexToBuf(block.parentHash)}, ${hexToBuf(block.stateRoot)},
+         ${hexToBuf(block.extrinsicsRoot)}, ${block.author ? hexToBuf(block.author) : null},
+         ${headerHash}, ${bodyHash}, ${block.isCanonical}, ${block.status}, ${block.finalized})
+      ON CONFLICT (net, height, block_hash) DO NOTHING
+    `;
+
+    return { headerBlobHash: headerHashHex, bodyBlobHash: bodyHashHex };
+  }
+
+  /** Shared by `putTransactions` and `putBlockBundle`. The terminal `transactions` insert is a
+   *  bare `ON CONFLICT DO NOTHING` (no target list) rather than one naming a specific constraint
+   *  -- `transactions` carries TWO independent unique constraints (the
+   *  `(net, block_height, block_hash, tx_hash)` PK and the separate
+   *  `UNIQUE (net, block_height, block_hash, position)`), and for a genuine idempotent retry
+   *  (byte-identical row) either one alone identifies the same already-committed row; targeting
+   *  only one by name would leave the other free to still raise if Postgres happened to check it
+   *  first. */
+  private async insertTransactionRows(tx: ChainArchiveTx, txs: readonly TransactionRecord[]): Promise<void> {
+    for (const t of txs) {
+      const rawHashHex = sha256Hex(t.rawBytes);
+      const rawHash = hexToBuf(rawHashHex);
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
+        VALUES (${rawHash}, ${Buffer.from(t.rawBytes)})
+        ON CONFLICT (hash) DO NOTHING
+      `;
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
+        VALUES (${rawHash}, 'tx_raw')
+        ON CONFLICT (blob_hash, role) DO NOTHING
+      `;
+      await tx`
+        INSERT INTO ${tx(this.schema)}.transactions
+          (net, tx_hash, block_height, block_hash, position, kind, protocol_version, result, raw_blob_hash)
+        VALUES
+          (${t.net}, ${hexToBuf(t.txHash)}, ${t.blockHeight}, ${hexToBuf(t.blockHash)},
+           ${t.position}, ${t.kind}, ${t.protocolVersion}, ${t.result ?? null}, ${rawHash})
+        ON CONFLICT DO NOTHING
+      `;
+    }
+  }
+
+  /** Shared by `putBridgeObservations` and `putBlockBundle`. */
+  private async insertBridgeObservationRows(tx: ChainArchiveTx, obs: readonly BridgeObservationRecord[]): Promise<void> {
+    for (const o of obs) {
+      const rawHashHex = sha256Hex(o.rawBytes);
+      const rawHash = hexToBuf(rawHashHex);
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
+        VALUES (${rawHash}, ${Buffer.from(o.rawBytes)})
+        ON CONFLICT (hash) DO NOTHING
+      `;
+      await tx`
+        INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
+        VALUES (${rawHash}, 'bridge_observation')
+        ON CONFLICT (blob_hash, role) DO NOTHING
+      `;
+      await tx`
+        INSERT INTO ${tx(this.schema)}.bridge_observations
+          (net, block_height, block_hash, observation_index, kind, raw_blob_hash)
+        VALUES
+          (${o.net}, ${o.blockHeight}, ${hexToBuf(o.blockHash)}, ${o.observationIndex}, ${o.kind}, ${rawHash})
+        ON CONFLICT (net, block_height, block_hash, observation_index) DO NOTHING
+      `;
+    }
+  }
+
   async putBlock(block: BlockRecord): Promise<{ headerBlobHash: Hex32; bodyBlobHash?: Hex32 }> {
     assertHex32(block.blockHash, "putBlock.blockHash");
     assertHex32(block.parentHash, "putBlock.parentHash");
@@ -150,50 +269,7 @@ export class PgChainArchiveStore implements ChainArchiveStore {
     if (block.author !== undefined) assertHex32(block.author, "putBlock.author");
 
     try {
-      return await this.sql.begin(async (tx) => {
-        const headerHashHex = sha256Hex(block.headerBytes);
-        const headerHash = hexToBuf(headerHashHex);
-        await tx`
-          INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
-          VALUES (${headerHash}, ${Buffer.from(block.headerBytes)})
-          ON CONFLICT (hash) DO NOTHING
-        `;
-        await tx`
-          INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
-          VALUES (${headerHash}, 'block_header')
-          ON CONFLICT (blob_hash, role) DO NOTHING
-        `;
-
-        let bodyHash: Buffer | null = null;
-        let bodyHashHex: Hex32 | undefined;
-        if (block.bodyBytes !== undefined) {
-          bodyHashHex = sha256Hex(block.bodyBytes);
-          bodyHash = hexToBuf(bodyHashHex);
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
-            VALUES (${bodyHash}, ${Buffer.from(block.bodyBytes)})
-            ON CONFLICT (hash) DO NOTHING
-          `;
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
-            VALUES (${bodyHash}, 'block_body')
-            ON CONFLICT (blob_hash, role) DO NOTHING
-          `;
-        }
-
-        await tx`
-          INSERT INTO ${tx(this.schema)}.blocks
-            (net, block_hash, height, parent_hash, state_root, extrinsics_root, author,
-             header_blob_hash, body_blob_hash, is_canonical, status, finalized)
-          VALUES
-            (${block.net}, ${hexToBuf(block.blockHash)}, ${block.height},
-             ${hexToBuf(block.parentHash)}, ${hexToBuf(block.stateRoot)},
-             ${hexToBuf(block.extrinsicsRoot)}, ${block.author ? hexToBuf(block.author) : null},
-             ${headerHash}, ${bodyHash}, ${block.isCanonical}, ${block.status}, ${block.finalized})
-        `;
-
-        return { headerBlobHash: headerHashHex, bodyBlobHash: bodyHashHex };
-      });
+      return await this.sql.begin(async (tx) => this.insertBlockRow(tx, block));
     } catch (err) {
       throw translatePostgresError(err);
     }
@@ -206,29 +282,7 @@ export class PgChainArchiveStore implements ChainArchiveStore {
       assertHex32(t.blockHash, "putTransactions.blockHash");
     }
     try {
-      await this.sql.begin(async (tx) => {
-        for (const t of txs) {
-          const rawHashHex = sha256Hex(t.rawBytes);
-          const rawHash = hexToBuf(rawHashHex);
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
-            VALUES (${rawHash}, ${Buffer.from(t.rawBytes)})
-            ON CONFLICT (hash) DO NOTHING
-          `;
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
-            VALUES (${rawHash}, 'tx_raw')
-            ON CONFLICT (blob_hash, role) DO NOTHING
-          `;
-          await tx`
-            INSERT INTO ${tx(this.schema)}.transactions
-              (net, tx_hash, block_height, block_hash, position, kind, protocol_version, result, raw_blob_hash)
-            VALUES
-              (${t.net}, ${hexToBuf(t.txHash)}, ${t.blockHeight}, ${hexToBuf(t.blockHash)},
-               ${t.position}, ${t.kind}, ${t.protocolVersion}, ${t.result ?? null}, ${rawHash})
-          `;
-        }
-      });
+      await this.sql.begin(async (tx) => this.insertTransactionRows(tx, txs));
     } catch (err) {
       throw translatePostgresError(err);
     }
@@ -237,27 +291,39 @@ export class PgChainArchiveStore implements ChainArchiveStore {
   async putBridgeObservations(obs: readonly BridgeObservationRecord[]): Promise<void> {
     if (obs.length === 0) return;
     try {
-      await this.sql.begin(async (tx) => {
-        for (const o of obs) {
-          const rawHashHex = sha256Hex(o.rawBytes);
-          const rawHash = hexToBuf(rawHashHex);
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blobs (hash, data)
-            VALUES (${rawHash}, ${Buffer.from(o.rawBytes)})
-            ON CONFLICT (hash) DO NOTHING
-          `;
-          await tx`
-            INSERT INTO ${tx(this.schema)}.chain_blob_roles (blob_hash, role)
-            VALUES (${rawHash}, 'bridge_observation')
-            ON CONFLICT (blob_hash, role) DO NOTHING
-          `;
-          await tx`
-            INSERT INTO ${tx(this.schema)}.bridge_observations
-              (net, block_height, block_hash, observation_index, kind, raw_blob_hash)
-            VALUES
-              (${o.net}, ${o.blockHeight}, ${hexToBuf(o.blockHash)}, ${o.observationIndex}, ${o.kind}, ${rawHash})
-          `;
-        }
+      await this.sql.begin(async (tx) => this.insertBridgeObservationRows(tx, obs));
+    } catch (err) {
+      throw translatePostgresError(err);
+    }
+  }
+
+  /** Fix 1 (sprint-fix round, HIGH): collapses the block + transactions + bridge-observations
+   *  writes for one block into ONE Postgres transaction, so a partial block can never be
+   *  committed at all -- see this method's own doc on `ChainArchiveStore` for the full
+   *  before/after failure-mode writeup. */
+  async putBlockBundle(bundle: BlockBundle): Promise<{ headerBlobHash: Hex32; bodyBlobHash?: Hex32 }> {
+    const { block, transactions: txs, bridgeObservations: obs } = bundle;
+    assertHex32(block.blockHash, "putBlockBundle.blockHash");
+    assertHex32(block.parentHash, "putBlockBundle.parentHash");
+    assertHex32(block.stateRoot, "putBlockBundle.stateRoot");
+    assertHex32(block.extrinsicsRoot, "putBlockBundle.extrinsicsRoot");
+    if (block.author !== undefined) assertHex32(block.author, "putBlockBundle.author");
+    for (const t of txs) {
+      assertHex32(t.txHash, "putBlockBundle.transactions.txHash");
+      assertHex32(t.blockHash, "putBlockBundle.transactions.blockHash");
+    }
+
+    try {
+      return await this.sql.begin(async (tx) => {
+        const result = await this.insertBlockRow(tx, block);
+        // FK-ordering note: `transactions`/`bridge_observations` both carry a real FK back to
+        // `blocks (net, height, block_hash)` (001_chain_archive_core.ts) -- inserting the block
+        // row first, in the SAME transaction, makes it visible to these later statements' own FK
+        // checks (ordinary same-transaction MVCC visibility), so the FK is satisfied even though
+        // the referenced row hasn't committed yet.
+        if (txs.length > 0) await this.insertTransactionRows(tx, txs);
+        if (obs.length > 0) await this.insertBridgeObservationRows(tx, obs);
+        return result;
       });
     } catch (err) {
       throw translatePostgresError(err);
@@ -425,13 +491,34 @@ export class PgChainArchiveStore implements ChainArchiveStore {
     }
   }
 
+  /** Fix 5 (sprint-fix round, MEDIUM): a monotonic guard against watermark regression. Nothing
+   *  prevents two overlapping `syncOnce()` calls (two service instances, or a scheduler firing
+   *  while a slow previous run is still in flight) from racing each other's `setWatermark` calls
+   *  -- without a guard, a slower/lagging call finishing AFTER a faster one can overwrite the
+   *  cursor backward with a stale, lower height, which then makes the next sync attempt
+   *  re-process already-ingested heights and hit the duplicate-key wedge Fix 1 addresses.
+   *
+   *  The guard is scoped to this store's one real convention -- a JSON value shaped
+   *  `{ height: number }` (`chain-archive-sync/sync-service.ts`'s sync cursor; also this file's
+   *  own test coverage) -- via the `ON CONFLICT ... DO UPDATE ... WHERE` clause below: when BOTH
+   *  the already-stored value and the incoming value carry a numeric `height` field, the update
+   *  is only applied if the incoming height is strictly greater, so a stale/regressed write is
+   *  silently dropped (the row keeps its later, correct value) rather than clobbering forward
+   *  progress. Any OTHER value shape (either side missing a numeric `height`, e.g. a future,
+   *  unrelated `chain_archive` watermark consumer with its own value convention) falls through to
+   *  the previous unconditional last-write-wins behavior unchanged -- this guard deliberately does
+   *  not assume every current or future caller of this generic `(key, value)` API uses the
+   *  height-cursor convention. */
   async setWatermark(key: string, value: unknown): Promise<void> {
     try {
       await this.sql`
-        INSERT INTO ${this.sql(this.schema)}.watermarks (kind, key, value, updated_at)
+        INSERT INTO ${this.sql(this.schema)}.watermarks AS w (kind, key, value, updated_at)
         VALUES ('chain_archive', ${key}, ${this.sql.json(value as JSONValue)}, now())
         ON CONFLICT (kind, key) DO UPDATE
         SET value = EXCLUDED.value, updated_at = now()
+        WHERE jsonb_typeof(w.value -> 'height') IS DISTINCT FROM 'number'
+           OR jsonb_typeof(EXCLUDED.value -> 'height') IS DISTINCT FROM 'number'
+           OR (EXCLUDED.value ->> 'height')::numeric > (w.value ->> 'height')::numeric
       `;
     } catch (err) {
       throw translatePostgresError(err);

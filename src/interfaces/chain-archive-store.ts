@@ -104,6 +104,17 @@ export interface BridgeObservationRecord {
   rawBytes: Uint8Array;
 }
 
+/** Everything one call to `putBlockBundle` needs to ingest a single block atomically: the block
+ *  row itself plus every transaction/bridge-observation row that belongs to it. `transactions`/
+ *  `bridgeObservations` may be empty (e.g. a block with no `pallet_midnight` transactions, or no
+ *  D-parameter change since the previous block) -- `putBlockBundle` still only writes the
+ *  `blocks` row in that case, inside the same one transaction. */
+export interface BlockBundle {
+  block: BlockRecord;
+  transactions: readonly TransactionRecord[];
+  bridgeObservations: readonly BridgeObservationRecord[];
+}
+
 export type VerifierKeyScope = "protocol" | "contract";
 
 export interface VerifierKeyObservationRecord {
@@ -146,27 +157,59 @@ export class BlockNotFoundError extends ChainArchiveError {
 
 /**
  * Storage contract for the Tier-1.5 chain archive. Every write method is content/idempotency-
- * aware where the schema itself is (blob puts are naturally idempotent by content address;
- * `putBlock`/`putTransactions` are NOT implicitly upsert-safe against a byte-for-byte-identical
- * re-ingest of the SAME (net, height, blockHash) row -- callers driving an at-least-once sync
- * loop must track a watermark, exactly like every other sync consumer in this codebase
- * (`src/interfaces/watermarks.ts`), and are expected to detect "already ingested this height"
- * before calling `putBlock` a second time for it).
+ * aware where the schema itself is (blob puts are naturally idempotent by content address) AND,
+ * as of the sprint-fix round below, `putBlock`/`putTransactions`/`putBridgeObservations`/
+ * `putBlockBundle` are now ALSO idempotent against a byte-for-byte-identical re-ingest of the
+ * SAME (net, height, blockHash) row: their terminal `INSERT`s use `ON CONFLICT ... DO NOTHING`
+ * on the table's own primary key, so retrying an ingest that already durably committed is a
+ * silent no-op rather than a duplicate-key error. This does NOT remove the need for a watermark
+ * (callers driving an at-least-once sync loop still must track "last successfully ingested
+ * height," exactly like every other sync consumer in this codebase,
+ * `src/interfaces/watermarks.ts`) -- it removes the failure mode where retrying the SAME height
+ * after a partial or already-fully-committed prior attempt wedges permanently on a duplicate-key
+ * error instead of succeeding as a no-op.
  */
 export interface ChainArchiveStore {
   /** Writes `header`/`body` bytes into `chain_blobs` (content-addressed by SHA-256) plus their
    *  `chain_blob_roles` rows, then the `blocks` row itself, inside one transaction. Returns the
    *  computed header/body blob hashes. A byte-identical header/body blob already present under
    *  the same role is reused, not duplicated (`chain_blobs` is a single global content-addressed
-   *  pool, matching `ckpt_chunks`'s established convention). */
+   *  pool, matching `ckpt_chunks`'s established convention). The final `blocks` insert is
+   *  `ON CONFLICT (net, height, block_hash) DO NOTHING` -- re-`putBlock`-ing an already-committed
+   *  block is a safe no-op, not a duplicate-key error. Prefer `putBlockBundle` over calling this
+   *  standalone from an ingestion loop -- it additionally makes the block/transactions/bridge-
+   *  observations write atomic as one unit, not just individually retry-safe. */
   putBlock(block: BlockRecord): Promise<{ headerBlobHash: Hex32; bodyBlobHash?: Hex32 }>;
 
   /** Writes each transaction's raw bytes into `chain_blobs`/`chain_blob_roles` (role `tx_raw`)
    *  plus its `transactions` row, one insert per element, inside one transaction covering the
-   *  whole batch (so a partial block's transaction set never becomes visible on failure). */
+   *  whole batch (so a partial block's transaction set never becomes visible on failure). Each
+   *  transaction's insert is `ON CONFLICT (net, block_height, block_hash, tx_hash) DO NOTHING` --
+   *  re-`putTransactions`-ing an already-committed set (in full or in part) is a safe no-op. */
   putTransactions(txs: readonly TransactionRecord[]): Promise<void>;
 
+  /** `ON CONFLICT (net, block_height, block_hash, observation_index) DO NOTHING` on the terminal
+   *  insert -- same re-ingest-safety as `putTransactions`. */
   putBridgeObservations(obs: readonly BridgeObservationRecord[]): Promise<void>;
+
+  /**
+   * Ingests one full block -- `bundle.block`, `bundle.transactions`, and
+   * `bundle.bridgeObservations` -- inside ONE Postgres transaction, so a partial block (e.g. the
+   * `blocks` row committed but its transactions not, because the write was interrupted or the
+   * caller's own upstream data source was itself inconsistent mid-ingest) can never become
+   * durably visible. This is the fix for the sprint-fix round's Fix 1: previously, a real
+   * ingestion caller (`chain-archive-sync/sync-service.ts`) issued `putBlock`/`putTransactions`/
+   * `putBridgeObservations` as three SEPARATE, independently-committed transactions, so a retry
+   * of the same height after a partial failure hit a duplicate-key error on whichever insert(s)
+   * had already committed and wedged permanently. Every underlying insert additionally uses
+   * `ON CONFLICT ... DO NOTHING` on its own primary key (matching `putBlock`/`putTransactions`/
+   * `putBridgeObservations` above), so retrying the exact same bundle after it has ALREADY fully
+   * committed (e.g. a crash between this call returning and the caller durably recording its own
+   * watermark) is also a safe no-op, not an error -- both the "partial prior attempt" and
+   * "fully-committed prior attempt, watermark just hadn't caught up" retry cases are covered.
+   * Returns the same header/body blob hashes `putBlock` would.
+   */
+  putBlockBundle(bundle: BlockBundle): Promise<{ headerBlobHash: Hex32; bodyBlobHash?: Hex32 }>;
 
   /** Upserts via `ON CONFLICT ... DO UPDATE SET first_seen_height = LEAST(...)`, matching the
    *  schema's own documented convention (`001_chain_archive_core.ts`'s verifier_key_observations

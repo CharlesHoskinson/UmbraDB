@@ -1,6 +1,12 @@
 import { PgChainArchiveStore } from "../src/postgres/chain-archive-store.js";
 import type { UmbraDBSql } from "../src/postgres/client.js";
-import type { ChainArchiveStore, Hex32, TransactionRecord } from "../src/interfaces/chain-archive-store.js";
+import type {
+  BlockRecord,
+  BridgeObservationRecord,
+  ChainArchiveStore,
+  Hex32,
+  TransactionRecord,
+} from "../src/interfaces/chain-archive-store.js";
 import { IndexerClient, type IndexerBlock, type IndexerClientOptions } from "./indexer-client.js";
 import { NodeRpcClient, type NodeRpcClientOptions, type SubstrateHeader } from "./node-rpc-client.js";
 
@@ -145,12 +151,47 @@ export class ChainArchiveSyncService {
     return { ingestedBlocks: ingested, fromHeight: startHeight, toHeight: endHeight, targetTipHeight };
   }
 
+  /**
+   * Fix 1 (sprint-fix round, HIGH): previously this method issued `putBlock`/`putTransactions`/
+   * `putBridgeObservations` as three SEPARATE, independently-committed Postgres transactions,
+   * with `setWatermark` (in `syncOnce`) as a fourth step after this whole method returned. None
+   * of the three writes used `ON CONFLICT`, so retrying the same height after ANY partial
+   * failure -- the documented "indexer hasn't caught up" case, but also a transient indexer
+   * inconsistency after the block-write committed, a transient Postgres error on a later write,
+   * or a process crash/SIGKILL between any two of the four writes -- hit a duplicate-key error on
+   * whichever insert(s) had already committed and wedged the sync service at that height
+   * permanently.
+   *
+   * Fixed by (a) fetching the indexer's view of this block, and building every record this block
+   * needs to write, BEFORE issuing a single store write, so the "indexer hasn't synced this
+   * height yet" throw (below) happens with zero writes having occurred at all; and (b) writing
+   * the block/transactions/bridge-observations as ONE atomic bundle via
+   * `ChainArchiveStore.putBlockBundle` (`src/postgres/chain-archive-store.ts`), which both makes
+   * the three logically-one-block writes commit-or-fail together AND makes each underlying insert
+   * `ON CONFLICT ... DO NOTHING` on its own primary key -- so retrying this exact height, whether
+   * the previous attempt never got this far, partially wrote, or (e.g. a crash between this
+   * method returning and `syncOnce`'s `setWatermark` call) fully committed, is always a safe
+   * no-op rather than a wedge.
+   */
   private async ingestOneBlock(height: number): Promise<void> {
     const blockHash = hexNoPrefix(await this.node.getBlockHash(height));
     const { block } = await this.node.getBlock(`0x${blockHash}`);
     const header = block.header;
 
-    await this.store.putBlock({
+    // One indexer fetch per block, shared by the transaction-ingestion and bridge-observation
+    // paths below -- avoids two redundant GraphQL round trips for the same block. Fetched BEFORE
+    // any store write (Fix 1) so the throw immediately below never leaves a partially-ingested
+    // block behind.
+    const indexerBlock = await this.indexer.getBlockByHeight(height);
+    if (indexerBlock === undefined) {
+      // Indexer hasn't synced this height yet -- do NOT advance the watermark past it (syncOnce
+      // only advances the watermark after this whole method returns successfully), so a later
+      // syncOnce() call re-attempts this exact height once the indexer catches up. No store write
+      // has happened yet at this point, so that retry starts completely fresh.
+      throw new Error(`indexer has not yet synced height ${height} (node has); retry later`);
+    }
+
+    const blockRecord: BlockRecord = {
       net: this.net,
       blockHash,
       height,
@@ -165,20 +206,20 @@ export class ChainArchiveSyncService {
       isCanonical: true,
       status: "canonical",
       finalized: true,
-    });
+    };
 
-    // One indexer fetch per block, shared by the transaction-ingestion and bridge-observation
-    // paths below -- avoids two redundant GraphQL round trips for the same block.
-    const indexerBlock = await this.indexer.getBlockByHeight(height);
-    if (indexerBlock === undefined) {
-      // Indexer hasn't synced this height yet -- do NOT advance the watermark past it (syncOnce
-      // only advances the watermark after this whole method returns successfully), so a later
-      // syncOnce() call re-attempts this exact height once the indexer catches up.
-      throw new Error(`indexer has not yet synced height ${height} (node has); retry later`);
+    const transactions = this.buildTransactionRecords(height, blockHash, block.extrinsics, indexerBlock);
+    const { records: bridgeObservations, newDParameterJson } =
+      this.buildBridgeObservationRecords(height, blockHash, indexerBlock);
+
+    await this.store.putBlockBundle({ block: blockRecord, transactions, bridgeObservations });
+
+    // Fix 2 (sprint-fix round, HIGH): only advance the in-memory D-parameter dedup cursor AFTER
+    // the durable write above has succeeded -- see `buildBridgeObservationRecords`'s own doc for
+    // why updating it any earlier silently drops observations on retry.
+    if (newDParameterJson !== undefined) {
+      this.lastDParameterJson = newDParameterJson;
     }
-
-    await this.ingestTransactionsForBlock(height, blockHash, block.extrinsics, indexerBlock);
-    await this.ingestBridgeObservationsForBlock(height, blockHash, indexerBlock);
   }
 
   /**
@@ -221,9 +262,9 @@ export class ChainArchiveSyncService {
    * (stable, and what a `tx_hash`-based lookup actually needs to disambiguate multiple
    * transactions in one block), not the node's raw extrinsic index.
    */
-  private async ingestTransactionsForBlock(
+  private buildTransactionRecords(
     height: number, blockHash: Hex32, nodeExtrinsics: string[], indexerBlock: IndexerBlock,
-  ): Promise<void> {
+  ): TransactionRecord[] {
     if (hexNoPrefix(indexerBlock.hash) !== blockHash) {
       throw new Error(
         `indexer/node block-hash mismatch at height ${height}: node=${blockHash} indexer=${hexNoPrefix(indexerBlock.hash)}`,
@@ -232,7 +273,7 @@ export class ChainArchiveSyncService {
 
     const nodeExtrinsicHexes = nodeExtrinsics.map(hexNoPrefix);
 
-    const records: TransactionRecord[] = indexerBlock.transactions.map((tx, position) => {
+    return indexerBlock.transactions.map((tx, position) => {
       const rawHex = hexNoPrefix(tx.raw);
       if (!nodeExtrinsicHexes.some((e) => e.includes(rawHex))) {
         throw new Error(
@@ -253,8 +294,6 @@ export class ChainArchiveSyncService {
         rawBytes,
       };
     });
-
-    await this.store.putTransactions(records);
   }
 
   /**
@@ -270,26 +309,42 @@ export class ChainArchiveSyncService {
    * this is a metadata-level observation, not a literal on-chain-byte capture -- documented
    * honestly as a judgment call in the final report, not silently assumed equivalent to the
    * `tx_raw`/header/body blobs' stronger byte-fidelity guarantee.
+   *
+   * **Fix 2 (sprint-fix round, HIGH)**: this method does NOT mutate `this.lastDParameterJson`
+   * itself anymore -- it only returns the candidate new value (`newDParameterJson`), which
+   * `ingestOneBlock` applies to the field ONLY after `putBlockBundle`'s durable write has
+   * resolved successfully. Previously, the cursor was set to the new value BEFORE the write was
+   * confirmed durable; if that write then failed transiently and the same height was retried on
+   * the same live service instance, the dedup check above would already see the cursor as
+   * "unchanged" and skip re-inserting the observation on retry -- silently dropping it forever,
+   * with no error and no log line. Returning `undefined` for `newDParameterJson` when the value
+   * is unchanged (the normal dedup-skip case) means the caller correctly leaves the cursor alone
+   * either way -- there is nothing new to remember, and the previously-stored value is already
+   * correct.
    */
-  private async ingestBridgeObservationsForBlock(
+  private buildBridgeObservationRecords(
     height: number, blockHash: Hex32, indexerBlock: IndexerBlock,
-  ): Promise<void> {
+  ): { records: BridgeObservationRecord[]; newDParameterJson: string | undefined } {
     const d = indexerBlock.systemParameters.dParameter;
     const json = JSON.stringify({
       numPermissionedCandidates: d.numPermissionedCandidates,
       numRegisteredCandidates: d.numRegisteredCandidates,
     });
-    if (json === this.lastDParameterJson) return; // unchanged since the last block -- skip
-    this.lastDParameterJson = json;
+    if (json === this.lastDParameterJson) {
+      return { records: [], newDParameterJson: undefined }; // unchanged since the last block -- skip
+    }
     const raw = new TextEncoder().encode(json);
-    await this.store.putBridgeObservations([{
-      net: this.net,
-      blockHeight: height,
-      blockHash,
-      observationIndex: 0,
-      kind: "system_parameters_d",
-      rawBytes: raw,
-    }]);
+    return {
+      records: [{
+        net: this.net,
+        blockHeight: height,
+        blockHash,
+        observationIndex: 0,
+        kind: "system_parameters_d",
+        rawBytes: raw,
+      }],
+      newDParameterJson: json,
+    };
   }
 }
 

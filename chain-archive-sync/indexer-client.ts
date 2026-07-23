@@ -18,6 +18,17 @@ export class IndexerClientError extends Error {
   }
 }
 
+/** Fix 3 (sprint-fix round, MEDIUM): a typed error for the specific "HTTP 200 but the body isn't
+ *  valid JSON" case (e.g. a proxy/load-balancer's HTML error page returned with a 2xx status) --
+ *  raised instead of letting `res.json()`'s bare, context-free `SyntaxError` propagate, which
+ *  gave no indication of which request/URL failed. */
+export class IndexerClientParseError extends Error {
+  constructor(message: string, readonly url: string, readonly cause?: unknown) {
+    super(message);
+    this.name = "IndexerClientParseError";
+  }
+}
+
 export interface IndexerTransaction {
   hash: string;
   protocolVersion: number;
@@ -34,15 +45,22 @@ export interface IndexerBlock {
 export interface IndexerClientOptions {
   url: string;
   fetchImpl?: typeof fetch;
+  /** Per-request timeout in milliseconds -- a hung/black-holed indexer otherwise stalls the
+   *  entire sync service indefinitely with no way to recover (Fix 3). Default: 20_000. */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 export class IndexerClient {
   private readonly url: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(opts: IndexerClientOptions) {
     this.url = opts.url;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   private async query<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -52,6 +70,7 @@ export class IndexerClient {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
       throw new IndexerClientError(`GraphQL request to ${this.url} failed`, err);
@@ -59,7 +78,12 @@ export class IndexerClient {
     if (!res.ok) {
       throw new IndexerClientError(`GraphQL HTTP ${res.status} from ${this.url}`);
     }
-    const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
+    let body: { data?: T; errors?: { message: string }[] };
+    try {
+      body = (await res.json()) as { data?: T; errors?: { message: string }[] };
+    } catch (err) {
+      throw new IndexerClientParseError(`response body from ${this.url} was not valid JSON`, this.url, err);
+    }
     if (body.errors !== undefined && body.errors.length > 0) {
       throw new IndexerClientError(`GraphQL error: ${body.errors.map((e) => e.message).join("; ")}`);
     }

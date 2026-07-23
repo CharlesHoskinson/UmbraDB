@@ -190,6 +190,116 @@ describe("PgChainArchiveStore", () => {
     expect(missing).toBeUndefined();
   });
 
+  /**
+   * Fix 5 (sprint-fix round, MEDIUM): nothing previously prevented two overlapping `syncOnce()`
+   * calls from racing `setWatermark`, and the plain last-write-wins upsert let a
+   * slower/lagging call finishing AFTER a faster one silently regress the stored cursor
+   * backward -- which then makes the next sync attempt re-process already-ingested heights and
+   * hit the duplicate-key wedge Fix 1 addresses. This test genuinely exercises the regression
+   * scenario (a LOWER height written after a HIGHER one, exactly what a lagging concurrent
+   * caller would do) and confirms the guard actually rejects it, not merely that a monotonic
+   * write succeeds (which a trivial last-write-wins implementation would also pass).
+   */
+  it("Fix 5: setWatermark never regresses the stored height -- a lower height written after a higher one is silently dropped, a genuinely higher one still advances it", async () => {
+    const key = "canonical_tip:ac_watermark_monotonic_net";
+    await store.setWatermark(key, { height: 10 });
+    expect(await store.getWatermark(key)).toEqual({ height: 10 });
+
+    // Simulates a slower/lagging concurrent syncOnce() call finishing AFTER a faster one already
+    // advanced the cursor past it -- must be a silent no-op, not a regression.
+    await store.setWatermark(key, { height: 5 });
+    expect(await store.getWatermark(key)).toEqual({ height: 10 });
+
+    // A genuinely later write (the normal, non-racing case) must still advance the cursor.
+    await store.setWatermark(key, { height: 11 });
+    expect(await store.getWatermark(key)).toEqual({ height: 11 });
+
+    // Equal height (a legitimate no-op retry of the same progress) does not error and leaves the
+    // stored value unchanged.
+    await store.setWatermark(key, { height: 11 });
+    expect(await store.getWatermark(key)).toEqual({ height: 11 });
+  });
+
+  /**
+   * Fix 1 (sprint-fix round, HIGH): `putBlockBundle` is the new atomic block+transactions+
+   * bridge-observations write `chain-archive-sync/sync-service.ts` now uses instead of three
+   * separately-committed calls. These tests exercise the two real retry shapes the 3-reviewer
+   * review identified: retrying an already-FULLY-committed bundle (e.g. the caller's own
+   * watermark write crashed after this succeeded), and retrying after a PARTIAL legacy-style
+   * write (what the old `putBlock`-then-`putTransactions`-then-`putBridgeObservations` sequence
+   * could leave behind on a crash between steps) -- both must succeed as a no-op/completion
+   * rather than a duplicate-key error, which is exactly the bug the reviewers reproduced.
+   */
+  describe("Fix 1: putBlockBundle idempotency", () => {
+    function bundleFixture(net: string, height: number, blockHash: string, parentHash: string, tag: number) {
+      const block = makeBlock(net, height, blockHash, parentHash, tag);
+      const txHash = h(height, 0x9);
+      return {
+        block: { ...block, isCanonical: true, status: "canonical" as const, finalized: true },
+        transactions: [{
+          net, txHash, blockHeight: height, blockHash, position: 0,
+          kind: "regular" as const, protocolVersion: 1,
+          rawBytes: new TextEncoder().encode(`tx-${net}-${height}`),
+        }],
+        bridgeObservations: [{
+          net, blockHeight: height, blockHash, observationIndex: 0,
+          kind: "system_parameters_d" as const,
+          rawBytes: new TextEncoder().encode(`obs-${net}-${height}`),
+        }],
+      };
+    }
+
+    it("retrying an identical bundle after a full commit is a safe no-op, not a duplicate-key error, and does not create duplicate rows", async () => {
+      const net = "fix1_full_retry_net";
+      const height = 900;
+      const blockHash = h(900, 0xa);
+      const bundle = bundleFixture(net, height, blockHash, h(0), 0xa);
+
+      await store.putBlockBundle(bundle);
+      // The exact same bundle again -- simulates a crash between this call durably succeeding
+      // and the caller's own watermark write committing, causing a later syncOnce() to retry
+      // this exact height from scratch.
+      await expect(store.putBlockBundle(bundle)).resolves.toBeDefined();
+
+      const blocks = await store.getBlocksAtHeight(net, height);
+      expect(blocks).toHaveLength(1);
+      const txs = await store.getTransactionsByHash(net, bundle.transactions[0]!.txHash);
+      expect(txs).toHaveLength(1);
+      const obsRows = await sql<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM ${sql(schema)}.bridge_observations
+        WHERE net = ${net} AND block_height = ${height}
+      `;
+      expect(obsRows[0]!.n).toBe(1);
+    });
+
+    it("retrying after a partial legacy-style write (block row already committed by a bare putBlock, transactions/bridge_observations missing) completes the missing rows instead of duplicate-key-erroring", async () => {
+      const net = "fix1_partial_retry_net";
+      const height = 901;
+      const blockHash = h(901, 0xa);
+      const bundle = bundleFixture(net, height, blockHash, h(0), 0xa);
+
+      // Reproduces exactly what the OLD (pre-fix) `ingestOneBlock` could leave behind: `putBlock`
+      // committed on its own, but the transactions/bridge_observations writes never ran (crash,
+      // transient error, or the indexer-not-caught-up throw that used to happen AFTER putBlock).
+      await store.putBlock(bundle.block);
+
+      // The retry -- under the OLD code this hit a duplicate-key error on the `blocks` PK and
+      // wedged permanently. Under the fix, the block insert is a no-op (ON CONFLICT DO NOTHING)
+      // and the previously-missing transactions/bridge_observations rows are written for real.
+      await expect(store.putBlockBundle(bundle)).resolves.toBeDefined();
+
+      const blocks = await store.getBlocksAtHeight(net, height);
+      expect(blocks).toHaveLength(1); // still exactly one row, not duplicated
+      const txs = await store.getTransactionsByHash(net, bundle.transactions[0]!.txHash);
+      expect(txs).toHaveLength(1); // the previously-missing transaction is now present
+      const obsRows = await sql<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM ${sql(schema)}.bridge_observations
+        WHERE net = ${net} AND block_height = ${height}
+      `;
+      expect(obsRows[0]!.n).toBe(1); // the previously-missing bridge observation is now present
+    });
+  });
+
   describe("AC-10: core access patterns use an index, not a sequential scan, at realistic volume", () => {
     const net = "ac10_net";
     const ROW_COUNT = 8_000;
