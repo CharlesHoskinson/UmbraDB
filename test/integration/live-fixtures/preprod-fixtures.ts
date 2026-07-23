@@ -11,7 +11,7 @@ import * as os from "node:os";
 
 export const SEED_FILE = `${os.homedir()}/.midnight-preprod-wallet.seed`;
 export const EXPECTED_UNSHIELDED_ADDRESS = "mn_addr_preprod14plwqf5qymh879pskxyharf86plfj288ccvklaa74nqsha5f2p3szaxvvc";
-export const EXPECTED_NIGHT_VALUE = 1_000_000_000n; // 1000 tNIGHT at 6 decimals
+export const EXPECTED_NIGHT_VALUE = 2_000_000_000n; // 2000 tNIGHT (1000 original + 1000 re-funded 2026-07-23, faucet tx 0005c968...a56c6c)
 
 /** The faucet transaction's hash/identifier are recorded truncated-with-an-ellipsis in the sprint
  *  brief and `AUTONOMOUS_RUN_LOG.md` (`b194e71d…493341`, identifier `00ea17cf…20bea`) -- the tests
