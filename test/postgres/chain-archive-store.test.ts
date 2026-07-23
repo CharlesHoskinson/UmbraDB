@@ -89,11 +89,14 @@ describe("PgChainArchiveStore", () => {
     expect(canonical?.blockHash).toBe(blockA);
 
     // The reorg flip itself, from a second connection concurrently polling mid-flip -- must
-    // never observe two canonical rows (the partial unique index enforces this at the DB layer;
-    // this test proves the APPLICATION-level flip in PgChainArchiveStore also never exposes an
-    // intermediate two-canonical or zero-canonical window to a concurrent reader beyond what a
-    // single atomic UPDATE pair guarantees).
-    const observations: (string | undefined)[] = [];
+    // never observe two canonical rows OR zero canonical rows (the spec's own scenario wording:
+    // "it SHALL observe exactly one canonical row (A before the flip, B after) -- never zero,
+    // never both"). Sol-audit fix round, Finding 5: the previous version of this test (a)
+    // tolerated "NONE" observations, directly contradicting the never-zero clause, and (b)
+    // could pass with ZERO observations recorded if the flip completed before the poller's
+    // first iteration -- both vacuities removed: the poller is now required to record real
+    // observations both BEFORE and AFTER the flip, and NONE/MULTIPLE are both hard failures.
+    const observations: string[] = [];
     let polling = true;
     const poller = (async () => {
       const sql2 = createClient({ connectionString: container.getConnectionUri(), schema });
@@ -109,13 +112,28 @@ describe("PgChainArchiveStore", () => {
         await sql2.end({ timeout: 5 });
       }
     })();
+    const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+    // The poller must genuinely observe the PRE-flip state before we flip...
+    while (observations.length < 3) await sleep(5);
     await store.setCanonical(net, height, blockB);
+    // ...and the POST-flip state before we stop -- so this test cannot pass on an empty or
+    // pre-flip-only observation log.
+    const lengthAtFlip = observations.length;
+    while (observations.length < lengthAtFlip + 3) await sleep(5);
     polling = false;
     await poller;
 
-    expect(observations).not.toContain("MULTIPLE");
-    expect(observations.every((o) => o === "NONE" || o === blockA || o === blockB)).toBe(true);
+    expect(observations.length).toBeGreaterThanOrEqual(6);
+    expect(observations).not.toContain("MULTIPLE"); // never both
+    expect(observations).not.toContain("NONE"); // never zero
+    expect(observations.every((o) => o === blockA || o === blockB)).toBe(true);
+    expect(observations[0]).toBe(blockA); // A before the flip
+    expect(observations[observations.length - 1]).toBe(blockB); // B after
+    // Exactly one transition: once B is observed, A never reappears.
+    const firstB = observations.indexOf(blockB);
+    expect(firstB).toBeGreaterThan(0);
+    expect(observations.slice(firstB).every((o) => o === blockB)).toBe(true);
 
     canonical = await store.getCanonicalBlockAtHeight(net, height);
     expect(canonical?.blockHash).toBe(blockB);
@@ -144,21 +162,74 @@ describe("PgChainArchiveStore", () => {
     ).rejects.toMatchObject({ code: "23505" });
   });
 
-  it("AC-1: a shared tx hash across two competing blocks at one height persists in full for both, queryable via getTransactionsByHash", async () => {
+  /**
+   * Sol-audit fix round, Finding 5: this test now exercises AC-1's ACTUAL scenario shape --
+   * complete competing transaction SETS ({t1, t2, t3} vs {t1, t4}, t1's hash shared with
+   * distinct bytes, exactly the spec's example), verified for COMPLETENESS per fork via the
+   * public `getTransactionsForBlock` enumeration added for this purpose (previously only the
+   * one shared transaction was inserted, and no public method could enumerate a block's full
+   * set to check nothing was lost). Also covers the spec's second scenario: a reorg marking A
+   * non-canonical must not delete A's transaction rows (previously only the block ROW's
+   * survival was checked, never its transactions).
+   */
+  it("AC-1: competing blocks at one height, sharing a tx hash, both persist with their COMPLETE transaction sets -- and a reorg preserves the losing fork's transaction rows", async () => {
     const net = "ac1_net";
     const height = 700;
     const blockA = h(700, 0xa);
     const blockB = h(700, 0xb);
     await store.putBlock(makeBlock(net, height, blockA, h(0), 0xa));
     await store.putBlock(makeBlock(net, height, blockB, h(0), 0xb));
-    const sharedTxHash = h(701);
+
+    // Block A carries {t1, t2, t3}; competing block B carries {t1, t4} -- t1's HASH is shared
+    // across both blocks (distinct bytes/position permitted, per the spec's own scenario).
+    const t1 = h(701);
+    const t2 = h(702);
+    const t3 = h(703);
+    const t4 = h(704);
+    const tx = (txHash: string, blockHash: string, position: number, raw: string) => ({
+      net, txHash, blockHeight: height, blockHash, position,
+      kind: "regular" as const, protocolVersion: 1, rawBytes: new TextEncoder().encode(raw),
+    });
+    // Neither insert may raise a uniqueness violation caused by the shared hash alone.
     await store.putTransactions([
-      { net, txHash: sharedTxHash, blockHeight: height, blockHash: blockA, position: 0, kind: "regular", protocolVersion: 1, rawBytes: new TextEncoder().encode("tx-in-A") },
-      { net, txHash: sharedTxHash, blockHeight: height, blockHash: blockB, position: 0, kind: "regular", protocolVersion: 1, rawBytes: new TextEncoder().encode("tx-in-B") },
+      tx(t1, blockA, 0, "t1-bytes-in-A"), tx(t2, blockA, 1, "t2-bytes"), tx(t3, blockA, 2, "t3-bytes"),
     ]);
-    const both = await store.getTransactionsByHash(net, sharedTxHash);
+    await store.putTransactions([
+      tx(t1, blockB, 0, "t1-bytes-in-B"), tx(t4, blockB, 1, "t4-bytes"),
+    ]);
+
+    // Both blocks retrievable at height H by their own hashes.
+    const blocksAtH = await store.getBlocksAtHeight(net, height);
+    expect(blocksAtH.map((b) => b.blockHash).sort()).toEqual([blockA, blockB].sort());
+
+    // COMPLETE per-fork transaction sets, scoped to each block -- nothing missing, nothing
+    // leaked across forks, positions intact.
+    const setA = await store.getTransactionsForBlock(net, blockA);
+    expect(setA.map((t) => t.txHash)).toEqual([t1, t2, t3]); // ordered by position
+    expect(setA.map((t) => t.position)).toEqual([0, 1, 2]);
+    const setB = await store.getTransactionsForBlock(net, blockB);
+    expect(setB.map((t) => t.txHash)).toEqual([t1, t4]);
+    expect(setB.map((t) => t.position)).toEqual([0, 1]);
+
+    // The shared hash resolves to BOTH inclusion records, each with its own distinct bytes.
+    const both = await store.getTransactionsByHash(net, t1);
     expect(both).toHaveLength(2);
     expect(both.map((t) => t.blockHash).sort()).toEqual([blockA, blockB].sort());
+    const bytesByBlock = new Map<string, string>();
+    for (const meta of both) {
+      bytesByBlock.set(meta.blockHash, Buffer.from(await store.getBlob(meta.rawBlobHash)).toString("utf8"));
+    }
+    expect(bytesByBlock.get(blockA)).toBe("t1-bytes-in-A");
+    expect(bytesByBlock.get(blockB)).toBe("t1-bytes-in-B");
+
+    // Reorg: B's fork wins, A is marked non-canonical -- A's block row AND its full transaction
+    // set must remain queryable (the archive's "recovery source of last resort" property).
+    await store.setCanonical(net, height, blockB);
+    const losingBlock = (await store.getBlocksAtHeight(net, height)).find((b) => b.blockHash === blockA);
+    expect(losingBlock).toBeDefined();
+    expect(losingBlock!.isCanonical).toBe(false);
+    const losingSet = await store.getTransactionsForBlock(net, blockA);
+    expect(losingSet.map((t) => t.txHash)).toEqual([t1, t2, t3]); // not cascade-deleted, complete
   });
 
   it("AC-5: two networks with a COLLIDING (height, block_hash) pair never leak into each other's query results", async () => {
@@ -180,6 +251,47 @@ describe("PgChainArchiveStore", () => {
     expect(alphaRange.every((b) => b.net === "net_alpha")).toBe(true);
     const betaRange = await store.getCanonicalChainRange("net_beta", height, height);
     expect(betaRange.every((b) => b.net === "net_beta")).toBe(true);
+  });
+
+  /**
+   * Sol-audit fix round, Finding 5: real store-level coverage for `putVerifierKeyObservation` --
+   * previously the only "verifier key" test queried an empty table via a sync service that never
+   * calls this method at all (see `chain-archive-sync.integration.test.ts`'s honesty rewrite).
+   * The SYNC-side ingestion remains explicitly unimplemented
+   * (`ChainArchiveSyncService.INGESTS_VERIFIER_KEYS === false`); the WRITE PATH itself is real
+   * and exercised here against real Postgres, including the documented LEAST-upsert semantics.
+   */
+  it("putVerifierKeyObservation: writes the blob + observation row, and repeated observations collapse via LEAST(first_seen_height), never a unique violation", async () => {
+    const vkBytes = new TextEncoder().encode("verifier-key[v6]-test-payload");
+    const record = {
+      vkBytes, net: "vk_net", scope: "protocol" as const, tag: "spend_v6", firstSeenHeight: 100,
+    };
+    await store.putVerifierKeyObservation(record);
+
+    const rows = await sql<{ scope: string; tag: string; first_seen_height: bigint }[]>`
+      SELECT scope, tag, first_seen_height FROM ${sql(schema)}.verifier_key_observations WHERE net = 'vk_net'
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.scope).toBe("protocol");
+    expect(rows[0]!.tag).toBe("spend_v6");
+    expect(Number(rows[0]!.first_seen_height)).toBe(100);
+
+    // A LATER re-observation of the same context must not raise and must keep the EARLIER height.
+    await store.putVerifierKeyObservation({ ...record, firstSeenHeight: 250 });
+    // An EARLIER observation must lower it (LEAST semantics), still exactly one row.
+    await store.putVerifierKeyObservation({ ...record, firstSeenHeight: 40 });
+    const after = await sql<{ first_seen_height: bigint }[]>`
+      SELECT first_seen_height FROM ${sql(schema)}.verifier_key_observations WHERE net = 'vk_net'
+    `;
+    expect(after).toHaveLength(1);
+    expect(Number(after[0]!.first_seen_height)).toBe(40);
+
+    // The vk bytes themselves are a real, hash-verified blob (AC-3 applies to this category too).
+    const blobHash = await sql<{ vk_hash: Buffer }[]>`
+      SELECT vk_hash FROM ${sql(schema)}.verifier_key_observations WHERE net = 'vk_net'
+    `;
+    const readBack = await store.getBlob(blobHash[0]!.vk_hash.toString("hex"));
+    expect(Buffer.from(readBack).toString("utf8")).toBe("verifier-key[v6]-test-payload");
   });
 
   it("watermarks: set/get round-trips and is scoped to the chain_archive schema's own local table (not tier1_wallet's)", async () => {

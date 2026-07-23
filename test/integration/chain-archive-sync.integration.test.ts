@@ -4,21 +4,27 @@ import { createClient, type UmbraDBSql } from "../../src/postgres/client.js";
 import { bootstrapChainArchiveSchema } from "../../chain-archive-sync/bootstrap.js";
 import { ChainArchiveSyncService } from "../../chain-archive-sync/sync-service.js";
 import { IndexerClient } from "../../chain-archive-sync/indexer-client.js";
-import { NodeRpcClient } from "../../chain-archive-sync/node-rpc-client.js";
 
 /**
  * REAL, non-mocked, live end-to-end integration test: a real Postgres (testcontainers) plus a
- * live HTTP connection to the already-running local Midnight devnet (node RPC
+ * live HTTP connection to an already-running local Midnight devnet (node RPC
  * `http://localhost:9944`, indexer GraphQL `http://localhost:8088/api/v3/graphql`, network id
- * `undeployed1` -- confirmed live via `system_chain` during this implementation session).
+ * `undeployed1` -- confirmed live via `system_chain` during the original implementation session).
  *
  * This is deliberately NOT gated behind an env-var flag the way `test/integration/
  * preprod-db-sync.integration.test.ts` is (`UMBRADB_LIVE_PREPROD=1`) -- that gate exists because
  * preprod is a shared, funded, real-money-adjacent public network with a seed file that must
- * never be committed; the local devnet used here has none of those constraints (no funds, no
- * shared state to corrupt, already running for this whole implementation session per the task's
- * own environment description) -- skipped automatically (not failed) if the devnet endpoints
- * are unreachable, so this suite degrades gracefully in an environment where the devnet isn't up.
+ * never be committed; the local devnet used here has none of those constraints.
+ *
+ * **Devnet-availability gating (Sol-audit fix round, Finding 4)**: when the devnet endpoints are
+ * unreachable, this whole suite is `describe.skipIf`-SKIPPED -- reported honestly as skipped in
+ * the run summary, exactly like the preprod suite's `describe.skipIf(!LIVE_PREPROD_ENABLED)`
+ * precedent. It previously used per-test `if (!up) return;` early-returns, which vitest counts
+ * as PASSED, silently inflating the green count in any devnet-less environment. That matters
+ * because devnet-less is the NORMAL state in CI: `.github/workflows/conformance.yml` provisions
+ * Docker for testcontainers but NO Midnight devnet, so in CI these tests are ALWAYS skipped --
+ * a green CI run proves nothing about this file beyond it collecting cleanly. Run it for real
+ * with the local devnet up (docs in `design/full-chain-storage-design.md` §3).
  */
 async function devnetIsUp(): Promise<boolean> {
   try {
@@ -37,14 +43,15 @@ const NET = "undeployed1";
 const NODE_URL = "http://localhost:9944";
 const INDEXER_URL = "http://localhost:8088/api/v3/graphql";
 
-describe("ChainArchiveSyncService against the live local devnet (real node + indexer, real Postgres)", () => {
+// Probed once at collection time (top-level await) so the whole suite can be genuinely
+// `describe.skipIf`-skipped -- shows up as SKIPPED, never as a vacuous PASS (Finding 4).
+const up = await devnetIsUp();
+
+describe.skipIf(!up)("ChainArchiveSyncService against the live local devnet (real node + indexer, real Postgres)", () => {
   let container: StartedPostgreSqlContainer;
   let sql: UmbraDBSql;
-  let up = false;
 
   beforeAll(async () => {
-    up = await devnetIsUp();
-    if (!up) return; // every `it` below no-ops via `skipIf`-equivalent guard at call site
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
     sql = createClient({ connectionString: container.getConnectionUri(), schema: "chain_archive" });
     // The "real invocation path" (task requirement 1): bootstraps the chain_archive schema via
@@ -62,7 +69,6 @@ describe("ChainArchiveSyncService against the live local devnet (real node + ind
   });
 
   it("syncs real blocks from genesis, including genesis's real ~26 transactions with cross-checked raw bytes", async () => {
-    if (!up) { console.warn("[chain-archive-sync integration] devnet unreachable -- skipping"); return; }
     const service = new ChainArchiveSyncService({
       sql, net: NET, schema: "chain_archive",
       node: { url: NODE_URL }, indexer: { url: INDEXER_URL },
@@ -106,7 +112,6 @@ describe("ChainArchiveSyncService against the live local devnet (real node + ind
   }, 60_000);
 
   it("is resumable: a second syncOnce() call continues from the watermark, does not re-ingest, and does not error", async () => {
-    if (!up) return;
     const service = new ChainArchiveSyncService({
       sql, net: NET, schema: "chain_archive",
       node: { url: NODE_URL }, indexer: { url: INDEXER_URL },
@@ -129,53 +134,59 @@ describe("ChainArchiveSyncService against the live local devnet (real node + ind
   }, 60_000);
 
   it("bridge_observations ingestion path is exercised for real and does not error on this devnet's data (build-now stub, task requirement 2)", async () => {
-    if (!up) return;
     const rows = await sql<{ n: number }[]>`
       SELECT count(*)::int AS n FROM chain_archive.bridge_observations WHERE net = ${NET}
     `;
     // At least the genesis-block D-parameter observation should have landed (real, live data --
     // design doc §3.7 confirms system_parameters_d has real rows on this devnet). Could
     // legitimately be a small number given the dedup-on-unchanged-value logic
-    // (sync-service.ts's ingestBridgeObservationsForBlock) -- this asserts the path is exercised
+    // (sync-service.ts's buildBridgeObservationRecords) -- this asserts the path is exercised
     // and produces real rows, not that every block gets one.
     expect(rows[0]!.n).toBeGreaterThanOrEqual(1);
   });
 
-  it("verifier_key_observations ingestion path is a documented no-op on this devnet (zero live contracts, design doc §3.6) and does not error", async () => {
-    if (!up) return;
-    // No contract has ever been deployed on this devnet (design doc §3.6, re-confirmed live this
-    // session) -- there is genuinely no verifier-key data to ingest. This test's job is only to
-    // confirm the table exists and is queryable without error in this empty state, per the
-    // task's explicit instruction: "confirm the ingestion code path is exercised and doesn't
-    // error on the empty case" rather than fabricating data that doesn't exist on this chain.
+  /**
+   * Sol-audit fix round, Finding 5: HONESTY REWRITE. The previous version of this test called
+   * itself an "ingestion path" test while only querying an empty table -- implying coverage of a
+   * code path that does not exist: `ChainArchiveSyncService` never calls
+   * `putVerifierKeyObservation` anywhere. Judgment call, recorded: sync-side verifier-key
+   * ingestion stays OUT OF SCOPE for this sprint -- no contract has ever been deployed on this
+   * devnet (design doc §3.6, re-confirmed live) and the captured testnet indexer DB shows
+   * `contract_actions: 0` too, so there is genuinely no VK-bearing data source to ingest from or
+   * test against; wiring a speculative code path no data can exercise would itself be the kind
+   * of untestable coverage-theater this fix round exists to remove. What IS real and covered:
+   * the STORE-level write path (`putVerifierKeyObservation`'s upsert/LEAST semantics) has a
+   * direct, real-Postgres test in `test/postgres/chain-archive-store.test.ts`. This test now
+   * asserts exactly what is true: the sync service declares the gap
+   * (`INGESTS_VERIFIER_KEYS = false`), and a fully-synced archive's table is empty and queryable
+   * BECAUSE no ingestion path exists yet.
+   */
+  it("verifier-key ingestion is NOT implemented in the sync service (documented gap; store-level write path covered in chain-archive-store.test.ts)", async () => {
+    expect(ChainArchiveSyncService.INGESTS_VERIFIER_KEYS).toBe(false);
     const rows = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM chain_archive.verifier_key_observations`;
-    expect(rows[0]!.n).toBe(0);
+    expect(rows[0]!.n).toBe(0); // empty precisely because no ingestion path exists yet
   });
 
   /**
-   * AC-4 (replay-recoverability for deferred data categories -- the hard gate). Per the task
-   * instructions: implement the mechanism/test for real, then report honestly rather than fake
-   * a pass. This suite proves the NECESSARY SUBSTRATE for AC-4 is real and working (the raw
-   * bytes a reconstruction would need to parse are genuinely archived, hash-verified, and
-   * retrievable purely from the archive, with zero live queries during retrieval) -- confirmed
-   * against a REAL zswap/dust/unshielded-bearing transaction on this devnet (height 0, cross-
-   * scanned live during this implementation session: genesis carries 28 ZswapOutput events, 85
-   * DustInitialUtxo events, and multiple unshieldedCreatedOutputs, per `design/
-   * full-chain-storage-design.md` §3.5's own live count). What this suite does NOT do -- and
-   * reports honestly as NOT DONE, not silently skipped -- is the semantic byte-level DECODE of
-   * those raw bytes into reconstructed zswap/unshielded/dust events. That decode requires
-   * Midnight's own ledger binary format (`ledger::structure::Transaction<S,P,B,D>`, a generic,
-   * multi-type-parameter Rust structure over a custom `Tagged`/SCALE-adjacent serialization --
-   * `midnight-ledger/ledger/src/structure.rs`, confirmed by direct source inspection during this
-   * implementation session at `/root/midnight/midnight-ledger`), which has no existing pure-JS/
-   * TS decoder in this repo's dependency tree and no pre-built WASM bindings available in this
-   * environment (`ledger-wasm`'s crate exists in that source tree but has no built `pkg/` output
-   * checked in or produced by this session) -- see the final implementation report for the full
-   * reasoning behind treating this as a genuinely blocked, not faked or silently skipped, gap.
+   * AC-4 SUBSTRATE check (retained): proves the raw bytes a reconstruction needs are genuinely
+   * archived, hash-verified, and retrievable purely from the archive, with zero live queries
+   * during retrieval, against a REAL zswap-bearing devnet transaction.
+   *
+   * **Correction (Sol-audit fix round, Finding 1)**: an earlier version of this block claimed
+   * the semantic decode of these bytes was "genuinely blocked -- no existing pure-JS/TS decoder
+   * ... and no pre-built WASM bindings available in this environment." That claim was FALSE:
+   * the sibling `midnight-wallet` checkout ships a built `@midnight-ntwrk/ledger-v8` WASM
+   * package that decodes these exact payloads (independently proven by review: the design doc's
+   * genesis sample decodes to `DistributeReserve(1000000000000000)`, and real regular
+   * transactions expose their zswap outputs, unshielded outputs, and dust actions). The real
+   * semantic decode -- reconstructed zswap/unshielded/dust events from archived bytes,
+   * field-matched against the indexer's independent report -- is now implemented
+   * (`chain-archive-sync/tx-replay-decoder.ts`) and proven end-to-end by
+   * `test/integration/chain-archive-replay-decode.integration.test.ts`, which is the actual
+   * AC-4 gate. This block remains only as the live-devnet substrate-availability check.
    */
-  describe("AC-4: replay-recoverability substrate (real archived bytes) -- semantic decode NOT implemented, see report", () => {
+  describe("AC-4 substrate: the archived raw bytes the replay decoder consumes are real and retrievable (semantic decode proven by chain-archive-replay-decode.integration.test.ts)", () => {
     it("a real zswap/dust/unshielded-bearing transaction's raw bytes are retrievable purely from the archive, hash-verified, with no live query during retrieval", async () => {
-      if (!up) return;
       const indexer = new IndexerClient({ url: INDEXER_URL });
       const indexerGenesis = await indexer.getBlockByHeight(0);
       expect(indexerGenesis).toBeDefined();
@@ -196,15 +207,10 @@ describe("ChainArchiveSyncService against the live local devnet (real node + ind
       );
       expect(archived.length).toBeGreaterThanOrEqual(1);
       // getBlob rehashes on read (AC-3) -- this call succeeding at all IS the proof the raw
-      // bytes a real decoder would need are present, uncorrupted, and content-address-verified,
+      // bytes the replay decoder needs are present, uncorrupted, and content-address-verified,
       // with zero indexer/node query in this specific call (getBlob talks to Postgres only).
       const rawBytes = await service.store.getBlob(archived[0]!.rawBlobHash);
       expect(rawBytes.length).toBeGreaterThan(0);
-
-      // What this test explicitly does NOT assert: that `rawBytes` decodes into a reconstructed
-      // ZswapOutput event matching zswapTx's fields. That semantic decode is the genuinely
-      // unimplemented part of AC-4 -- see this describe block's own doc comment and the
-      // implementation report.
     });
   });
 });

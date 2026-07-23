@@ -235,6 +235,39 @@ describe("ChainArchiveSyncService retry safety (sprint-fix round Fixes 1-3)", ()
     expect(obsRows[0]!.n).toBe(1);
   }, 60_000);
 
+  /**
+   * Sol-audit fix round, Finding 5: a direct, non-devnet-gated proof that a REAL D-parameter
+   * CHANGE is detected and recorded -- the devnet-gated bridge_observations test only asserts
+   * "at least one row landed," which never proves change-detection; this one drives a chain
+   * whose D-parameter genuinely changes at a known height and asserts the recorded observations
+   * are exactly the change points, with the changed values' real content.
+   */
+  it("Finding 5: a real D-parameter change is detected and recorded as a bridge observation at exactly the changing height, with the changed content", async () => {
+    // Heights 0-1 share one D-parameter; height 2 changes it; height 3 keeps the changed value.
+    const blocks = fakeChain([
+      { height: 0, dParamSeed: 7 }, { height: 1, dParamSeed: 7 },
+      { height: 2, dParamSeed: 42 }, { height: 3, dParamSeed: 42 },
+    ]);
+    const { service, schema } = await newService(blocks, 3);
+
+    const result = await service.syncOnce({ maxBlocks: 4 });
+    expect(result.ingestedBlocks).toBe(4);
+
+    const obs = await sql<{ block_height: bigint; raw_blob_hash: Buffer }[]>`
+      SELECT block_height, raw_blob_hash FROM ${sql(schema)}.bridge_observations
+      WHERE net = ${NET} AND kind = 'system_parameters_d' ORDER BY block_height
+    `;
+    // Exactly the change points: first-ever value at height 0, the change at height 2 --
+    // heights 1 and 3 (unchanged values) must NOT have produced near-duplicate rows.
+    expect(obs.map((o) => Number(o.block_height))).toEqual([0, 2]);
+
+    // The height-2 observation's archived content is the REAL changed value, not just any row.
+    const changed = await service.store.getBlob(obs[1]!.raw_blob_hash.toString("hex"));
+    expect(JSON.parse(Buffer.from(changed).toString("utf8"))).toEqual({
+      numPermissionedCandidates: 42, numRegisteredCandidates: 43,
+    });
+  }, 60_000);
+
   it("Fix 3 (syncOnce-level consequence): a malformed node-reported block number surfaces a typed error from syncOnce instead of silently no-oping with a reported success", async () => {
     const blocks = fakeChain([{ height: 0, dParamSeed: 1 }]);
     const { service } = await newService(blocks, 0, { badHeaderNumberForHash: blocks[0]!.hash });

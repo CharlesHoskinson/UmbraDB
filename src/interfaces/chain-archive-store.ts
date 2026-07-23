@@ -243,6 +243,15 @@ export interface ChainArchiveStore {
    *  (AC-1: a shared tx hash across competing blocks at one height persists in full for both). */
   getTransactionsByHash(net: string, txHash: Hex32): Promise<TransactionMeta[]>;
 
+  /** The COMPLETE transaction set archived for one specific block (scoped by `blockHash`, so
+   *  competing forks at the same height each enumerate their own set), ordered by `position`
+   *  ascending. Empty array if the block has no transactions or does not exist. Added in the
+   *  Sol-audit fix round (Finding 5): AC-1's spec text requires each fork's "full transaction
+   *  set [to] be retrievable scoped to" its block, and no public method could enumerate a
+   *  block's transactions to verify completeness -- read paths (replay/AC-8 cross-validation)
+   *  need exactly this enumeration anyway. */
+  getTransactionsForBlock(net: string, blockHash: Hex32): Promise<TransactionMeta[]>;
+
   /** The canonical chain's blocks within `[fromHeight, toHeight]` inclusive, ordered by height
    *  ascending. Spans a partition boundary transparently (AC-6) -- the caller never needs to know
    *  where a `CHAIN_ARCHIVE_HEIGHT_PARTITION_SIZE` boundary falls. */

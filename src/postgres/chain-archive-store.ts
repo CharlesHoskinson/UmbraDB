@@ -444,6 +444,21 @@ export class PgChainArchiveStore implements ChainArchiveStore {
     }
   }
 
+  async getTransactionsForBlock(net: string, blockHash: Hex32): Promise<TransactionMeta[]> {
+    assertHex32(blockHash, "getTransactionsForBlock.blockHash");
+    try {
+      const rows = await this.sql<TxRow[]>`
+        SELECT net, tx_hash, block_height, block_hash, position, kind, protocol_version, result, raw_blob_hash
+        FROM ${this.sql(this.schema)}.transactions
+        WHERE net = ${net} AND block_hash = ${hexToBuf(blockHash)}
+        ORDER BY position ASC
+      `;
+      return rows.map(toTxMeta);
+    } catch (err) {
+      throw translatePostgresError(err);
+    }
+  }
+
   async getCanonicalChainRange(net: string, fromHeight: number, toHeight: number): Promise<BlockMeta[]> {
     try {
       const rows = await this.sql<BlockRow[]>`

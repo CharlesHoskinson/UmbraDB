@@ -14,11 +14,20 @@ import { NodeRpcClient, type NodeRpcClientOptions, type SubstrateHeader } from "
  * The real ingestion/sync service that populates the `chain_archive` schema from a live Midnight
  * node (JSON-RPC, raw block bytes) and indexer (GraphQL, structured transaction metadata) --
  * `design/full-chain-storage-design.md`'s Tier-1.5 archive, made real per this implementation
- * sprint's task. Depends ONLY on `ChainArchiveStore` (`src/interfaces/chain-archive-store.ts`)
- * and the two plain-`fetch` clients in this directory -- never imports anything from
- * `src/postgres/*` beyond the one concrete `PgChainArchiveStore` construction helper below, and
- * critically: `src/postgres/*` never imports anything from here (AC-7's guard,
- * `test/postgres/no-chain-sync-import-guard.test.ts`, enforces the latter half).
+ * sprint's task.
+ *
+ * **Dependency shape, stated precisely (Sol-audit fix round, Finding 7 -- an earlier version of
+ * this comment overclaimed "interface injection")**: this module directly imports and constructs
+ * the concrete `PgChainArchiveStore` (`src/postgres/chain-archive-store.ts`) in its constructor,
+ * and imports the `UmbraDBSql` type from `src/postgres/client.ts` -- there is no runtime
+ * dependency injection of the store. `ChainArchiveStore`
+ * (`src/interfaces/chain-archive-store.ts`) serves as a TYPE-ONLY contract: the `store` field is
+ * typed against the interface, so everything after construction goes through the interface
+ * surface, but the implementation choice is hard-wired here, not injected by the caller. That is
+ * an allowed, deliberate arrangement -- the architectural boundary (AC-7) is DIRECTIONAL:
+ * `chain-archive-sync/* -> src/postgres/*` is the permitted direction, and what the guard
+ * (`test/postgres/no-chain-sync-import-guard.test.ts`) enforces is that `src/*` never imports
+ * anything from this directory back.
  *
  * **Judgment call, documented (no design-doc precedent covers this exactly)**: the node's
  * `chain_getBlock` JSON-RPC response does not hand back literal on-wire SCALE bytes for the
@@ -84,6 +93,19 @@ export interface SyncOnceResult {
 const WATERMARK_KEY_PREFIX = "sync_cursor:";
 
 export class ChainArchiveSyncService {
+  /** Honest scope declaration (Sol-audit fix round, Finding 5): this service does NOT ingest
+   *  verifier-key observations -- nothing here ever calls
+   *  `ChainArchiveStore.putVerifierKeyObservation`. Sync-side VK ingestion is out of scope for
+   *  this sprint: neither the local devnet nor the captured testnet has ever had a contract
+   *  deployed (design doc §3.6; `contract_actions: 0`), so no VK-bearing data source exists to
+   *  ingest from or to test against. The STORE-level write path is real and covered
+   *  (`test/postgres/chain-archive-store.test.ts`); flip this to `true` only alongside an actual
+   *  ingestion implementation and a data source that exercises it. */
+  static readonly INGESTS_VERIFIER_KEYS = false as const;
+
+  /** Typed against the `ChainArchiveStore` INTERFACE (type-only contract), but constructed
+   *  concretely as `PgChainArchiveStore` in the constructor below -- see the module doc's
+   *  "Dependency shape" note (Finding 7). */
   readonly store: ChainArchiveStore;
   private readonly node: NodeRpcClient;
   private readonly indexer: IndexerClient;
