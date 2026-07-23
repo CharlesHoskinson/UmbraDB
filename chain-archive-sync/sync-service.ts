@@ -297,21 +297,31 @@ export class ChainArchiveSyncService {
 
     return indexerBlock.transactions.map((tx, position) => {
       const rawHex = hexNoPrefix(tx.raw);
-      if (!nodeExtrinsicHexes.some((e) => e.includes(rawHex))) {
+      const rawBytes = Buffer.from(rawHex, "hex");
+      const decodedTag = rawBytes.subarray(0, SYSTEM_TX_TAG.length).toString("utf8");
+      const kind: "regular" | "system" = decodedTag === SYSTEM_TX_TAG ? "system" : "regular";
+      // The CONTAINS cross-check applies only to REGULAR (user-submitted) transactions, which are
+      // carried as on-wire extrinsics in the node's block body. Runtime-generated SYSTEM
+      // transactions (e.g. a block-reward `midnight:system-transaction[v6]`) are produced during
+      // block execution and are NOT present in `chain_getBlock.extrinsics` -- confirmed live on
+      // preprod block 1, where the indexer reports one system tx contained in none of the node's
+      // extrinsics. Genesis is the exception: its system txs are seeded inline into the genesis
+      // extrinsic and DO satisfy CONTAINS. For a runtime-generated system tx the indexer is the
+      // sole authoritative source of its raw bytes, so requiring node-body containment there is
+      // wrong -- it aborted a real sync from block 1 onward. Regular txs still MUST be contained.
+      if (kind === "regular" && !nodeExtrinsicHexes.some((e) => e.includes(rawHex))) {
         throw new Error(
           `indexer-reported transaction raw bytes not found within any of the node's own extrinsics ` +
           `for height ${height} (hash ${hexNoPrefix(tx.hash)}): indexer bytes not present in node block body`,
         );
       }
-      const rawBytes = Buffer.from(rawHex, "hex");
-      const decodedTag = rawBytes.subarray(0, SYSTEM_TX_TAG.length).toString("utf8");
       return {
         net: this.net,
         txHash: hexNoPrefix(tx.hash),
         blockHeight: height,
         blockHash,
         position,
-        kind: decodedTag === SYSTEM_TX_TAG ? "system" : "regular",
+        kind,
         protocolVersion: tx.protocolVersion,
         rawBytes,
       };
