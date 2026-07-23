@@ -75,6 +75,14 @@ published via GitHub Pages:
 
 Source: [`docs/visualizations/cardano-midnight-flow.html`](docs/visualizations/cardano-midnight-flow.html) — a single self-contained page (React + ReactFlow inlined, no build step, no external requests).
 
+## v1.0.0 roadmap
+
+The release gates, critical path, and explicitly deferred scope for the UmbraDB 1.0.0 release are tracked on a single self-contained page — the gate items span the API surface, a durable checkpoint cursor, recovery testing, a perf baseline, and infosec sign-off, with everything outside that set deferred past 1.0.0 — published via GitHub Pages:
+
+**▶ [UmbraDB v1.0.0 Roadmap](https://charleshoskinson.github.io/UmbraDB/roadmapv1.html)**
+
+Source: [`docs/roadmapv1.html`](docs/roadmapv1.html)
+
 ## Getting started
 
 Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
