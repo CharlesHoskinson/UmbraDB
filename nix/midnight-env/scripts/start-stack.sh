@@ -89,6 +89,7 @@ DBPASS=$(cat "$HOME/.midnight-pg-password")
   # satisfies Require.
   export DB_SYNC_POSTGRES_CONNECTION_STRING="postgresql://midnight:${DBPASS}@127.0.0.1:5432/cexplorer"
   export CARDANO_SECURITY_PARAMETER=2160
+  export CFG_PRESET=preprod
   nohup midnight-node \
     --chain res/preprod/chain-spec-raw.json \
     --base-path "$MIDNIGHT_NODE_DATA" \
