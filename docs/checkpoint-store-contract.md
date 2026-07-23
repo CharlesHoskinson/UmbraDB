@@ -62,8 +62,8 @@ upsert), a watermark-behind replay re-applies already-durable writes and so prod
 `kv_history` rows and extra, higher `version` numbers in TemporalKV** versus a fault-free run.
 Each replayed `put` unconditionally bumps `version` by exactly one (`src/postgres/temporal-kv.ts`
 sets `version = version + 1`), which is `Formal/STORAGE_ALGEBRA.md` **Law T1** (gapless
-monotonicity): a replay therefore yields **duplicate consecutive versions and a higher final
-version, never a gap**. The watermark row itself carries no such lineage; it is simply overwritten
+monotonicity): a replay therefore yields **extra versions carrying duplicate values — distinct,
+consecutive version numbers, never a repeated or skipped one — and a higher final version**. The watermark row itself carries no such lineage; it is simply overwritten
 again to the same value. Replay convergence is therefore defined on **current state**, not on
 history chains:
 

@@ -22,9 +22,10 @@ interface WatermarkRow {
  * (`openspec/changes/sprint-4-watermarks/design.md` §1/§9). Does not run migrations itself —
  * call `runMigrations` (`migrate.ts`) before constructing this against a fresh database.
  *
- * `set`/`get` accept a caller-supplied `TransactionHandle` directly (unlike
- * `CheckpointStore.save`/`prune`, which compose `withTransaction` internally and accept no `tx`
- * option) — the same composition pattern `PgTemporalKV.put`/`get` already use (`design.md` §6):
+ * `set`/`get` accept a caller-supplied `TransactionHandle` directly — the same composition
+ * pattern `PgTemporalKV.put`/`get` and (as of the durable-composition change) `CheckpointStore.save`
+ * use; `CheckpointStore.prune` still composes `withTransaction` internally and accepts no `tx`
+ * option (`design.md` §6):
  * `PgWatermarks` needs no `PgTransactionLeaseLayer` reference of its own, since it never opens a
  * transaction internally.
  *
