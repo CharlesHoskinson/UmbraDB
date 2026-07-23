@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "src/interfaces/checkpoint-store.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "4401142597c26eceab66c6675db4ddb4",
+    "mtime": 1784576426.303759,
+    "ast_hash": "61573e55835af2939d4db6acb3df09ff",
     "semantic_hash": ""
   },
   "src/interfaces/storage-errors.ts": {
@@ -45,8 +45,8 @@
     "semantic_hash": ""
   },
   "src/postgres/checkpoint-store.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "2353b40e506ffdae11585a66d31ea461",
+    "mtime": 1784729917.3253257,
+    "ast_hash": "3d8fdd347bb9444b94039ee9cf3d2dca",
     "semantic_hash": ""
   },
   "src/postgres/client.ts": {
@@ -255,8 +255,8 @@
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA.md": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "07d47870b785e351c1e37ff588360cd9",
+    "mtime": 1784729917.2996047,
+    "ast_hash": "9810e285a068a6e35ef5e139b0db9935",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
@@ -1082,56 +1082,6 @@
   "openspec/changes/v1.0.0-recovery-testing/tasks.md": {
     "mtime": 1784832500.404776,
     "ast_hash": "a9ab860ff81eb0b069b65c1e612e6c2d",
-    "semantic_hash": ""
-  },
-  "src/postgres/save-and-advance.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "61741d5ff7d362ed014b11eb5cda65a7",
-    "semantic_hash": ""
-  },
-  "test/postgres/checkpoint-store-contract-doc.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "d87442ddce6077d0a728ce6ce73137b1",
-    "semantic_hash": ""
-  },
-  "test/postgres/checkpoint-store-cotx.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "a0060c14eb5d7645a9ddc8c66335f877",
-    "semantic_hash": ""
-  },
-  "test/postgres/durable-cursor-crash-handoff.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "b856e581f7a4acfd17080a1d9706ac33",
-    "semantic_hash": ""
-  },
-  "test/postgres/save-and-advance-import-guard.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "3ef33c3fe6f8fd0d3c46909bbeecf59b",
-    "semantic_hash": ""
-  },
-  "test/postgres/save-and-advance.property.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "96d5e6c2058efb7500a34e2e9b69f8d3",
-    "semantic_hash": ""
-  },
-  "test/postgres/save-and-advance.test.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "d3191f14d85e6144e4419249711fc104",
-    "semantic_hash": ""
-  },
-  "docs/checkpoint-store-contract.md": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "72773039fa7931665cc4698bc80a7ab4",
-    "semantic_hash": ""
-  },
-  "docs/v1-implementation-guideline.md": {
-    "mtime": 1784838952.2576044,
-    "ast_hash": "a73e6aaca6bd43991eebed4951370593",
-    "semantic_hash": ""
-  },
-  "docs/v1-lessons-learned.md": {
-    "mtime": 1784838952.270605,
-    "ast_hash": "0f3aecc85c6efca00941a3ad22f3abbe",
     "semantic_hash": ""
   }
 }
