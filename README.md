@@ -24,7 +24,7 @@ UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
 On top of these, `PgWalletStateEnvelopeStore` persists shielded/unshielded/dust wallet-sync
 snapshots as a single `CheckpointStore.save()` call. It's a capability, not a sixth primitive:
 it adds no table or migration of its own, reusing `CheckpointStore`'s existing chunk/manifest
-storage entirely.
+storage.
 
 ## Why
 
@@ -35,13 +35,57 @@ single writer lease, and a boring, well-understood storage engine everyone alrea
 gives you all of that directly, with real ACID transactions instead of a replica-set-gated
 approximation of them.
 
+## Getting started
+
+Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
+create the `btree_gist` extension, exclusion constraints, and trigger functions, so the connecting
+role needs privileges for those, not just network reachability.
+
+```bash
+npm install
+npm run typecheck        # tsc --noEmit
+npm test                 # vitest run — spins up Postgres via Testcontainers, needs Docker
+npm run docs:storage     # generate API reference (TypeDoc) into docs/api/storage/
+```
+
+```typescript
+import { createClient } from "./src/postgres/client.js";
+import { runMigrations } from "./src/postgres/migrate.js";
+import { PgTemporalKV } from "./src/postgres/temporal-kv.js";
+import { PgTransactionLeaseLayer } from "./src/postgres/transaction-lease.js";
+
+const sql = createClient({ connectionString: process.env.DATABASE_URL, schema: "my_app" });
+await runMigrations(sql, { schema: "my_app" });
+
+const kv = new PgTemporalKV(sql);
+const leases = new PgTransactionLeaseLayer(sql);
+
+// Simple read/write — each call is its own transaction.
+const entry = await kv.put("wallet", "default", "balance", { amount: 100 });
+await kv.get("wallet", "default", "balance");
+await kv.getAt("wallet", "default", "balance", { kind: "version", version: entry.version });
+
+// Atomic multi-key write: both puts commit together, or neither does.
+await leases.withTransaction(async (tx) => {
+  await kv.put("wallet", "default", "balance", { amount: 90 }, { tx });
+  await kv.put("wallet", "default", "last-tx", { id: "abc123" }, { tx });
+});
+
+// Single-writer coordination — one process at a time runs the critical section.
+await leases.withLease("wallet-sync:mainnet", async () => {
+  // ...sync work only one writer should be doing at once...
+});
+
+await sql.end();
+```
+
 ## Architecture
 
-Every module is a thin Postgres adapter behind a narrow, hand-written TypeScript interface, no
-ORM or generated client. `Transaction/Lease` is the one module the others depend on. It's how a
-caller wires a `TemporalKV.put()` and a `Watermarks.set()` into the same atomic commit, and it's
-what coordinates a single writer across multiple application instances (on top of, not instead
-of, Postgres's own transactions, constraints, and locking).
+Every module is a thin Postgres adapter behind a narrow, hand-written TypeScript interface.
+`Transaction/Lease` is the one module the others depend on. It's how a caller wires a
+`TemporalKV.put()` and a `Watermarks.set()` into the same atomic commit, and it's what
+coordinates a single writer across multiple application instances (on top of, not instead of,
+Postgres's own transactions, constraints, and locking).
 
 ```
                         +--------------------------------+
@@ -100,19 +144,18 @@ of, Postgres's own transactions, constraints, and locking).
 
 A caller reaching for `opts.tx` on `TemporalKV.put()` or `Watermarks.set()` resolves that handle
 through `Transaction/Lease`'s own registry (a module-level map, not a shared instance), so two
-independently constructed adapters agree on which live `postgres.js` transaction a handle
-actually refers to, with no dependency-injection container required. `CheckpointStore` is
-different: its own methods compose `Transaction/Lease` internally rather than accepting a
-caller-supplied handle, since a checkpoint save or prune is meant to be one atomic unit of work
-on its own. An application can also call `withTransaction()`/`withLease()` directly, as the usage
-example below does, without going through a data module at all.
+independently constructed adapters agree on which live `postgres.js` transaction a handle refers
+to, with no dependency-injection container required. `CheckpointStore` is different: its own
+methods compose `Transaction/Lease` internally rather than accepting a caller-supplied handle,
+since a checkpoint save or prune is meant to be one atomic unit of work on its own. An
+application can also call `withTransaction()`/`withLease()` directly, as the usage example above
+does, without going through a data module at all.
 
-The diagram above predates two later additions, both composing on top of what it already shows
-rather than adding new architectural layers: `TransactionHistory` (its own `transaction_history`
-table) resolves `opts.tx` through the same `Transaction/Lease` registry as `TemporalKV` and
-`Watermarks`; `PgWalletStateEnvelopeStore` sits entirely above `CheckpointStore`, calling its
-`save()`/`load()` as a regular caller would rather than touching Postgres directly, which is why
-it needs no table of its own and no new box in the picture.
+The diagram predates two later additions, both of which compose on what it already shows:
+`TransactionHistory` (its own `transaction_history` table) resolves `opts.tx` through the same
+`Transaction/Lease` registry as `TemporalKV` and `Watermarks`, and `PgWalletStateEnvelopeStore`
+sits entirely above `CheckpointStore`, calling `save()`/`load()` as any caller would -- which is
+why it gets no box in the picture.
 
 ## Status
 
@@ -136,59 +179,51 @@ All five modules are implemented and merged:
   pending-clear query, and `opts.tx` composition through the same `Transaction/Lease` registry
   as `TemporalKV`/`Watermarks`.
 
-Also merged, on top of the five modules above rather than as a sixth: **wallet-state envelope
-persistence** (Sprint 8), `PgWalletStateEnvelopeStore` -- persists shielded/unshielded/dust
-wallet-sync snapshots as one atomic `CheckpointStore.save()` call per `(walletId, networkId)`.
-It adds no table or migration of its own; it's a thin wrapper over `CheckpointStore`'s existing
-`ckpt_*` storage.
+Also merged, on top of the five rather than as a sixth: **wallet-state envelope persistence**
+(Sprint 8) -- `PgWalletStateEnvelopeStore`, one atomic `CheckpointStore.save()` call per
+`(walletId, networkId)`, stored in `CheckpointStore`'s existing `ckpt_*` tables.
 
-Every implemented module went through the same cycle before merge: draft an
+Every module went through the same cycle before merge: draft an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) change in EARS format, put it through several
 independent review passes, fix what they find, and re-review until nothing new turns up. Every
-sprint went through multiple review rounds and turned up genuine bugs: a race
-in `CREATE EXTENSION` DDL serialization, a cursor-cancellation gap in `postgres.js`, a
-connection-reservation wait with no timeout or abort handling, among others. That's the whole
-point of running it this way instead of shipping on the first green test run.
+sprint turned up genuine bugs: a race in `CREATE EXTENSION` DDL serialization, a
+cursor-cancellation gap in `postgres.js`, a connection-reservation wait with no timeout or abort
+handling, among others. That's the point of running it this way instead of shipping on the first
+green test run.
 
 ## Formal verification
 
-Lean M1 is complete for the abstract per-key TemporalKV history model. The
-kernel-checked slice covers successful version assignment and append behavior,
-failed-write preservation, strict timestamp-invariant preservation, basic
-version/time lookup characterizations, accepted-write replay, and agreement
-between version and timestamp addressing. M2 derives bounded half-open validity
-intervals plus the live tail, proves pairwise disjointness and exact horizon
-coverage, and adds executable prefix retention. Retention-aware time and exact
-version lookup distinguish absence from unavailable history, preserve original
-versions and the live event, and agree with the complete M1 history throughout
-the certified retained horizon.
+Lean M1 is complete for the abstract per-key TemporalKV history model. The kernel-checked slice
+covers successful version assignment and append behavior, failed-write preservation, strict
+timestamp-invariant preservation, basic version/time lookup characterizations, accepted-write
+replay, and agreement between version and timestamp addressing. M2 derives bounded half-open
+validity intervals plus the live tail, proves pairwise disjointness and exact horizon coverage,
+and adds executable prefix retention. Retention-aware time and exact version lookup distinguish
+absence from unavailable history, preserve original versions and the live event, and agree with
+the complete M1 history throughout the certified retained horizon.
 
-Lean M3a now adds an executable abstract Watermarks store over the complete
-`(kind, key)` address and proves W1: unconditional overwrite, same-address
-last-write-wins and state idempotence, distinct-address framing and commutation,
-trace composition, and lookup by the final matching command with initial-store
-fallback. The generic value layer also distinguishes an untouched address from
-a stored null-like abstract value (`none` versus `some none`).
+Lean M3a adds an executable abstract Watermarks store over the complete `(kind, key)` address
+and proves W1: unconditional overwrite, same-address last-write-wins and state idempotence,
+distinct-address framing and commutation, trace composition, and lookup by the final matching
+command with initial-store fallback. The generic value layer also distinguishes an untouched
+address from a stored null-like abstract value (`none` versus `some none`).
 
-M3b CheckpointStore C1: complete (abstract save-side projection only). The Lean
-model proves unconditional finite chunk-identity joins, existing-left-biased
-finite-map merge laws, commutation for compatible maps, and a local
-collision-free-on-bound-values compatibility bridge. It also executes the
-same-hash/different-bytes order-dependence counterexample rather than assuming
-SHA-256 injectivity. The runtime's corrected `(manifest_id, position)` key
-preserves repeated ordered chunk references, but ordered reconstruction is a
-future Lean theorem.
+M3b (CheckpointStore C1) is complete for the abstract save-side projection only. The Lean model
+proves unconditional finite chunk-identity joins, existing-left-biased finite-map merge laws,
+commutation for compatible maps, and a local collision-free-on-bound-values compatibility
+bridge. It also executes the same-hash/different-bytes order-dependence counterexample rather
+than assuming SHA-256 injectivity. The runtime's corrected `(manifest_id, position)` key
+preserves repeated ordered chunk references, but ordered reconstruction is a future Lean
+theorem.
 
-Keyed-store lifting, SQL retention/refinement and retention-floor error wiring,
-Checkpoint C2a/GC, ordered reconstruction, collision handling, leases, and
-liveness remain deferred. The T3/T5, W1, and C1 results concern abstract stores;
-SQL constraints, pruning atomicity, triggers, JSON validation, timestamps,
-transactions, and runtime refinement remain external obligations.
-The small API smoke module checks imports and selected library theorem
-contracts; it does not prove those later store models.
-The default Lake build compiles those contracts and an elaborated-environment
-audit that rejects new axiom declarations or project declarations outside the
-approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
+Keyed-store lifting, SQL retention/refinement and retention-floor error wiring, Checkpoint
+C2a/GC, ordered reconstruction, collision handling, leases, and liveness remain deferred. The
+T3/T5, W1, and C1 results concern abstract stores; SQL constraints, pruning atomicity, triggers,
+JSON validation, timestamps, transactions, and runtime refinement remain external obligations.
+The small API smoke module checks imports and selected library theorem contracts; it does not
+prove the later store models themselves. The default Lake build compiles those contracts and an
+elaborated-environment audit that rejects new axiom declarations or project declarations outside
+the approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
 
 ```sh
 cd Formal/Lean
@@ -196,57 +231,13 @@ lake build
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-trust.ps1
 ```
 
-The committed manifest supplies the pinned dependency revisions. Run
-`lake update` only when intentionally refreshing that manifest.
+The committed manifest supplies the pinned dependency revisions. Run `lake update` only when
+intentionally refreshing that manifest.
 
 See [`ROADMAP.md`](ROADMAP.md) for the full milestone breakdown (formal verification, the
 property-test suite, performance benchmarking, and the eventual cutover) and
 [`openspec/changes/`](openspec/changes/) / [`openspec/specs/`](openspec/specs/) for the
 in-progress and completed module specs.
-
-## Getting started
-
-Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
-create the `btree_gist` extension, exclusion constraints, and trigger functions, so the connecting
-role needs privileges for those, not just network reachability.
-
-```bash
-npm install
-npm run typecheck        # tsc --noEmit
-npm test                 # vitest run — spins up Postgres via Testcontainers, needs Docker
-npm run docs:storage     # generate API reference (TypeDoc) into docs/api/storage/
-```
-
-```typescript
-import { createClient } from "./src/postgres/client.js";
-import { runMigrations } from "./src/postgres/migrate.js";
-import { PgTemporalKV } from "./src/postgres/temporal-kv.js";
-import { PgTransactionLeaseLayer } from "./src/postgres/transaction-lease.js";
-
-const sql = createClient({ connectionString: process.env.DATABASE_URL, schema: "my_app" });
-await runMigrations(sql, { schema: "my_app" });
-
-const kv = new PgTemporalKV(sql);
-const leases = new PgTransactionLeaseLayer(sql);
-
-// Simple read/write — each call is its own transaction.
-const entry = await kv.put("wallet", "default", "balance", { amount: 100 });
-await kv.get("wallet", "default", "balance");
-await kv.getAt("wallet", "default", "balance", { kind: "version", version: entry.version });
-
-// Atomic multi-key write: both puts commit together, or neither does.
-await leases.withTransaction(async (tx) => {
-  await kv.put("wallet", "default", "balance", { amount: 90 }, { tx });
-  await kv.put("wallet", "default", "last-tx", { id: "abc123" }, { tx });
-});
-
-// Single-writer coordination — one process at a time runs the critical section.
-await leases.withLease("wallet-sync:mainnet", async () => {
-  // ...sync work only one writer should be doing at once...
-});
-
-await sql.end();
-```
 
 ## Design
 
@@ -254,10 +245,10 @@ await sql.end();
   of the initial build.
 - [`design/design.md`](design/design.md): concrete schema (DDL) for every module.
 - [`design/design-interfaces.md`](design/design-interfaces.md): the original consolidated
-  TypeScript interface contract (shared conventions, then each module's interface). This predates
+  TypeScript interface contract (shared conventions, then each module's interface). It predates
   the per-module OpenSpec changes under [`openspec/changes/`](openspec/changes/), which are
-  authoritative for anything actually implemented. See that file's own staleness notes where the
-  two disagree.
+  authoritative for anything implemented; see the file's own staleness notes where the two
+  disagree.
 - [`design/design-algebra.md`](design/design-algebra.md): the algebraic structure each module is
   meant to satisfy (event-sourced monoid actions, idempotent join-semilattices, and which
   properties are currently guaranteed by a schema constraint versus merely intended), with a
@@ -266,12 +257,11 @@ await sql.end();
   retention-aware T3 and validity-chain T5 proofs, the abstract Watermarks W1 model/laws, and the
   abstract save-side CheckpointStore C1 projection; C2a/GC, ordered reconstruction, collision
   handling, leases, keyed transactions, and SQL/runtime refinement remain future milestones.
-- [`openspec/`](openspec/): the actual, current source of truth for anything implemented.
-  `openspec/specs/` holds requirements for sprints that have been archived after merge (currently
-  just TemporalKV); `openspec/changes/` holds work still in progress or completed changes awaiting
-  archival, currently including Transaction/Lease, CheckpointStore, Watermarks, TransactionHistory,
-  and wallet-state envelope persistence with their historical proposal → design → tasks →
-  EARS-format spec records.
+- [`openspec/`](openspec/): the source of truth for anything implemented. `openspec/specs/`
+  holds requirements for sprints archived after merge (currently just TemporalKV);
+  `openspec/changes/` holds work in progress or completed changes awaiting archival -- currently
+  Transaction/Lease, CheckpointStore, Watermarks, TransactionHistory, and wallet-state envelope
+  persistence, each with its proposal → design → tasks → EARS-format spec record.
 
 ## Layout
 
