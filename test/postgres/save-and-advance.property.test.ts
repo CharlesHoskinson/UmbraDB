@@ -14,6 +14,13 @@ import { registerSuiteLifecycle, TEST_SCHEMA } from "./setup.js";
  * in a separate transaction), the durable cursor never references an absent checkpoint, and
  * resume-from-cursor reproduces the reference CURRENT state.
  *
+ * A9 is "driven fault-free", so rather than only asserting the end state we also exercise the
+ * intermediate WATERMARK-BEHIND window the contract (§2.2) describes: in the manual form, between
+ * the data commit and the cursor advance, the new checkpoint is ALREADY durable while the cursor
+ * still names the PRIOR value — the safe, recoverable direction, and NEVER the reverse
+ * (cursor-ahead-of-data) silent-skip failure. The combinator form has no such observable window
+ * (atomic co-commit), which is itself the property that distinguishes the two.
+ *
  * Determinism (guideline C1): payloads come from fast-check's seeded generator (no unseeded
  * randomness, no wall-clock); the seed is pinned and reported below.
  */
@@ -60,6 +67,9 @@ describe("durable-composition property P11 (Formal/STORAGE_ALGEBRA.md W1; A9)", 
 
           let referenceData: Buffer | undefined;
           let referenceSeq = 0;
+          // The cursor value durable BEFORE this op's advance (undefined until the first advance) —
+          // the value the intermediate watermark-behind window must still show in the manual form.
+          let priorCursor: string | undefined;
 
           for (const op of ops) {
             const data = Buffer.from(op.data);
@@ -68,6 +78,7 @@ describe("durable-composition property P11 (Formal/STORAGE_ALGEBRA.md W1; A9)", 
             if (op.form === "combinator") {
               // Atomic co-commit: the cursor is advanced to the sequence this save will claim,
               // inside one transaction. One save per op ⇒ the claimed sequence is deterministic.
+              // There is NO observable watermark-behind window here — both land at one commit.
               const summary = await saveAndAdvance(deps, w, net, data, {
                 kind: KIND,
                 key,
@@ -79,11 +90,23 @@ describe("durable-composition property P11 (Formal/STORAGE_ALGEBRA.md W1; A9)", 
               // strictly AFTER, in a separate transaction — the documented safe composition.
               const summary = await checkpoints.save(w, net, data);
               expect(summary.sequence).toBe(nextSeq);
+
+              // Intermediate WATERMARK-BEHIND window (contract §2.2): the new checkpoint is ALREADY
+              // durable, but the cursor has not yet advanced — so it still names the PRIOR value
+              // (undefined before the very first advance), i.e. the cursor is BEHIND its data, the
+              // safe/recoverable direction. It is provably never AHEAD: the cursor here can only be
+              // the previous value or (after the set below) the new one, never a not-yet-saved seq.
+              const behind = await watermarks.get<string>(KIND, key);
+              expect(behind).toBe(priorCursor);
+              const newlyDurable = await checkpoints.load(w, net);
+              expect(newlyDurable.sequence).toBe(nextSeq);
+
               await watermarks.set(KIND, key, String(summary.sequence));
             }
 
             referenceSeq = nextSeq;
             referenceData = data;
+            priorCursor = String(nextSeq);
 
             // Invariant 1: the durable cursor names a checkpoint that EXISTS (load must not throw).
             const cursorVal = await watermarks.get<string>(KIND, key);

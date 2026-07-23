@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import { ValidationError } from "../../src/interfaces/storage-errors.js";
 import type {
   WatermarkKey,
   WatermarkKind,
@@ -123,19 +122,42 @@ describe("saveAndAdvance — co-transactional checkpoint + cursor (G5, A6–A7)"
     const priorData = randomBytes(64);
     await saveAndAdvance(d, "w1", "n1", priorData, { kind: KIND, key: "w1", value: "1" });
 
-    // Attempt a second saveAndAdvance whose cursor value fails validation (a bigint is not a
-    // JSON-representable WatermarkValue). This fires INSIDE the single transaction, AFTER `save`
-    // has already written the seq-2 rows on that transaction but BEFORE the one COMMIT — the
-    // injected in-transaction failure the A7 scenario describes (an injected rollback, distinct
-    // from the T5 postmaster-kill crash owned by the testing-gate change).
+    // Inject an in-transaction failure that fires AFTER `watermarks.set` has already written the
+    // new cursor row on the combinator's transaction handle (which itself runs AFTER `save` wrote
+    // the seq-2 rows on that same handle), but BEFORE the single COMMIT. The rejection therefore
+    // exercises the DATABASE transaction ROLLBACK — not client-side Zod validation, which the
+    // previous bigint-value injection short-circuited before any SQL, making A7 unable to tell a
+    // co-transactional `set(..., { tx })` from a `tx`-dropped autocommit `set(...)`.
+    //
+    // TEETH: the injected `set` faithfully forwards whatever `opts` the combinator handed it. If
+    // `save-and-advance.ts:66` dropped `tx` (regression), `set` would write the new cursor "2" on
+    // the pool's AUTOCOMMIT connection — committed immediately and beyond the reach of the
+    // transaction rollback below — so the final cursor assertion would observe "2" and FAIL.
+    // Under the correct co-transactional code, the "2" write lands on `tx` and the rollback undoes
+    // it, leaving the durable cursor at "1". (An injected rollback, distinct from the
+    // T5 postmaster-kill crash owned by the testing-gate change.)
+    const injected = new Error("injected in-transaction failure after cursor set");
+    const rollingBackWatermarks: Watermarks = Object.create(d.watermarks);
+    rollingBackWatermarks.set = async function set(
+      kind: WatermarkKind,
+      key: WatermarkKey,
+      value: WatermarkValue,
+      opts?: Parameters<Watermarks["set"]>[3],
+    ): Promise<void> {
+      await d.watermarks.set(kind, key, value, opts);
+      throw injected;
+    };
+
     const newData = randomBytes(64);
     await expect(
-      saveAndAdvance(d, "w1", "n1", newData, {
-        kind: KIND,
-        key: "w1",
-        value: 1n as unknown as WatermarkValue,
-      }),
-    ).rejects.toBeInstanceOf(ValidationError);
+      saveAndAdvance(
+        { ...d, watermarks: rollingBackWatermarks },
+        "w1",
+        "n1",
+        newData,
+        { kind: KIND, key: "w1", value: "2" },
+      ),
+    ).rejects.toBe(injected);
 
     // Neither the new checkpoint nor the advanced cursor is durable...
     const history = await d.checkpoints.history("w1", "n1");
@@ -143,7 +165,8 @@ describe("saveAndAdvance — co-transactional checkpoint + cursor (G5, A6–A7)"
     const loaded = await d.checkpoints.load("w1", "n1");
     expect(loaded.sequence).toBe(1);
     expect(Buffer.from(loaded.data).equals(priorData)).toBe(true);
-    // ...and the previously durable cursor still points at the previously durable checkpoint.
+    // ...and the previously durable cursor still points at the previously durable checkpoint (the
+    // seq-2 "2" advance rolled back with the transaction, not committed on autocommit).
     expect(await d.watermarks.get(KIND, "w1")).toBe("1");
   });
 });
