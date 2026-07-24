@@ -16,7 +16,7 @@ lands first.
 
 ## 1. G13 — perf-correctness fixes (LAND FIRST)
 
-- [ ] 1.1 **HP-1: batch `save()`'s chunk + junction inserts** (`design.md` §1) — replace the two
+- [x] 1.1 **HP-1: batch `save()`'s chunk + junction inserts** (`design.md` §1) — replace the two
   per-chunk loops (`checkpoint-store.ts:156-162`, `:190-195`) with one multi-row chunk
   `INSERT … SELECT … FROM unnest($1::bytea[], $2::bytea[]) ON CONFLICT (hash) DO UPDATE SET
   created_at = now()` and one multi-row junction `INSERT … SELECT $1::bigint, p, h FROM
@@ -31,7 +31,7 @@ lands first.
   `postgres.js` usage, fall back to asserting round-count constancy via the emitted SQL
   (postgres.js `debug` hook) and record in a comment which guarantee is actually verified —
   inheriting Sprint 4 task 1.1's "record-the-limitation" precedent.
-- [ ] 1.2 **HP-1 equivalence guard** (`design.md` §1; `council/A` §Phase-3 "behavior-neutral") —
+- [x] 1.2 **HP-1 equivalence guard** (`design.md` §1; `council/A` §Phase-3 "behavior-neutral") —
   prove the batched path is byte-identical to the pre-change path. *Satisfies:* Requirement "the
   batching fixes preserve save/history behavior exactly (equivalence)". **Acceptance:** a test
   saves payloads including one with a repeated chunk hash at two distinct positions, `load`s them
@@ -39,7 +39,7 @@ lands first.
   hash, dense-position, recomputed-manifest-hash), and the resulting `manifest_hash` equals what
   the pre-change `save` produced for that payload; a dedup test asserts a near-duplicate save
   reuses existing chunk rows with no duplicates written.
-- [ ] 1.3 **IS-2: `ckpt_chunks.size_bytes` generated column** (`design.md` §2) — new forward-only
+- [x] 1.3 **IS-2: `ckpt_chunks.size_bytes` generated column** (`design.md` §2) — new forward-only
   migration `006_ckpt_chunks_size_bytes.ts` adding `size_bytes integer GENERATED ALWAYS AS
   (octet_length(data)) STORED`; register it in `migrate.ts`'s `tier1WalletMigrations`. Pattern:
   `chain_archive/001_chain_archive_core.ts:123`. *Satisfies:* Requirement "ckpt_chunks carries a
@@ -47,7 +47,7 @@ lands first.
   only). **Acceptance:** after `runMigrations`, `information_schema` shows `ckpt_chunks.size_bytes`
   as an `integer` generated column and a freshly inserted `L`-byte chunk has `size_bytes = L`
   (verified via query, not "the migration didn't error").
-- [ ] 1.4 **HP-2: collapse `history()` N+1 into one grouped query reading `size_bytes`**
+- [x] 1.4 **HP-2: collapse `history()` N+1 into one grouped query reading `size_bytes`**
   (`design.md` §2) — replace the per-manifest aggregate loop (`checkpoint-store.ts:322-328`) with
   `… WHERE mc.manifest_id = ANY($1) GROUP BY mc.manifest_id`, summing `c.size_bytes` (not
   `octet_length(c.data)`); re-associate rows to manifests by `manifest_id`, preserving
@@ -62,7 +62,7 @@ lands first.
   *Optional (design §2):* `prune`'s own `RETURNING octet_length(c.data)`
   (`checkpoint-store.ts:397-404`) may likewise switch to `RETURNING size_bytes`; not required for
   the gate, and if not done, drop the "called out in tasks" claim rather than leaving it dangling.
-- [ ] 1.5 **IS-1: `kv_current fillfactor=90`** (`design.md` §3) — new forward-only migration
+- [x] 1.5 **IS-1: `kv_current fillfactor=90`** (`design.md` §3) — new forward-only migration
   `005_kv_current_fillfactor.ts` running `ALTER TABLE ${sql(schema)}.kv_current SET (fillfactor =
   90)`; register it in `tier1WalletMigrations`. **Regardless of the order tasks 1.3 and 1.5 are
   built in, the final `tier1WalletMigrations` array MUST be numerically ordered
@@ -163,7 +163,7 @@ lands first.
 
 ## 4. Close-out
 
-- [ ] 4.1 Whole-change differential review: an auditor re-reads this proposal/design against the
+- [x] 4.1 Whole-change differential review: an auditor re-reads this proposal/design against the
   actual committed code and confirms every "Acceptance" criterion above was actually checked — a CI
   run passing is not sufficient evidence on its own, per every prior sprint's close-out standard.
   Confirm the two hard-rule invariants explicitly: (a) the baseline exists and *no perf number
@@ -172,7 +172,7 @@ lands first.
   (G13 fixes landed; baseline recorded; ceilings documented; CV-aware regression gate explicitly
   deferred post-1.0.0) — and cross-link this change from the roadmap's §"Critical path" step 3 so
   the roadmap doesn't drift from what's been built.
-- [ ] 4.3 Per this repo's `CLAUDE.md` convention: refresh any repo knowledge-graph outputs affected
+- [x] 4.3 Per this repo's `CLAUDE.md` convention: refresh any repo knowledge-graph outputs affected
   by the new `bench/` tree and the two migrations in this change's close-out commit. *(Skip if the
   graphify step is explicitly waived for this change.)*
 

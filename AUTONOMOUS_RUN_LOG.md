@@ -97,3 +97,117 @@ authenticated.
   `--always-approve --single` to actually execute tools. A **local Titus cybersecurity model** (Ollama
   GGUF on the RTX 5090) was added as a standing per-round security lane (MLX build is Apple-only →
   used the publisher's GGUF variant); its prompt is council-designed.
+
+---
+
+## Change: `v1.0.0-perf-baseline` — G13 / G14 (2026-07-24)
+
+Implemented by `implementer / Opus-4.8 + Sonnet-builder / perf-round-1` in isolated worktree
+`/root/UmbraDB-g13` (branch `feat/g13-perf-baseline`). G13 = HP-1 batched save (chunk + junction
+inserts), HP-2 grouped `history()`, IS-1 `kv_current fillfactor=90` (migration 005), IS-2
+`ckpt_chunks.size_bytes` generated column (migration 006). G14 = `bench/` harness + committed
+baseline artifact + GC anti-join scale measurement (10^6, cliff K=2.0×/D=5000ms NOT MET →
+single-statement delete retained) + `Performance/CEILINGS.md` SC-1..6 + non-release-gating coarse
+smoke guard. Every task ran red → green; full conformance ended **418 passed / 0 failed / 11 skipped
+(44 files)**; `bench:smoke` exits 0.
+
+### Rework (class 3 — cross-vendor audit caught real correctness defects post-self-verify)
+
+- **R1 — bind-parameter overflow (HP-1).** The batched junction insert used postgres.js's multi-row
+  `VALUES` helper (3 bind-params/row), reintroducing PostgreSQL's 65,535-parameter protocol cap the
+  old per-chunk loop never hit: a ≥21,846-chunk save (large payload at small `chunkSize`) threw. The
+  chunk upsert had the same cap at ≥32,768 unique chunks. **Codex GPT-5.6 cold audit found it; the
+  PUSH Opus review and the builder self-verify did not.** Fixed by sub-batching both inserts at
+  `INSERT_ROW_BATCH = 10_000` (≤30,000 params/statement) — the sanctioned "record-the-limitation"
+  path, since design §1's `unnest($1::bytea[])` form is unusable (postgres.js cannot bind `bytea[]`,
+  SQLSTATE 42846). Proof: a 30,000-junction-row save now succeeds and round-trips.
+- **R2 — empty-data save regression (HP-1).** A 0-chunk save (`new Uint8Array(0)`) made
+  `sql([], …)` render an invalid empty `VALUES` clause; pre-HP-1 the per-chunk loop issued zero
+  statements and an empty save persisted as a 0-chunk manifest that round-tripped to empty.
+  **Independently found by both the Opus review and the Codex cold audit** (BLOCK 2). Fixed by the
+  same batched-loop construct (0 rows → 0 iterations → no statement). Test added.
+- **R3 — incomplete acceptance evidence (HP-1 A1–A4, HP-2/IS-1 A5/A8/A10).** The tests passed a
+  weaker proxy than the acceptance criteria required (single 3-chunk case, no repeated-chunk
+  equivalence with manifest-hash preservation, no `created_at`-refresh assertion, no 50-manifest
+  2-query history count, no `size_bytes`-in-SQL check, no `kv_current`-single-index check). Codex
+  flagged all as BLOCK against the change's own `acceptance.md`. Strengthened to assert each
+  criterion directly.
+- **R4 — 256 MB workload missing (G14 BLOCK 5).** The harness measured only 1/16/64 MB and declared
+  256 MB an unmeasured "ceiling"; design §4 always declared the full 1/16/64/256 set. Added the
+  256 MB measurement (p50 ≈ 4266 ms) and regenerated the committed baseline artifact.
+
+### Rework (class 2 — the machine oracle caught what BOTH diff-scoped audits could not)
+
+- **R5 — cross-file migration-count regression.** Adding migrations 005/006 broke **four hardcoded
+  `_migrations` count assertions in `durability-probe.test.ts`** (a G6 test asserting `toBe(5)`),
+  surfacing only in the full `vitest run` — NOT in the Opus review NOR the two Codex passes, because
+  none of them touched that file (it is not in the change's diff). **Lesson:** a migration addition's
+  blast radius extends beyond its own diff to every hardcoded migration-count/name assertion in the
+  suite (`migrate.test.ts` was updated; `durability-probe.test.ts` was missed). Diff-scoped LLM
+  review cannot see a test it does not read — the full-suite machine oracle (Stage 5) is the
+  required, non-substitutable backstop. Fixed: `toBe(7)` ×4 with a keep-in-sync comment.
+
+### Rework (class 3 continued — cross-vendor cold audit, rounds 2-4)
+
+Codex ran four cold re-audit rounds (5, 5, 1, and confirm BLOCKs) — convergent, each finding real,
+progressively-finer spec-compliance gaps. Highlights:
+
+- **R7 — the HP-1 insert form (the recurring crux, resolved empirically).** Round-1's fix used a
+  ceil(N/10000) sub-batched `VALUES` — round-2 codex flagged it violates A1's "exactly one statement
+  independent of chunk count." Design §1 specified `unnest($1::bytea[])`; a prior fixer wrongly
+  believed postgres.js can't bind `bytea[]` (SQLSTATE 42846). **Empirically proven false:** the 42846
+  is only from INLINE arrays (`${buffers}::bytea[]` → postgres.js binds one `bytea`); `sql.array()`
+  works. BUT `unnest(sql.array(bytea[]))` **text-serializes** each buffer to `\x<hex>` and a 256 MiB
+  checkpoint's hex (~537 M chars) blows V8's MAX_STRING_LENGTH (536,870,888) — a `RangeError` **caught
+  only by the 256 MB harness workload**, not the small-array probe (lesson: verify at real scale).
+  Resolution — a hybrid, both single-statement: **junction** = `unnest(sql.array(int[],bytea[]))`
+  (large row count, tiny 32-byte data, dodges the 65,535 bind-param cap); **chunk** = multi-row
+  `VALUES` (binds each `data` as a binary param, streams 256 MB+).
+- **R8 — round-2 spec-completeness (4 BLOCKs).** A4 mixed conflict/insert dedup test was missing (the
+  test re-saved identical content, not a mix of existing+new hashes); the bench image was tag- not
+  digest-pinned (fixed to `postgres@sha256:742f40…`); the GC cliff K/D was adjudicated over
+  sub-envelope 10k/50k points (would false-trigger B8 remediation — now scoped to the declared
+  100k–1M envelope); the Watermarks workload lacked the Task-2.2 bloat-stability metric (added
+  `pg_relation_size`+`n_dead_tup` after a same-key burst: 8 KiB / 33 dead tuples over 5,245 updates).
+- **R9 — the chunk-insert trilemma (round-3, 1 BLOCK).** The chunk `VALUES` still crashed on >32,767
+  DISTINCT chunks (reachable via an explicit sub-64-KiB `chunkSize`); the pre-fix "large-N" test used
+  1-byte chunks (≤256 distinct) so it never exposed it. **No single-statement form handles BOTH large
+  DATA (unnest → V8 string limit) AND many rows (VALUES → 65,535 param cap)** — a hard protocol/runtime
+  constraint, not a code defect. Resolution: a **defensive sub-batch on the chunk insert** —
+  `CHUNK_INSERT_MAX_ROWS=30,000` → EXACTLY one statement for every in-model checkpoint (unreachable at
+  any realistic chunkSize; 30k unique 4 MiB chunks = 120 GiB, beyond `load()`'s SC-3 heap ceiling), and
+  >1 statement ONLY for the out-of-model pathological case where one statement is physically
+  impossible. New test proves a 33,000-distinct-chunk save succeeds + round-trips. The sanctioned
+  "record-the-limitation" path (tasks.md §1.1). **Lesson:** design specs can prescribe an idiom
+  (`unnest(bytea[])`) that is infeasible for the real payload envelope; the implementation records the
+  driver/protocol limit rather than pretending the literal spec is achievable, and §2.2 forbids
+  inflating a physically-infeasible "exactly-1-statement-for-any-N" to a merge blocker.
+
+- **R10 — round-4: the A1 infeasibility, and a §2.2 governance determination.** Round-4 returned
+  two BLOCKs that are **mutually exclusive**, and together they prove A1's literal
+  "exactly-one-statement-independent-of-chunk-count" is physically unachievable in postgres.js:
+  (i) BLOCK-1 held that the chunk defensive sub-batch emits `ceil(N/30000)` statements for >30k
+  distinct chunks, violating "exactly one"; (ii) BLOCK-2 showed the *only* exactly-one form —
+  `unnest(sql.array(bytea[]))` (round-2's junction fix) — **crashes** at ~7.6M positions, because
+  postgres.js text-serializes each 32-byte hash to ~70 chars and blows V8's ~537 MB string cap
+  (reachable at chunkSize:1 + ~8 MiB). **There is no postgres.js form that inserts unbounded `bytea`
+  rows in one statement** (VALUES → 65,534 bind-param cap; unnest → V8 string cap). Resolution: make
+  BOTH inserts defensive param-safe `VALUES` sub-batches — the code now NEVER crashes for any input
+  (fixing the genuine BLOCK-2 robustness bug) and emits EXACTLY ONE statement for the entire realistic
+  envelope; only a pathological sub-64-KiB chunkSize with tens of thousands of chunks emits >1. Per
+  **guideline §2.2 (anti-severity-inflation) and §0.2 (this doc governs how work is closed)**, the
+  consolidating lead records BLOCK-1 as a **physically-infeasible-requirement satisfied in spirit**,
+  NOT a merge blocker: A1's own acceptance test operationalizes it as "constant round count across
+  N ∈ {1,16,64}", which the implementation meets exactly; demanding literal exactly-one-for-all-N
+  would require the very form (unnest) that BLOCK-2 proves crashes. A further re-audit round would
+  re-flag BLOCK-1 unchanged forever (it is infeasible to "fix"), so the loop is closed here with this
+  documented determination rather than iterated. The real BLOCK-2 crash and all three NITs
+  (param-cap off-by-one comment, GC lower-boundary K pair, remaining `000..004` lineage docs) WERE
+  fixed. **Human review welcome on this §2.2 call.**
+
+### Rework (class 1 — infra flake, not a change defect)
+
+- **R6 — host-load teardown flake.** `chain-archive-sync-retry.integration.test.ts`'s `afterAll`
+  `container.stop()` exceeded the 10 s default hook timeout under heavy host load (the local
+  archive-node + indexer sync were running). Same class as the prior change's `setup.ts` fix;
+  hardened to `60_000`. Unrelated to perf-baseline (touches no checkpoint-store/migration code).
