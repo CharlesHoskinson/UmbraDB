@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -18,19 +18,21 @@ import { registerSuiteLifecycle, TEST_SCHEMA, withSuiteWatchdog } from "../../po
  *
  * A sustained CONCURRENT mix — KV `put`s (versioned) + checkpoint `save` cadence + watermark ticks
  * (fused as the G5 `saveAndAdvance` durable-composition primitive) + periodic `prune` (GC passes) +
- * a held `withLease` — run for a BOUNDED duration at a DECLARED envelope. The test asserts:
+ * a held `withLease` — run at a DECLARED envelope. The test asserts:
  *
  *   (a) a NAMED, ENUMERATED set of P1–P10-derived, SQL-observable invariants — spelled out IN CODE
  *       below (never a vague "P1–P10 hold") — is sampled DURING the run (not only at teardown) and
  *       never fails. The four invariants (`design.md` §3.1(a) / acceptance F2):
- *         I1  gapless per-(ns,scope,key) `version` sequences in `kv_history` (P1/P2);
+ *         I1  gapless per-(ns,scope,key) `version` sequences in `kv_history`, AND the per-key
+ *             `kv_current.version` is consistent with that history (P1/P2) — see below;
  *         I2  only `complete = true` manifests are `load`able (C1);
  *         I3  no `ckpt_manifest_chunks` row references a missing/incomplete manifest (C2a);
- *         I4  the durable watermark is never AHEAD of the max durable data (the T5 invariant).
+ *         I4  the durable watermark is never AHEAD of the max durable data — KV-INCLUSIVE (the T5
+ *             invariant): the covered batch's KV datum must be durable too, not checkpoint-only.
  *       Sampling is REAL: a concurrent sampler evaluates all four every ~SAMPLE_INTERVAL_MS against
  *       the LIVE database and fails on the FIRST violation. Sample count is asserted > 0 (in fact
  *       >= MIN_SAMPLES), and the LAST sample is asserted NON-VACUOUS (real manifests + history +
- *       watermark present), so "mid-run sampling is real" is auditor-verifiable.
+ *       watermark + covered KV datum present), so "mid-run sampling is real" is auditor-verifiable.
  *
  *   (b) the END STATE equals a FAULT-FREE REFERENCE on the current-state equality predicate
  *       (`design.md` §2.3 / acceptance F3): the FULL `kv_current` value set + the latest complete
@@ -43,23 +45,31 @@ import { registerSuiteLifecycle, TEST_SCHEMA, withSuiteWatchdog } from "../../po
  *   (c) each GC/prune-pass duration is recorded as a WRITTEN artifact and completes within a named
  *       `GC_PASS_WATCHDOG_MS` TEST-TERMINATION constant (`design.md` §3.1(c) / acceptance F4). The
  *       watchdog is a TERMINATION bound, not a perf gate: NO pass-rate/latency threshold gates the
- *       release (`ROADMAP` §D). The recorded durations ARE the deliverable; they are ungated.
+ *       release (`ROADMAP` §D). The recorded durations ARE the deliverable; they are ungated. A
+ *       dedicated leg (below) additionally proves a GC pass GENUINELY reclaims chunks (not merely
+ *       records `reclaimedChunks`): chunks backdated past the 15-min grace window are actually
+ *       deleted, so `reclaimedChunks > 0` and a broken chunk-reclamation anti-join would fail.
  *
- * ENVELOPE — declared vs live-run (honest, not hidden):
+ * ENVELOPE — DECLARED and MET (acceptance F1: "a declared envelope (10^5–10^6 chunks, not 10^7)"):
  *   The DECLARED supported envelope is 10^5–10^6 chunks (`council/B` §1: "'10^7 chunks' exceeds the
  *   plausible envelope of a local wallet datastore; benchmark to a declared supported envelope (e.g.
- *   10^5–10^6 chunks) and document the ceiling"). This is recorded as a documented constant
- *   ({@link DECLARED_ENVELOPE}). The LIVE run is deliberately SCALED DOWN to fit `conformance.yml`'s
- *   `timeout-minutes: 30` (`design.md` §3.1 "Fit to the required gate"; §3 item 5): it runs a few
- *   thousand chunks over ~{@link SOAK_DURATION_MS}ms so the whole test finishes in a couple of
- *   minutes wall-clock, well under the CI timeout. The scaling is explicit in {@link LIVE_ENVELOPE}
- *   and written into the GC artifact, so what actually ran is never overstated.
+ *   10^5–10^6 chunks) and document the ceiling"). This live run EXECUTES at the declared FLOOR: the
+ *   full-sync writer commits {@link SYNC_SAVES} checkpoints of {@link CHUNKS_PER_SAVE} distinct
+ *   chunks each — a DETERMINISTIC {@link TARGET_CHUNKS} = SYNC_SAVES x CHUNKS_PER_SAVE >= 10^5
+ *   chunks — so the lock / query-plan / GC anti-join behaviour at 10^5 chunks is ACTUALLY exercised
+ *   under the concurrent mix, not a 1,000-chunk stand-in. The writer is COUNT-bounded (not merely
+ *   time-bounded), so the 10^5 floor is met on every host regardless of speed; it is self-paced over
+ *   ~{@link SOAK_TARGET_MS}ms so the sampler and GC passes fire many times DURING the run, and the
+ *   whole test finishes in a couple of minutes wall-clock — well under `conformance.yml`'s
+ *   `timeout-minutes: 30`. The envelope is a real, MET constant ({@link LIVE_ENVELOPE}), written into
+ *   the GC artifact; the 10^7 matrix is explicitly out of scope (`council/B` §1).
  *
- * `src/` is byte-unchanged: this test drives ONLY the public adapters + the existing shared
- * container harness (`registerSuiteLifecycle` / `withSuiteWatchdog`); it adds no `src/` code and
- * spins up NO second container (one dedicated actor pool + one small sampler pool, both against the
- * SAME shared container, per the harness's documented "own dedicated pool against the same
- * database" hook).
+ * `src/` is byte-unchanged: this test drives ONLY the public adapters (+ raw SQL through the client
+ * for the grace-window backdate and the interrupted-save leftover, exactly as the load-under-prune
+ * and checkpoint-store GC tests do) + the existing shared container harness (`registerSuiteLifecycle`
+ * / `withSuiteWatchdog`); it adds no `src/` code and spins up NO second container (one dedicated
+ * actor pool + one small sampler pool + a couple of tiny admin pools, all against the SAME shared
+ * container, per the harness's documented "own dedicated pool against the same database" hook).
  */
 
 // ============================================================================================
@@ -69,30 +79,45 @@ import { registerSuiteLifecycle, TEST_SCHEMA, withSuiteWatchdog } from "../../po
 const NET = "n";
 /** KV namespace the churn actor writes (versioned `put`s → the gapless-version invariant). */
 const CHURN_NS = "soak-churn";
+/** KV namespace the SYNC actor writes its per-batch, cursor-tied datum into (the T5 KV half). */
+const SYNC_KV_NS = "soak-sync-kv";
 /** Watermark kind the sync/full-sync writer ticks (co-committed with each checkpoint). */
 const SYNC_KIND = "soak-sync";
 
-/** DECLARED supported envelope (`council/B` §1) — recorded, NOT what the live CI run executes. */
+/** DECLARED supported envelope (`council/B` §1) — the live run below EXECUTES at its 10^5 floor. */
 const DECLARED_ENVELOPE = {
-  chunksLow: 100_000, // 10^5 — the declared FLOOR
+  chunksLow: 100_000, // 10^5 — the declared FLOOR (this live run meets it)
   chunksHigh: 1_000_000, // 10^6 — the declared ceiling
   note:
     "council/B §1 declared supported envelope for a local wallet datastore (10^5–10^6 chunks); " +
-    "the 10^7 matrix is explicitly out of scope. The live CI run below is SCALED DOWN from this " +
-    "to fit conformance.yml timeout-minutes:30 (design.md §3.1 / §3 item 5).",
+    "the 10^7 matrix is explicitly out of scope. This live CI run EXECUTES at the 10^5 FLOOR " +
+    "(acceptance F1): SYNC_SAVES x CHUNKS_PER_SAVE distinct chunks under the concurrent mix.",
 } as const;
 
-/** Bounded soak duration (`design.md` §3.1 "run for a bounded duration N"). Scaled to fit CI. */
-const SOAK_DURATION_MS = 60_000;
-
-/** Chunking: each checkpoint `save` produces exactly {@link CHUNKS_PER_SAVE} distinct chunks, so a
- *  few-thousand-chunk live envelope is reached with a realistic (not per-millisecond) save cadence. */
+/** Chunking: each checkpoint `save` produces exactly {@link CHUNKS_PER_SAVE} distinct chunks (its
+ *  payload is CHUNKS_PER_SAVE * CHUNK_SIZE bytes, split into CHUNKS_PER_SAVE distinct chunks). */
 const CHUNK_SIZE = 512;
-const CHUNKS_PER_SAVE = 6;
+const CHUNKS_PER_SAVE = 550;
 
-/** Cadences for the concurrent actors (paced so the mix is SUSTAINED across the whole duration and
- *  the recorded sequence stays CI-tractable to replay for the reference). */
-const SYNC_INTERVAL_MS = 150; // checkpoint+watermark tick cadence (realistic sync progress)
+/** The full-sync writer commits exactly this many checkpoints — a DETERMINISTIC, count-bounded
+ *  envelope so the 10^5 chunk floor is MET on every host, not left to a timing race. */
+const SYNC_SAVES = 200;
+
+/** The DETERMINISTIC live chunk envelope actually written by the sync writer (>= the 10^5 floor). */
+const TARGET_CHUNKS = SYNC_SAVES * CHUNKS_PER_SAVE; // 200 * 550 = 110,000 (10% over the 10^5 floor)
+
+/** Self-pacing target for the sync writer: spread SYNC_SAVES saves over ~this long so the sampler
+ *  (every SAMPLE_INTERVAL_MS) and the GC passes (every PRUNE_INTERVAL_MS) fire many times DURING
+ *  the run. The writer is COUNT-bounded — a slower host simply takes longer, still reaching 10^5. */
+const SOAK_TARGET_MS = 60_000;
+const SYNC_PACE_MS = Math.floor(SOAK_TARGET_MS / SYNC_SAVES); // ~300ms between checkpoint saves
+
+/** Hard safety deadline for the concurrent actors: they stop when the sync writer completes its
+ *  count OR at this bound (belt-and-suspenders vs. a wedged run — the per-op watchdog is the primary
+ *  termination mechanism). Generous vs. the ~60s expected soak; comfortably under CI's 30 min. */
+const MAX_SOAK_MS = 300_000;
+
+/** Cadences for the concurrent actors (paced so the mix is SUSTAINED across the whole duration). */
 const CHURN_INTERVAL_MS = 30; // KV put cadence
 const PRUNE_INTERVAL_MS = 2_000; // GC-pass cadence
 const LEASE_HOLD_MS = 300; // how long each held withLease is held
@@ -104,36 +129,56 @@ const RETAIN_COUNT = 40; // prune retains this many newest complete manifests
 
 /** GC-pass TEST-TERMINATION bound (`design.md` §3.1(c)). Its ONLY role is to fail a WEDGED pass
  *  fast — it is NOT a perf gate (no pass-rate/latency threshold gates the release; the durations
- *  are a recorded, ungated artifact). Generous vs. the real prune cost (a few ms on this envelope). */
-const GC_PASS_WATCHDOG_MS = 10_000;
+ *  are a recorded, ungated artifact). Generous vs. the real prune cost on this envelope. */
+const GC_PASS_WATCHDOG_MS = 15_000;
 
 /** Per-op JS-level watchdog bound (independent of G7's server-side timeouts) for the non-prune
  *  actor ops, so a half-dead backend fails typed rather than hanging the suite. */
 const OP_WATCHDOG_MS = 30_000;
 
 /** Live-run floors — asserted so a green run PROVES the envelope was actually exercised (not a
- *  vacuous zero-op pass). Conservative vs. the ~2k-chunk target so the test does not flake. */
-const LIVE_CHUNK_FLOOR = 1_000; // ckpt_chunks actually created
+ *  vacuous zero-op pass). The chunk floor is the DECLARED 10^5; the sync writer is count-bounded to
+ *  TARGET_CHUNKS > this, so it is met deterministically. */
+const LIVE_CHUNK_FLOOR = 100_000; // 10^5 — the declared envelope FLOOR (acceptance F1)
 const MIN_SAMPLES = 10; // mid-run invariant samples that must have fired
 const MIN_GC_PASSES = 5; // prune passes that must have run and been timed
 const MIN_CHURN_PUTS = 400; // KV puts that must have committed
 
-/** The live-run envelope, recorded into the artifact so the SCALING is documented, not hidden. */
+/** BLOCK 5 — the dedicated GC-reclamation leg (mirrors the checkpoint-store GC-scale /
+ *  load-under-prune tests): a handful of UNIQUE-content checkpoints whose chunks are backdated past
+ *  prune's 15-minute grace window, so a `prune` retaining only the newest few GENUINELY deletes the
+ *  older manifests AND reclaims their now-orphaned chunks. */
+const GC_RECLAIM_SAVES = 8;
+const GC_RECLAIM_RETAIN = 2; // keep the newest 2 → the other 6 manifests + their chunks are reclaimed
+const GC_RECLAIM_CHUNK_SIZE = 4_096;
+const GC_RECLAIM_PAYLOAD_BYTES = 512; // < chunkSize → exactly one distinct chunk per checkpoint
+
+/** BLOCK 8 — the "only complete manifests are loadable" leg: complete checkpoints plus an ACTUAL
+ *  incomplete (interrupted-save leftover) manifest at a HIGHER seq, driven through the REAL adapter. */
+const INCOMPLETE_COMPLETE_SAVES = 3;
+const INCOMPLETE_CHUNK_SIZE = 4_096;
+
+/** The live-run envelope, recorded into the artifact so what actually ran is documented, not hidden. */
 const LIVE_ENVELOPE = {
-  soakDurationMs: SOAK_DURATION_MS,
+  syncSaves: SYNC_SAVES,
   chunkSize: CHUNK_SIZE,
   chunksPerSave: CHUNKS_PER_SAVE,
-  targetChunkFloor: LIVE_CHUNK_FLOOR,
+  targetChunks: TARGET_CHUNKS,
+  chunkFloor: LIVE_CHUNK_FLOOR,
+  syncPaceMs: SYNC_PACE_MS,
   churnKeys: CHURN_KEYS,
   retainCount: RETAIN_COUNT,
   note:
-    "SCALED-DOWN live run of the declared envelope, sized to finish in ~1–2 min wall-clock so the " +
-    "soak fits the required gate (conformance.yml timeout-minutes:30) without being live-gated or " +
-    "made optional (design.md §3.1 'Fit to the required gate').",
+    "DECLARED-envelope live run (acceptance F1): the full-sync writer commits SYNC_SAVES checkpoints " +
+    "of CHUNKS_PER_SAVE distinct chunks each = TARGET_CHUNKS (>= the 10^5 floor), DETERMINISTICALLY " +
+    "(count-bounded, not timing-dependent), under the sustained concurrent mix. Self-paced over " +
+    "~SOAK_TARGET_MS so the sampler + GC passes fire many times DURING the run; fits conformance.yml " +
+    "timeout-minutes:30 without being live-gated or made optional (design.md §3.1 'Fit to the gate').",
 } as const;
 
-/** Test timeout: the bounded soak + the sequential fault-free reference replay + comfortable margin. */
-const TEST_TIMEOUT_MS = SOAK_DURATION_MS + 180_000;
+/** Test timeout: the count-bounded soak (safety-capped at MAX_SOAK_MS) + the sequential fault-free
+ *  reference replay + the GC-reclamation / incomplete-manifest legs + comfortable margin. */
+const TEST_TIMEOUT_MS = MAX_SOAK_MS + 300_000;
 
 // ============================================================================================
 // Deterministic payloads / values (byte-identical between the soak run and its fault-free
@@ -162,6 +207,27 @@ function churnValue(key: string, n: number): JsonValue {
   return { k: key, v: n };
 }
 
+/** The sync writer's per-batch, cursor-tied KV datum (mirrors the T5 keystone
+ *  `cursor-durability.crash.test.ts`: `item:i` -> `{ batch: i }`, with batch index === cursor
+ *  value). Written FIRST, before the batch's cursor advance, so the cursor covering batch `i`
+ *  implies `item:i` is already durable — the KV half of "durable data" the T5 sample checks. */
+function itemKey(batch: number): string {
+  return `item:${batch}`;
+}
+function itemValue(batch: number): JsonValue {
+  return { batch };
+}
+
+function sha256(data: Uint8Array): Buffer {
+  return createHash("sha256").update(data).digest();
+}
+
+/** Deep-equality of a durable KV value against an expected value (mirrors the T5 keystone). Values
+ *  here are small single-key JSON objects, so a canonical `JSON.stringify` compare is exact. */
+function kvValueEqual(actual: JsonValue | undefined, expected: JsonValue): boolean {
+  return actual !== undefined && JSON.stringify(actual) === JSON.stringify(expected);
+}
+
 // ============================================================================================
 // PURE invariant predicates — GENUINELY FALSIFIABLE (a negative-control block below feeds each a
 // crafted bad input and asserts it flags a violation, so none is a weaker proxy). The sampler
@@ -172,40 +238,69 @@ interface HistGroup {
   ns: string;
   scope: string;
   key: string;
-  mn: bigint; // min(version) — int8 → bigint via the client's types.bigint mapping
-  mx: bigint; // max(version)
-  cnt: number; // count(*)          (cast ::int)
-  dcnt: number; // count(distinct version) (cast ::int)
+  cur: bigint; // kv_current.version for this key (int8 → bigint)
+  mn: bigint | null; // min(history version) — null when the key has no superseded history yet
+  mx: bigint | null; // max(history version)
+  cnt: number | null; // count(*)          (cast ::int)
+  dcnt: number | null; // count(distinct version) (cast ::int)
 }
 
-/** I1 (P1/P2): for each (ns,scope,key) present in `kv_history`, the superseded `version` values
- *  form a CONTIGUOUS run with no gap, no duplicate, starting at 1. (`kv_history` holds the OLD row
- *  on every supersession, so a key at current version V has history versions {1..V-1}.) Returns one
- *  message per violating key; empty ⇒ the invariant holds. */
+/** I1 (P1/P2): for each (ns,scope,key) present in `kv_current`, the superseded `version` values in
+ *  `kv_history` form a CONTIGUOUS run with no gap, no duplicate, starting at 1, AND — critically —
+ *  the LIVE `kv_current.version` is consistent with that history: `kv_history` holds the OLD row on
+ *  every supersession, so a key at current version V has history {1..V-1}, i.e. `cur == max+1` (or
+ *  `cur == 1` with no history yet). Reading `kv_current.version` too (not just `kv_history`) is what
+ *  catches a current-row version JUMP (history={1,2,3} but `kv_current` at 100) that a history-only
+ *  check would miss. Returns one message per violating key; empty ⇒ the invariant holds. */
 function gaplessVersionViolations(rows: readonly HistGroup[]): string[] {
   const out: string[] = [];
   for (const r of rows) {
-    const span = Number(r.mx - r.mn) + 1;
-    if (r.dcnt !== r.cnt) {
-      out.push(`I1 gapless(${r.key}): duplicate versions (count=${r.cnt}, distinct=${r.dcnt})`);
-    } else if (span !== r.cnt) {
-      out.push(`I1 gapless(${r.key}): GAP in versions (min=${r.mn}, max=${r.mx}, count=${r.cnt})`);
-    } else if (r.mn !== 1n) {
-      out.push(`I1 gapless(${r.key}): history does not start at version 1 (min=${r.mn})`);
+    const cnt = r.cnt ?? 0;
+    if (cnt === 0) {
+      // No superseded history yet: the key must be at its FIRST version (a first, un-superseded put).
+      if (r.cur !== 1n) {
+        out.push(`I1 gapless(${r.key}): no kv_history yet but kv_current.version=${r.cur} (expected 1)`);
+      }
+      continue;
+    }
+    const mn = r.mn!;
+    const mx = r.mx!;
+    const dcnt = r.dcnt!;
+    const span = Number(mx - mn) + 1;
+    if (dcnt !== cnt) {
+      out.push(`I1 gapless(${r.key}): duplicate versions (count=${cnt}, distinct=${dcnt})`);
+    } else if (span !== cnt) {
+      out.push(`I1 gapless(${r.key}): GAP in versions (min=${mn}, max=${mx}, count=${cnt})`);
+    } else if (mn !== 1n) {
+      out.push(`I1 gapless(${r.key}): history does not start at version 1 (min=${mn})`);
+    } else if (r.cur !== mx + 1n) {
+      // kv_current.version must be exactly one past the newest superseded version — a current-row
+      // version jump (history {1..k}, kv_current jumping to N != k+1) is caught HERE, mid-run.
+      out.push(
+        `I1 gapless(${r.key}): kv_current.version=${r.cur} inconsistent with kv_history max=${mx} (expected ${mx + 1n})`,
+      );
     }
   }
   return out;
 }
 
-/** I4 (T5): the durable watermark is never AHEAD of the max durable data. `undefined` watermark
- *  (no cursor yet) is vacuously ok. Returns a message on inversion, `null` when it holds. */
+/** I4 (T5), KV-INCLUSIVE (mirrors the T5 keystone `cursor-durability.crash.test.ts`): the durable
+ *  watermark is never AHEAD of the max durable DATA, where "data" is BOTH the checkpoint (its label
+ *  == cursor value) AND the batch's KV datum (`item:cursorValue`). `undefined` watermark (no cursor
+ *  yet) is vacuously ok. Returns a message on inversion (checkpoint OR covered KV missing), else
+ *  `null`. A checkpoint-seq-only check would let a LOST KV write for a cursor-covered batch pass —
+ *  covering the KV half closes that hole. */
 function watermarkNotAheadViolation(
   watermark: number | undefined,
   maxDurableData: number | undefined,
+  coveredKvValue: JsonValue | undefined,
 ): string | null {
   if (watermark === undefined) return null;
   if (maxDurableData === undefined || watermark > maxDurableData) {
-    return `I4 T5: watermark ${watermark} is AHEAD of max durable data ${maxDurableData ?? "none"}`;
+    return `I4 T5: watermark ${watermark} is AHEAD of max durable checkpoint data ${maxDurableData ?? "none"}`;
+  }
+  if (!kvValueEqual(coveredKvValue, itemValue(watermark))) {
+    return `I4 T5: covered batch ${watermark}'s KV datum (item:${watermark}) is ABSENT/mismatched in durable data (got ${JSON.stringify(coveredKvValue ?? null)})`;
   }
   return null;
 }
@@ -314,7 +409,10 @@ async function readCurrentState(
  *  identical, and the FULL watermarks value set agrees. `kv_history`/`version` are excluded because
  *  they legitimately diverge (`council/B` §1: an unconditioned `put` is a version-bumping upsert;
  *  the soak's concurrency + reference's independent run produce different version counters and
- *  spurious `kv_history` rows, but the CURRENT value is identical). */
+ *  spurious `kv_history` rows, but the CURRENT value is identical). The sync writer's per-batch KV
+ *  datum lives under its OWN scope (SYNC_KV_NS/`syncKvScope`) which this predicate does NOT compare
+ *  (it compares the churn scope) — it is auxiliary evidence for the T5 sample, not part of the
+ *  fault-free-reference equality, so the reference does not replay it. */
 function assertCurrentStateEqual(actual: CurrentState, reference: CurrentState): void {
   expect(actual.kvAll).toEqual(reference.kvAll);
   expect(actual.latestPayload.equals(reference.latestPayload)).toBe(true);
@@ -332,6 +430,7 @@ interface SampleObservation {
   chunks: number;
   watermark: number | undefined;
   maxDurableLabel: number | undefined;
+  coveredKvPresent: boolean; // the KV-inclusive T5 half checked a real covered datum
   gaplessKeysChecked: number;
   c1Checked: boolean;
   violations: string[];
@@ -341,24 +440,35 @@ interface SampleObservation {
 // The one required soak test
 // ============================================================================================
 
-describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a sustained concurrent mix (design.md §3.1)", () => {
+describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a sustained concurrent mix at the declared 10^5 envelope (design.md §3.1)", () => {
   it(
-    "[[soak.full-sync.invariants-hold]] a sustained concurrent mix (KV puts + checkpoint/watermark cadence + periodic prune + held lease) at a declared envelope samples four enumerated P1–P10-derived SQL invariants DURING the run (never failing), ends replay-equivalent to a fault-free reference on the current-state predicate, and records each GC-pass duration bounded by GC_PASS_WATCHDOG_MS (no perf threshold gates)",
+    "[[soak.full-sync.invariants-hold]] a sustained concurrent mix (KV puts + checkpoint/watermark cadence + periodic prune + held lease) at a DECLARED 10^5-chunk envelope samples four enumerated P1–P10-derived SQL invariants DURING the run (gapless incl. kv_current.version; C1; C2a; KV-inclusive T5 — never failing), a GC pass genuinely reclaims backdated chunks, an incomplete manifest is excluded by the real load/history path, and the end state is replay-equivalent to a fault-free reference on the current-state predicate; each GC-pass duration is recorded and bounded by GC_PASS_WATCHDOG_MS (no perf threshold gates)",
     async () => {
       // ---- FALSIFIABILITY (test-honesty): prove each pure invariant predicate has TEETH before
       //      the soak relies on it — a crafted bad input MUST be flagged; a good input MUST pass. ----
-      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", mn: 1n, mx: 5n, cnt: 4, dcnt: 4 }]).length)
+      // I1 gapless + the kv_current.version consistency (BLOCK 7):
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 5n, mn: 1n, mx: 5n, cnt: 4, dcnt: 4 }]).length)
         .toBeGreaterThan(0); // span 5 ≠ count 4 ⇒ GAP
-      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", mn: 1n, mx: 3n, cnt: 3, dcnt: 3 }]))
-        .toEqual([]); // contiguous 1..3 ⇒ holds
-      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", mn: 2n, mx: 3n, cnt: 2, dcnt: 2 }]).length)
-        .toBeGreaterThan(0); // does not start at 1
-      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", mn: 1n, mx: 3n, cnt: 3, dcnt: 2 }]).length)
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 4n, mn: 1n, mx: 3n, cnt: 3, dcnt: 3 }]))
+        .toEqual([]); // contiguous history 1..3 with kv_current at 4 ⇒ holds
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 4n, mn: 2n, mx: 3n, cnt: 2, dcnt: 2 }]).length)
+        .toBeGreaterThan(0); // history does not start at 1
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 4n, mn: 1n, mx: 3n, cnt: 3, dcnt: 2 }]).length)
         .toBeGreaterThan(0); // duplicate version
-      expect(watermarkNotAheadViolation(5, 3)).not.toBeNull(); // ahead ⇒ violation
-      expect(watermarkNotAheadViolation(3, 3)).toBeNull(); // equal ⇒ holds
-      expect(watermarkNotAheadViolation(2, 3)).toBeNull(); // behind ⇒ holds
-      expect(watermarkNotAheadViolation(undefined, undefined)).toBeNull(); // no cursor yet ⇒ vacuous
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 100n, mn: 1n, mx: 3n, cnt: 3, dcnt: 3 }]).length)
+        .toBeGreaterThan(0); // BLOCK 7: gapless history 1..3 but kv_current JUMPED to 100 ⇒ violation
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 1n, mn: null, mx: null, cnt: null, dcnt: null }]))
+        .toEqual([]); // first put, no history yet, kv_current at 1 ⇒ holds
+      expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 5n, mn: null, mx: null, cnt: null, dcnt: null }]).length)
+        .toBeGreaterThan(0); // no history but kv_current at 5 ⇒ violation
+      // I4 KV-inclusive T5 (BLOCK 6):
+      expect(watermarkNotAheadViolation(5, 3, { batch: 5 })).not.toBeNull(); // ahead of checkpoint ⇒ violation
+      expect(watermarkNotAheadViolation(3, 3, { batch: 3 })).toBeNull(); // equal + covered KV present ⇒ holds
+      expect(watermarkNotAheadViolation(2, 3, { batch: 2 })).toBeNull(); // behind + covered KV present ⇒ holds
+      expect(watermarkNotAheadViolation(undefined, undefined, undefined)).toBeNull(); // no cursor yet ⇒ vacuous
+      expect(watermarkNotAheadViolation(3, 3, undefined)).not.toBeNull(); // covered batch's KV datum MISSING ⇒ violation
+      expect(watermarkNotAheadViolation(3, 3, { batch: 99 })).not.toBeNull(); // covered batch's KV datum MISMATCHED ⇒ violation
+      // I3 / I2:
       expect(danglingJunctionViolation(1)).not.toBeNull();
       expect(danglingJunctionViolation(0)).toBeNull();
       expect(onlyCompleteLoadableViolations(false, 0).length).toBeGreaterThan(0); // non-complete loaded
@@ -373,6 +483,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       // container / schema — isolation is by identifier, as in the T5 keystone test).
       const syncWallet = `soak-sw-${runId}`;
       const syncKey = `soak-sk-${runId}`;
+      const syncKvScope = `soak-skv-${runId}`;
       const churnScope = `soak-cs-${runId}`;
       const leaseKey = `soak-lease-${runId}`;
       const refWallet = `ref-sw-${runId}`;
@@ -417,20 +528,27 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
 
       const runStart = Date.now();
       const runStartPerf = performance.now();
-      const deadline = runStart + SOAK_DURATION_MS;
+      const deadline = runStart + MAX_SOAK_MS;
       const active = (): boolean => running && Date.now() < deadline;
 
-      // ---- ACTOR 1: full-sync writer — checkpoint + watermark, fused via the G5 saveAndAdvance
-      //      durable-composition primitive. Single-threaded, owns the monotonic batch counter and the
-      //      sync cursor, so its recorded sequence is totally ordered and the reference reproduces it
-      //      exactly. The watermark for batch b co-commits with checkpoint b (labelled b), which is
-      //      precisely WHY I4 (watermark ≤ max durable data) holds. ----
+      // ---- ACTOR 1: full-sync writer — for each batch, FIRST the batch's KV datum (item:b, tied to
+      //      the cursor value b), THEN the checkpoint + watermark fused via the G5 saveAndAdvance
+      //      durable-composition primitive (the watermark for batch b co-commits with checkpoint b,
+      //      labelled b — precisely WHY I4 holds). COUNT-bounded to SYNC_SAVES so the 10^5 chunk
+      //      envelope is met DETERMINISTICALLY on every host; self-paced so the mix is sustained.
+      //      Single-threaded, owns the monotonic batch counter, so its recorded sequence is totally
+      //      ordered and the reference reproduces it exactly. ----
       const syncActor = async (): Promise<void> => {
-        let batch = 0;
-        while (active()) {
-          batch += 1;
+        for (let batch = 1; batch <= SYNC_SAVES && running; batch++) {
           const b = batch;
           try {
+            // KV half FIRST (mirrors the T5 keystone): item:b becomes durable BEFORE the cursor
+            // advances to b, so a cursor covering b implies item:b is durable — the KV half of
+            // "durable data" the T5 sample verifies.
+            await withSuiteWatchdog(() => a.kv.put(SYNC_KV_NS, syncKvScope, itemKey(b), itemValue(b)), {
+              label: `sync-kv-b${b}`,
+              timeoutMs: OP_WATCHDOG_MS,
+            });
             await withSuiteWatchdog(
               () =>
                 saveAndAdvance(
@@ -448,8 +566,10 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
             recordFatal("sync", err);
             return;
           }
-          await delay(SYNC_INTERVAL_MS);
+          if (b < SYNC_SAVES) await delay(SYNC_PACE_MS);
         }
+        // The full deterministic 10^5 envelope is written — stop the concurrent actors.
+        running = false;
       };
 
       // ---- ACTOR 2: KV churn — independent versioned put()s over a rotating keyspace (disjoint from
@@ -555,35 +675,51 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       const sampleInvariants = async (): Promise<SampleObservation> => {
         const violations: string[] = [];
 
-        // I1 — gapless per-(ns,scope,key) versions in kv_history (single self-consistent statement).
+        // I1 — gapless per-(ns,scope,key) versions in kv_history AND kv_current.version consistency.
+        // ONE self-consistent statement: kv_current LEFT JOIN its kv_history aggregate, so the live
+        // current version and its superseded history are read from the SAME snapshot (a cross-
+        // statement read could otherwise report a spurious current-vs-history inversion mid-put).
         const hist = await withSuiteWatchdog(
           sampler.sql<HistGroup[]>`
-            SELECT ns, scope, key,
-                   min(version) AS mn, max(version) AS mx,
-                   count(*)::int AS cnt, count(distinct version)::int AS dcnt
-            FROM ${sampler.sql(TEST_SCHEMA)}.kv_history
-            WHERE ns = ${CHURN_NS} AND scope = ${churnScope}
-            GROUP BY ns, scope, key`,
+            SELECT c.ns, c.scope, c.key, c.version AS cur,
+                   h.mn, h.mx, h.cnt, h.dcnt
+            FROM ${sampler.sql(TEST_SCHEMA)}.kv_current c
+            LEFT JOIN (
+              SELECT ns, scope, key,
+                     min(version) AS mn, max(version) AS mx,
+                     count(*)::int AS cnt, count(distinct version)::int AS dcnt
+              FROM ${sampler.sql(TEST_SCHEMA)}.kv_history
+              WHERE ns = ${CHURN_NS} AND scope = ${churnScope}
+              GROUP BY ns, scope, key
+            ) h ON h.ns = c.ns AND h.scope = c.scope AND h.key = c.key
+            WHERE c.ns = ${CHURN_NS} AND c.scope = ${churnScope}`,
           { label: "sample-I1-gapless", timeoutMs: OP_WATCHDOG_MS },
         );
         violations.push(...gaplessVersionViolations(hist));
-        const historyRows = hist.reduce((s, r) => s + r.cnt, 0);
+        const historyRows = hist.reduce((s, r) => s + (r.cnt ?? 0), 0);
 
-        // I4 — watermark ≤ max durable data. ONE statement (scalar subselects) so watermark and the
-        // max complete-manifest label are read from the SAME consistent snapshot (they co-commit via
-        // saveAndAdvance, so a cross-statement read could otherwise report a spurious inversion).
+        // I4 — watermark ≤ max durable data, KV-INCLUSIVE. ONE statement (scalar subselects) so the
+        // watermark, the max complete-manifest label, AND the covered batch's KV datum
+        // (item:watermark) are read from the SAME consistent snapshot (they co-commit via
+        // saveAndAdvance / are written before it, so a cross-statement read could otherwise report a
+        // spurious inversion). The covered KV key is built from the SAME watermark value.
         const t5 = await withSuiteWatchdog(
-          sampler.sql<{ wm: number | null; maxlabel: bigint | null }[]>`
+          sampler.sql<{ wm: number | null; maxlabel: bigint | null; covered_kv: JsonValue | null }[]>`
             SELECT
               (SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.watermarks
                  WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) AS wm,
               (SELECT max((label)::bigint) FROM ${sampler.sql(TEST_SCHEMA)}.ckpt_manifests
-                 WHERE w = ${syncWallet} AND net = ${NET} AND complete AND label ~ '^[0-9]+$') AS maxlabel`,
+                 WHERE w = ${syncWallet} AND net = ${NET} AND complete AND label ~ '^[0-9]+$') AS maxlabel,
+              (SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.kv_current
+                 WHERE ns = ${SYNC_KV_NS} AND scope = ${syncKvScope}
+                   AND key = ('item:' || ((SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.watermarks
+                                             WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) #>> '{}'))) AS covered_kv`,
           { label: "sample-I4-watermark", timeoutMs: OP_WATCHDOG_MS },
         );
         const watermark = t5[0]!.wm === null ? undefined : Number(t5[0]!.wm);
         const maxDurableLabel = t5[0]!.maxlabel === null ? undefined : Number(t5[0]!.maxlabel);
-        const t5v = watermarkNotAheadViolation(watermark, maxDurableLabel);
+        const coveredKv = t5[0]!.covered_kv === null ? undefined : t5[0]!.covered_kv;
+        const t5v = watermarkNotAheadViolation(watermark, maxDurableLabel, coveredKv);
         if (t5v !== null) violations.push(t5v);
 
         // I3 — no junction row references a missing/incomplete manifest (single statement).
@@ -639,6 +775,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
           chunks,
           watermark,
           maxDurableLabel,
+          coveredKvPresent: coveredKv !== undefined,
           gaplessKeysChecked: hist.length,
           c1Checked,
           violations,
@@ -664,10 +801,11 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
         }
       };
 
-      // ---- Run the sustained concurrent mix for the bounded duration ----
+      // ---- Run the sustained concurrent mix; the sync writer is count-bounded (it stops the others
+      //      when its full envelope is written), with MAX_SOAK_MS as a safety backstop. ----
       const stopTimer = setTimeout(() => {
         running = false;
-      }, SOAK_DURATION_MS);
+      }, MAX_SOAK_MS);
       await Promise.all([syncActor(), churnActor(), pruneActor(), leaseActor(), samplerActor()]);
       clearTimeout(stopTimer);
       const soakWallMs = Date.now() - runStart;
@@ -690,18 +828,22 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       expect(lastSample!.gaplessKeysChecked).toBeGreaterThan(0);
       expect(lastSample!.c1Checked).toBe(true);
       expect(lastSample!.watermark).toBeDefined();
+      expect(lastSample!.coveredKvPresent).toBe(true); // the KV-inclusive T5 half checked a real covered datum
 
-      // ---- The live envelope was actually exercised (not a zero-op vacuous pass) ----
+      // ---- The DECLARED 10^5 envelope was actually exercised (not a zero-op vacuous pass). The sync
+      //      writer is count-bounded to SYNC_SAVES * CHUNKS_PER_SAVE distinct chunks, so this floor is
+      //      met DETERMINISTICALLY; measured before the GC-reclamation leg (which reclaims some) and
+      //      the reference replay (which dedups). ----
+      expect(batchMax).toBe(SYNC_SAVES); // every declared checkpoint committed (deterministic envelope)
       const finalChunks = (
         await withSuiteWatchdog(
           a.sql<{ chunks: number }[]>`SELECT count(*)::int AS chunks FROM ${a.sql(TEST_SCHEMA)}.ckpt_chunks`,
           { label: "final-chunk-count", timeoutMs: OP_WATCHDOG_MS },
         )
       )[0]!.chunks;
-      expect(finalChunks).toBeGreaterThanOrEqual(LIVE_CHUNK_FLOOR);
+      expect(finalChunks).toBeGreaterThanOrEqual(LIVE_CHUNK_FLOOR); // >= 10^5 (acceptance F1)
       expect(gcPasses.length).toBeGreaterThanOrEqual(MIN_GC_PASSES);
       expect(churnLog.length).toBeGreaterThanOrEqual(MIN_CHURN_PUTS);
-      expect(batchMax).toBeGreaterThan(0);
       expect(leaseHolds).toBeGreaterThan(0);
 
       // ---- Assertion (c): every recorded GC pass completed within the termination watchdog, and the
@@ -710,6 +852,125 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       for (const p of gcPasses) {
         expect(p.durationMs).toBeLessThanOrEqual(GC_PASS_WATCHDOG_MS); // termination bound, not a perf gate
       }
+
+      // ---- BLOCK 5: a REAL reclamation — prove a GC pass GENUINELY reclaims chunks (not merely
+      //      records reclaimedChunks). During the soak all chunks are inside the 15-min grace window,
+      //      so reclaimedChunks is legitimately 0; here a DEDICATED wallet's UNIQUE-content chunks are
+      //      backdated PAST the grace window (mirroring the checkpoint-store GC-scale / load-under-
+      //      prune tests: `UPDATE ckpt_chunks SET created_at = now() - interval '1 hour'`), then a
+      //      prune retaining only the newest few genuinely DELETES the older manifests AND reclaims
+      //      their now-orphaned backdated chunks. A broken chunk-reclamation anti-join would fail. ----
+      const gcWallet = `soak-gc-${runId}`;
+      const gc = adaptersOf(newPool(uri, 2));
+      for (let i = 0; i < GC_RECLAIM_SAVES; i++) {
+        await withSuiteWatchdog(
+          () => gc.checkpoints.save(gcWallet, NET, randomBytes(GC_RECLAIM_PAYLOAD_BYTES), { chunkSize: GC_RECLAIM_CHUNK_SIZE, label: `gc${i}` }),
+          { label: `gc-seed-${i}`, timeoutMs: OP_WATCHDOG_MS },
+        );
+      }
+      // Backdate this wallet's chunks past prune's 15-minute grace window (trusted literal, inlined
+      // exactly as the store's own prune inlines its window / as load-under-prune backdates).
+      await withSuiteWatchdog(
+        gc.sql`
+          UPDATE ${gc.sql(TEST_SCHEMA)}.ckpt_chunks
+          SET created_at = now() - interval '1 hour'
+          WHERE hash IN (
+            SELECT mc.chunk_hash FROM ${gc.sql(TEST_SCHEMA)}.ckpt_manifest_chunks mc
+            JOIN ${gc.sql(TEST_SCHEMA)}.ckpt_manifests m ON m.id = mc.manifest_id
+            WHERE m.w = ${gcWallet} AND m.net = ${NET}
+          )`,
+        { label: "gc-backdate", timeoutMs: OP_WATCHDOG_MS },
+      );
+      const gcReclaim = await withSuiteWatchdog(
+        () => gc.checkpoints.prune(gcWallet, NET, GC_RECLAIM_RETAIN),
+        { label: "gc-reclaim-prune", timeoutMs: GC_PASS_WATCHDOG_MS },
+      );
+      // The older manifests were genuinely deleted AND their backdated, now-orphaned chunks reclaimed.
+      expect(gcReclaim.prunedSequences.length).toBeGreaterThan(0); // manifests deleted > 0
+      expect(gcReclaim.reclaimedChunks).toBeGreaterThan(0); // chunks GENUINELY reclaimed (broken anti-join fails)
+      expect(gcReclaim.reclaimedBytes).toBeGreaterThan(0);
+
+      // ---- BLOCK 8: the "only complete manifests are loadable" (C1) filter, exercised against the
+      //      REAL adapter with an ACTUAL incomplete manifest present. Save complete checkpoints, then
+      //      forge an interrupted-save LEFTOVER (a `complete = false` manifest at a HIGHER seq, wired
+      //      to a real chunk) — the partial state an aborted save leaves behind. A load/history that
+      //      DROPPED its `complete = true` filter would return the higher-seq incomplete manifest;
+      //      the REAL adapter path must EXCLUDE it: load(latest) returns the last COMPLETE checkpoint,
+      //      and history omits the leftover. ----
+      const incWallet = `soak-inc-${runId}`;
+      const inc = adaptersOf(newPool(uri, 2));
+      const completeSeqs: number[] = [];
+      for (let i = 0; i < INCOMPLETE_COMPLETE_SAVES; i++) {
+        const s = await withSuiteWatchdog(
+          () => inc.checkpoints.save(incWallet, NET, randomBytes(256), { chunkSize: INCOMPLETE_CHUNK_SIZE, label: `ok${i}` }),
+          { label: `inc-complete-${i}`, timeoutMs: OP_WATCHDOG_MS },
+        );
+        completeSeqs.push(s.sequence);
+      }
+      const lastCompleteSeq = Math.max(...completeSeqs);
+      // Forge the interrupted-save leftover on the SAME counter the real save() allocates from, so it
+      // lands at a HIGHER seq than every complete one (that higher seq is what gives the test teeth:
+      // without the complete filter, load's `ORDER BY seq DESC LIMIT 1` would return THIS row).
+      const incData = randomBytes(256);
+      const incChunkHash = sha256(incData);
+      const incompleteSeq = await withSuiteWatchdog(
+        () =>
+          inc.sql.begin(async (tx) => {
+            const seqRow = await tx<{ claimed: bigint }[]>`
+              INSERT INTO ${tx(TEST_SCHEMA)}.ckpt_sequence_counters (w, net)
+              VALUES (${incWallet}, ${NET})
+              ON CONFLICT (w, net) DO UPDATE
+              SET next_seq = ${tx(TEST_SCHEMA)}.ckpt_sequence_counters.next_seq + 1
+              RETURNING next_seq - 1 AS claimed`;
+            const seq = seqRow[0]!.claimed;
+            await tx`
+              INSERT INTO ${tx(TEST_SCHEMA)}.ckpt_chunks (hash, data)
+              VALUES (${incChunkHash}, ${incData}) ON CONFLICT (hash) DO NOTHING`;
+            const mrow = await tx<{ id: bigint }[]>`
+              INSERT INTO ${tx(TEST_SCHEMA)}.ckpt_manifests (w, net, seq, complete, manifest_hash, label)
+              VALUES (${incWallet}, ${NET}, ${seq}, false, ${sha256(incChunkHash)}, 'interrupted-save')
+              RETURNING id`;
+            await tx`
+              INSERT INTO ${tx(TEST_SCHEMA)}.ckpt_manifest_chunks (manifest_id, position, chunk_hash)
+              VALUES (${mrow[0]!.id}, 0, ${incChunkHash})`;
+            return Number(seq);
+          }),
+        { label: "inc-forge-leftover", timeoutMs: OP_WATCHDOG_MS },
+      );
+      // Sanity/teeth: an incomplete manifest genuinely EXISTS, at a HIGHER seq than any complete one.
+      const incState = await withSuiteWatchdog(
+        inc.sql<{ n: number; maxinc: number | null; maxcomplete: number | null }[]>`
+          SELECT
+            (SELECT count(*)::int FROM ${inc.sql(TEST_SCHEMA)}.ckpt_manifests
+               WHERE w = ${incWallet} AND net = ${NET} AND NOT complete) AS n,
+            (SELECT max(seq)::int FROM ${inc.sql(TEST_SCHEMA)}.ckpt_manifests
+               WHERE w = ${incWallet} AND net = ${NET} AND NOT complete) AS maxinc,
+            (SELECT max(seq)::int FROM ${inc.sql(TEST_SCHEMA)}.ckpt_manifests
+               WHERE w = ${incWallet} AND net = ${NET} AND complete) AS maxcomplete`,
+        { label: "inc-verify-state", timeoutMs: OP_WATCHDOG_MS },
+      );
+      expect(incState[0]!.n).toBeGreaterThan(0); // the incomplete leftover really exists
+      expect(incompleteSeq).toBeGreaterThan(lastCompleteSeq); // ...at a HIGHER seq (the teeth)
+      expect(incState[0]!.maxinc).toBe(incompleteSeq);
+      expect(incState[0]!.maxcomplete).toBe(lastCompleteSeq);
+      // The REAL adapter path EXCLUDES it: load(latest) returns the last COMPLETE checkpoint, NOT the
+      // higher-seq incomplete one — so weakening the `complete = true` filter in `src` fails here.
+      const loaded = await withSuiteWatchdog(() => inc.checkpoints.load(incWallet, NET), {
+        label: "inc-load-latest",
+        timeoutMs: OP_WATCHDOG_MS,
+      });
+      expect(loaded.sequence).toBe(lastCompleteSeq);
+      // history() omits the incomplete leftover entirely (returns only the complete seqs).
+      const incHistory = await withSuiteWatchdog(() => inc.checkpoints.history(incWallet, NET, { limit: 100 }), {
+        label: "inc-history",
+        timeoutMs: OP_WATCHDOG_MS,
+      });
+      const incHistSeqs = incHistory.map((h) => h.sequence);
+      expect(incHistSeqs).toContain(lastCompleteSeq);
+      expect(incHistSeqs).not.toContain(incompleteSeq); // the leftover is excluded
+      expect(incHistSeqs.every((s) => completeSeqs.includes(s))).toBe(true);
+
+      // ---- Write the GC-pass durations + reclamation artifact (deliverable of assertion (c)) ----
       const artifactPath =
         process.env.UMBRADB_SOAK_GC_ARTIFACT ??
         fileURLToPath(new URL("./artifacts/gc-pass-durations.json", import.meta.url));
@@ -727,6 +988,12 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
         durationStatsMs: durations.length
           ? { min: Math.min(...durations), max: Math.max(...durations), mean: durations.reduce((s, d) => s + d, 0) / durations.length }
           : null,
+        reclamation: {
+          note: "Dedicated grace-window-backdated leg (BLOCK 5): proves a GC pass GENUINELY reclaims chunks.",
+          prunedManifests: gcReclaim.prunedSequences.length,
+          reclaimedChunks: gcReclaim.reclaimedChunks,
+          reclaimedBytes: gcReclaim.reclaimedBytes,
+        },
         passes: gcPasses,
       };
       mkdirSync(dirname(artifactPath), { recursive: true });
@@ -806,11 +1073,14 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       // eslint-disable-next-line no-console
       console.log(
         `[soak] wall=${(soakWallMs / 1000).toFixed(1)}s samples=${sampleCount} ` +
-          `checkpointSaves=${batchMax} chunks=${finalChunks} churnPuts=${churnLog.length} ` +
+          `checkpointSaves=${batchMax} chunks=${finalChunks} (floor=${LIVE_CHUNK_FLOOR}) churnPuts=${churnLog.length} ` +
           `gcPasses=${gcPasses.length} leaseHolds=${leaseHolds} ` +
+          `reclaim={prunedManifests=${gcReclaim.prunedSequences.length}, reclaimedChunks=${gcReclaim.reclaimedChunks}, reclaimedBytes=${gcReclaim.reclaimedBytes}} ` +
+          `incompleteManifest={completeSeqs=[${completeSeqs.join(",")}], incompleteSeq=${incompleteSeq}, loadedSeq=${loaded.sequence}} ` +
           `lastSample={t=${lastSample!.tMs}ms, completeManifests=${lastSample!.completeManifests}, ` +
           `historyRows=${lastSample!.historyRows}, watermark=${String(lastSample!.watermark)}, ` +
-          `maxDurableLabel=${String(lastSample!.maxDurableLabel)}, gaplessKeys=${lastSample!.gaplessKeysChecked}} ` +
+          `maxDurableLabel=${String(lastSample!.maxDurableLabel)}, coveredKvPresent=${lastSample!.coveredKvPresent}, ` +
+          `gaplessKeys=${lastSample!.gaplessKeysChecked}} ` +
           `gcDurationsMs=[${gcPasses.map((p) => p.durationMs.toFixed(1)).join(",")}] ` +
           `artifact=${artifactPath}`,
       );

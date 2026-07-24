@@ -1,15 +1,21 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "v1.0.0-recovery-testing Task 7.3 — the durability mutation gate (guideline §2.3/§3.6). SCOPED to the single co-transactional save+cursor combinator src/postgres/save-and-advance.ts (the keystone durability primitive: one COMMIT makes checkpoint AND cursor durable together, so the cursor can never be ahead of its data). Mutation testing is slow (tests re-run per mutant), so the mutate set is one tight, high-value durability file and the runner uses a narrow vitest config (save-and-advance.test.ts only) — this keeps the CI job minutes, not hours (measured baseline 2026-07-24: 5 mutants, 100.00% score, ~17s wall). break is committed just-below the 100% baseline at 90 (well above guideline §2.3's break:60 floor; leaves headroom for equivalent mutants as the file grows); it ratchets up and MUST NOT be lowered to pass.",
+  "_comment": "v1.0.0-recovery-testing durability mutation gate (guideline §2.3/§3.6). §2.3 requires StrykerJS mutation on AT LEAST FOUR durability adapters; this mutates FIVE — save-and-advance.ts (the co-commit keystone), checkpoint-store.ts, watermarks.ts, transaction-lease.ts, temporal-kv.ts — each paired with its own fast .test.ts unit suite via vitest.mutation.config.ts (perTest coverage reruns only a mutant's covering tests). MEASURED BASELINE 2026-07-24 (per-adapter, single-container reuse; each adapter's own .test.ts): save-and-advance 100.00% (5 mutants), watermarks 84.21% (38), checkpoint-store 76.41% (195), temporal-kv 70.26% (195), transaction-lease 64.83% (293) => AGGREGATE 70.68% over 726 mutants (505 killed, 6 timeout, 136 survived, 76 no-coverage). The per-adapter aggregate is a conservative LOWER BOUND for this interleaved config: here each adapter's mutants ALSO get coverage from sibling suites (checkpoint-store.test.ts / save-and-advance.test.ts drive transaction-lease.ts, etc.), so no-coverage mutants can only become killed, never lowering the score. break is committed at 65 — below the measured 70.68% aggregate (honest, green-now), WELL ABOVE guideline §2.3's break:60 floor; it ratchets up and MUST NOT be lowered to pass. Per-adapter wall-clock (concurrency 3): 17s / 85s / 348s / 323s / 611s. To reproduce fast, run mutation per-adapter (single-container reuse) rather than all five interleaved (which churns a container per file-switch).",
   "testRunner": "vitest",
   "vitest": { "configFile": "vitest.mutation.config.ts" },
-  "mutate": ["src/postgres/save-and-advance.ts"],
+  "mutate": [
+    "src/postgres/save-and-advance.ts",
+    "src/postgres/checkpoint-store.ts",
+    "src/postgres/watermarks.ts",
+    "src/postgres/transaction-lease.ts",
+    "src/postgres/temporal-kv.ts"
+  ],
   "coverageAnalysis": "perTest",
   "reporters": ["clear-text", "html", "json"],
-  "concurrency": 4,
-  "timeoutMS": 60000,
-  "timeoutFactor": 2.5,
-  "thresholds": { "high": 100, "low": 80, "break": 90 },
+  "concurrency": 3,
+  "timeoutMS": 25000,
+  "timeoutFactor": 2,
+  "thresholds": { "high": 90, "low": 70, "break": 65 },
   "tempDirName": ".stryker-tmp",
   "cleanTempDir": true
 }
