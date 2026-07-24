@@ -24,7 +24,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 0. Crash harness (foundation)
 
-- [ ] 0.1 Extend `test/postgres/setup.ts` with the three fault primitives (`design.md` §1):
+- [x] 0.1 Extend `test/postgres/setup.ts` with the three fault primitives (`design.md` §1):
   Testcontainers `container.restart()`/`container.stop()` helpers, a `pg_terminate_backend(pid)`
   helper (capturing a target backend's `pg_backend_pid()`), and a child-process spawn+SIGKILL
   helper. Reuse the existing shared session-scoped container and `registerSuiteLifecycle()
@@ -33,7 +33,7 @@ separate change) — do not let perf work starve T1–T5.
   confirms from the parent that the container is still up and a fresh client connects; a
   `pg_terminate_backend` helper test confirms a targeted backend's connection is dropped and the
   pool recovers. **Satisfies:** the harness precondition for every G9/G10 requirement.
-- [ ] 0.2 Write `test/integration/crash/crash-worker.ts` — a `tsx`-launched entrypoint that
+- [x] 0.2 Write `test/integration/crash/crash-worker.ts` — a `tsx`-launched entrypoint that
   performs one `save` (or a co-transactional `save`+cursor advance, or holds one `withLease`)
   against the shared container, honoring a **test-only** `UMBRADB_CRASH_HOOK` env var that pauses
   at a **named program point** and signals readiness to the parent (stdout line or sentinel row),
@@ -45,14 +45,14 @@ separate change) — do not let perf work starve T1–T5.
   documented point and emits its readiness signal; without the env var the worker performs an
   ordinary uninterrupted `save`; `tsc --noEmit` passes and `src/` is unchanged (verified by diff).
   **Satisfies:** the deterministic-fault precondition (`design.md` §1) for Tasks 1–4.
-- [ ] 0.3 Add the **suite-level watchdog backstop** (`design.md` §1): a named `SUITE_WATCHDOG_MS`
+- [x] 0.3 Add the **suite-level watchdog backstop** (`design.md` §1): a named `SUITE_WATCHDOG_MS`
   constant wrapping every crash/soak operation so a half-dead Postgres (accepting connections, not
   completing queries) fails the pending op with a typed timeout error rather than hanging, even if
   G7's server-side timeouts are absent/misconfigured. **Acceptance:** a fault-injection unit
   (e.g. a query against a deliberately-stalled backend) terminates within `SUITE_WATCHDOG_MS` and
   throws a typed timeout/connection error, not a hang. **Satisfies:** "the crash and soak suites
   terminate within a bounded wall-clock even when Postgres is half-dead".
-- [ ] 0.4 Author `test/integration/required-tests.manifest.json` + `check-required-tests.ts` — the
+- [x] 0.4 Author `test/integration/required-tests.manifest.json` + `check-required-tests.ts` — the
   **skip-enforcement mechanism** (`design.md` §1.1). The manifest's `"required"` section lists the
   stable ids of every non-live crash/soak test that MUST execute (T1; T2 typed-error +
   benign-duplicate; T5 watermark-never-ahead + replay + both `synchronous_commit` legs; T3; soak;
@@ -67,7 +67,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 1. Process-kill mid-save (G9 / 02-T1)
 
-- [ ] 1.1 `test/integration/crash/process-kill-save.crash.test.ts` (`design.md` §2.1). Spawn the
+- [x] 1.1 `test/integration/crash/process-kill-save.crash.test.ts` (`design.md` §2.1). Spawn the
   worker with `UMBRADB_CRASH_HOOK=before-commit`, SIGKILL at readiness, then from a fresh client
   assert: (a) no `complete = true` manifest at the interrupted seq; (b) the prior committed seq
   still `load`s and hash-verifies; (c) no orphaned junction rows. **Acceptance:** all three
@@ -78,14 +78,14 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 2. Postgres-kill mid-save + retry-duplication contract (G9 / 02-T2)
 
-- [ ] 2.1 `test/integration/crash/pg-kill-save.crash.test.ts` (`design.md` §2.2). Worker begins
+- [x] 2.1 `test/integration/crash/pg-kill-save.crash.test.ts` (`design.md` §2.2). Worker begins
   `save`; at `before-commit` the parent kills Postgres (`container.restart()` or
   `pg_terminate_backend`). Assert: (a) the in-flight `save` rejects with `ConnectionError` (not a
   raw driver error); (b) after recovery the checkpoint is all-or-nothing; (c) `load(latest)`
   returns correct bytes. **Acceptance:** all three asserted; the `ConnectionError` assertion checks
   the typed class, not a substring. **Satisfies:** "Postgres-kill mid-save surfaces a typed error
   and stays all-or-nothing (T2)".
-- [ ] 2.2 Retry-duplication contract, in its 1.0.0 documented-unsafe form (`design.md` §2.2;
+- [x] 2.2 Retry-duplication contract, in its 1.0.0 documented-unsafe form (`design.md` §2.2;
   `council/B` §5 item 3). Construct the lost-COMMIT-ack state by the **sanctioned simulation**
   (`design.md` §2.2) — a `save` that provably committed (assert its manifest is present and
   `load`s), then a re-invocation with identical content — NOT a timed kill, since the
@@ -102,7 +102,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 3. Crash between data and cursor — the keystone (G9 / 02-T5)  ⟵ depends on G5
 
-- [ ] 3.1 `test/integration/crash/cursor-durability.crash.test.ts` (`design.md` §2.3). **Blocked on
+- [x] 3.1 `test/integration/crash/cursor-durability.crash.test.ts` (`design.md` §2.3). **Blocked on
   G5.** Kill at the `after-data-commit-before-cursor` hook — after the data commit, around the
   cursor advance — exercising the co-transactional path and the **safe** two-transaction ordering
   (data→cursor); the unsafe cursor-before-data ordering is out of scope. Assert: (a) the durable
@@ -117,7 +117,7 @@ separate change) — do not let perf work starve T1–T5.
   the test does not pass before G5 is merged (marked pending, not green, until then). **Satisfies:**
   "a crash between data and cursor never leaves the watermark ahead of durable data (T5)" — the
   watermark-never-ahead and replay-convergence scenarios.
-- [ ] 3.2 `synchronous_commit` matrix (`design.md` §2.3; `council/B` §3 item 3) — **two separate
+- [x] 3.2 `synchronous_commit` matrix (`design.md` §2.3; `council/B` §3 item 3) — **two separate
   scenarios**, `on` and `off`. Run 3.1's fault under each. Assert the "watermark never ahead of
   durable data" invariant in both; the `off` leg forces an **unclean postmaster kill**
   (`pg_ctl stop -m immediate` / in-container `kill -9` of the postmaster, NOT a clean container
@@ -129,7 +129,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 4. Lease non-wedge cold start (G9 / 02-T3)
 
-- [ ] 4.1 `test/integration/crash/lease-nonwedge.crash.test.ts` (`design.md` §2.4). Worker holds a
+- [x] 4.1 `test/integration/crash/lease-nonwedge.crash.test.ts` (`design.md` §2.4). Worker holds a
   `withLease` (`UMBRADB_CRASH_HOOK=in-critical-section`); parent SIGKILLs it. From a fresh process
   assert: (a) a fresh `withLease` on the same key acquires immediately (no wedge/timeout);
   (b) `pg_locks` shows the class-2 advisory lock for that key gone. **Acceptance:** both asserted;
@@ -139,7 +139,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 5. Full-sync soak + load-under-concurrent-prune (G10)
 
-- [ ] 5.1 `test/integration/soak/full-sync-soak.integration.test.ts` (`design.md` §3.1;
+- [x] 5.1 `test/integration/soak/full-sync-soak.integration.test.ts` (`design.md` §3.1;
   `council/B` §3 item 5). Sustained concurrent mix (KV puts + checkpoint save cadence + watermark
   ticks + periodic `prune` + held lease) for a bounded duration at a **declared envelope**
   (10^5–10^6 chunks, per `council/B` §1 — NOT 10^7). Assert: (a) a **named set of
@@ -156,7 +156,7 @@ separate change) — do not let perf work starve T1–T5.
   `timeout-minutes` (or is split into a separate **still-required** job — never made live-gated or
   optional). **Satisfies:** "a full-sync soak runs at a declared envelope with GC passes and holds
   every invariant".
-- [ ] 5.2 `test/integration/soak/load-under-prune.integration.test.ts` (`design.md` §3.2;
+- [x] 5.2 `test/integration/soak/load-under-prune.integration.test.ts` (`design.md` §3.2;
   `council/B` §3 item 6). Drive `load` of a live checkpoint concurrently with `prune`, using the
   **forced-interleave primitive** (`design.md` §3.2): a test-only pause point between `load`'s
   manifest read and its first chunk-byte read, with an advisory-lock/`pg_sleep` handshake that
@@ -209,7 +209,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 7. CI gate wiring
 
-- [ ] 7.1 Wire the crash, soak, and differential suites into the required gate
+- [x] 7.1 Wire the crash, soak, and differential suites into the required gate
   (`.github/workflows/conformance.yml` / `package.json` `test:conformance`) so they run with
   `UMBRADB_LIVE_PREPROD` unset and **do not self-skip** (`design.md` §0; `01` checklist item 3's
   finding that today's recovery test self-skips), and add the `check-required-tests.ts` (Task 0.4)
