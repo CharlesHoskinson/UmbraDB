@@ -29,7 +29,7 @@ describe("runMigrations", () => {
         select count(*)::text as count from ${sql("idempotent_test")}._migrations
       `;
       expect(second[0]!.count).toBe(first[0]!.count);
-      expect(Number(first[0]!.count)).toBe(5); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks + 004_transaction_history
+      expect(Number(first[0]!.count)).toBe(7); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks + 004_transaction_history
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -45,7 +45,7 @@ describe("runMigrations", () => {
         runMigrations(sqlB, { schema }),
       ]);
       const rows = await sqlA<{ name: string }[]>`select name from ${sqlA(schema)}._migrations order by name`;
-      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
+      expect(rows.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history", "005_kv_current_fillfactor", "006_ckpt_chunks_size_bytes"]);
     } finally {
       await sqlA.end({ timeout: 5 });
       await sqlB.end({ timeout: 5 });
@@ -80,8 +80,8 @@ describe("runMigrations", () => {
         ]);
         const rowsA = await sqlA<{ name: string }[]>`select name from ${sqlA(schemaA)}._migrations order by name`;
         const rowsB = await sqlB<{ name: string }[]>`select name from ${sqlB(schemaB)}._migrations order by name`;
-        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
-        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history"]);
+        expect(rowsA.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history", "005_kv_current_fillfactor", "006_ckpt_chunks_size_bytes"]);
+        expect(rowsB.map((r) => r.name)).toEqual(["000_schema", "001_temporal_kv", "002_checkpoint_store", "003_watermarks", "004_transaction_history", "005_kv_current_fillfactor", "006_ckpt_chunks_size_bytes"]);
         const ext = await sqlA<{ n: number }[]>`select count(*)::int as n from pg_extension where extname = 'btree_gist'`;
         expect(ext[0]!.n).toBe(1); // exactly one catalog row, not a failed/duplicate race
       } finally {

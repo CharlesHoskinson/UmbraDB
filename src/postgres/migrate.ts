@@ -8,6 +8,8 @@ import * as migration001 from "./migrations/001_temporal_kv.js";
 import * as migration002 from "./migrations/002_checkpoint_store.js";
 import * as migration003 from "./migrations/003_watermarks.js";
 import * as migration004 from "./migrations/004_transaction_history.js";
+import * as migration005 from "./migrations/005_kv_current_fillfactor.js";
+import * as migration006 from "./migrations/006_ckpt_chunks_size_bytes.js";
 
 /** Conservative default bound (ms) for acquiring the schema-scoped migration advisory lock —
  *  generous enough for a concurrent startup where another instance is mid-migration, short
@@ -64,7 +66,7 @@ async function withReservedTransaction<T>(reserved: ISql, fn: () => Promise<T>):
  *  selecting a different lineage (e.g. the Tier-1.5 chain-archive one) — this is still the
  *  default every existing caller gets when it omits that option, so this rename changes no
  *  runtime behavior for any current call site. */
-const tier1WalletMigrations: Migration[] = [migration000, migration001, migration002, migration003, migration004];
+const tier1WalletMigrations: Migration[] = [migration000, migration001, migration002, migration003, migration004, migration005, migration006];
 
 export interface RunMigrationsOptions {
   schema: string;

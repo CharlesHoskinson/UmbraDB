@@ -164,13 +164,26 @@ export class PgCheckpointStore implements CheckpointStore {
         // of created_at is load-bearing for prune's grace-window TOCTOU safety (design.md §3),
         // not just a convenience -- a plain DO NOTHING would defeat the grace window on every
         // re-referenced-but-already-existing chunk.
+        // HP-1 (v1.0.0-perf-baseline design.md §1): one multi-row upsert instead of a per-chunk
+        // loop of single-row awaits (2N round-trips -> 2). postgres.js's sql(rows, ...cols) helper
+        // maps each Buffer to bytea; the `ON CONFLICT ... DO UPDATE SET created_at = now()` refresh
+        // is carried verbatim (load-bearing for prune's grace-window TOCTOU safety, unchanged).
+        // Content-addressed: a repeated chunk yields a duplicate hash, and a single multi-row
+        // upsert cannot touch the same ON CONFLICT target twice (Postgres SQLSTATE 21000), so
+        // dedupe by hash for the chunk write. The junction insert below still records EVERY
+        // position, repeats included, so a chunk reused at two positions stays representable.
+        const seenChunkHashes = new Set<string>();
+        const chunkRows: { hash: Buffer; data: Uint8Array }[] = [];
         for (let i = 0; i < chunks.length; i++) {
-          await sql`
-            INSERT INTO ${sql(this.schema)}.ckpt_chunks (hash, data)
-            VALUES (${chunkHashes[i]!}, ${chunks[i]!})
-            ON CONFLICT (hash) DO UPDATE SET created_at = now()
-          `;
+          const key = chunkHashes[i]!.toString("hex");
+          if (seenChunkHashes.has(key)) continue;
+          seenChunkHashes.add(key);
+          chunkRows.push({ hash: chunkHashes[i]!, data: chunks[i]! });
         }
+        await sql`
+          INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(chunkRows, "hash", "data")}
+          ON CONFLICT (hash) DO UPDATE SET created_at = now()
+        `;
 
         // Sequence allocation (design.md §2.2): atomic upsert-increment, gapless and monotonic
         // under concurrency by construction (the row lock is held for this whole transaction).
@@ -198,12 +211,15 @@ export class PgCheckpointStore implements CheckpointStore {
 
         // Junction rows keyed by (manifest_id, position) -- design.md §2.1's fix -- so a
         // repeated chunk hash at two different positions is representable.
-        for (let i = 0; i < chunkHashes.length; i++) {
-          await sql`
-            INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks (manifest_id, position, chunk_hash)
-            VALUES (${manifest.id}, ${i}, ${chunkHashes[i]!})
-          `;
-        }
+        // HP-1: one multi-row junction insert; position is preserved by the input-array index.
+        const junctionRows = chunkHashes.map((chunk_hash, i) => ({
+          manifest_id: manifest.id,
+          position: i,
+          chunk_hash,
+        }));
+        await sql`
+          INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks ${sql(junctionRows, "manifest_id", "position", "chunk_hash")}
+        `;
 
         return toSummary(manifest, data.byteLength, chunks.length);
     };
@@ -351,21 +367,34 @@ export class PgCheckpointStore implements CheckpointStore {
             LIMIT ${opts.limit}
           `;
 
-          const summaries: CheckpointSummary[] = [];
-          for (const manifest of manifestRows) {
-            const aggRows = await sql<AggregateRow[]>`
-              SELECT count(*) AS chunk_count, coalesce(sum(octet_length(c.data)), 0) AS byte_length
-              FROM ${sql(this.schema)}.ckpt_manifest_chunks mc
-              JOIN ${sql(this.schema)}.ckpt_chunks c ON c.hash = mc.chunk_hash
-              WHERE mc.manifest_id = ${manifest.id}
-            `;
-            const agg = aggRows[0]!;
-            summaries.push(toSummary(
+          // HP-2 + IS-2 (v1.0.0-perf-baseline design.md §2): one grouped query over the stored
+          // size_bytes column instead of a per-manifest aggregate (1+N -> 2 round-trips); summing
+          // ckpt_chunks.size_bytes (a generated column) never detoasts the `data` bytea. Rows are
+          // re-associated to each manifest by manifest_id, preserving the ORDER BY seq DESC page order.
+          const manifestIds = manifestRows.map((m) => m.id);
+          const aggRows =
+            manifestIds.length === 0
+              ? []
+              : await sql<(AggregateRow & { manifest_id: bigint })[]>`
+                  SELECT mc.manifest_id,
+                         count(*) AS chunk_count,
+                         coalesce(sum(c.size_bytes), 0) AS byte_length
+                  FROM ${sql(this.schema)}.ckpt_manifest_chunks mc
+                  JOIN ${sql(this.schema)}.ckpt_chunks c ON c.hash = mc.chunk_hash
+                  WHERE mc.manifest_id = ANY(${sql.array(manifestIds)})
+                  GROUP BY mc.manifest_id
+                `;
+          const aggById = new Map(aggRows.map((a) => [a.manifest_id, a]));
+          // A manifest with zero chunks yields no group row; fall back to (0, 0) exactly as the
+          // former per-manifest scalar aggregate's coalesce did.
+          const summaries: CheckpointSummary[] = manifestRows.map((manifest) => {
+            const agg = aggById.get(manifest.id);
+            return toSummary(
               manifest,
-              coerceToSafeNumber(agg.byte_length, "CheckpointSummary.byteLength"),
-              coerceToSafeNumber(agg.chunk_count, "CheckpointSummary.chunkCount"),
-            ));
-          }
+              coerceToSafeNumber(agg?.byte_length ?? 0n, "CheckpointSummary.byteLength"),
+              coerceToSafeNumber(agg?.chunk_count ?? 0n, "CheckpointSummary.chunkCount"),
+            );
+          });
           return summaries;
         },
         { isolation: "repeatable read" },
