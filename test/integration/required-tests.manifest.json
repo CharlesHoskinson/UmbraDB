@@ -1,0 +1,46 @@
+{
+  "$schema-note": "v1.0.0-recovery-testing skip-enforcement manifest (design.md §1.1, Task 0.4). 'required' lists the stable ids of every non-live crash/soak test that MUST execute-and-pass in the required gate; check-required-tests.ts fails the gate by id if any is missing or reported skipped. 'deferred' lists WHERE-gated optional-feature ids that reconcile as skipped-pending-feature and are exempt while their feature is unshipped. Each governed test embeds its id as a [[id]] token in its title. Task 0 seeds the 0.1/0.2/0.3 harness smoke ids; later tasks append T1/T2/T5/T3/soak/load-under-prune/P3 ids.",
+  "required": [
+    {
+      "id": "crash-harness.smoke.spawn-sigkill-container-survives",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.1: spawn the crash worker, SIGKILL it, confirm the shared container is still up and a fresh client connects."
+    },
+    {
+      "id": "crash-harness.smoke.pg-terminate-backend-drops-and-recovers",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.1: pg_terminate_backend drops a targeted backend's connection and the dedicated pool recovers (reconnects with a new backend pid)."
+    },
+    {
+      "id": "crash-harness.smoke.suite-watchdog-bounds-stalled-backend",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.3: a query against a deliberately-stalled backend is bounded by the suite watchdog and throws a typed SuiteWatchdogTimeoutError, not a hang."
+    },
+    {
+      "id": "crash-harness.smoke.no-hook-ordinary-save",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: without UMBRADB_CRASH_HOOK the worker performs an ordinary uninterrupted save and exits 0."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.before-commit",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the before-commit hook pauses after the manifest INSERT is issued, before COMMIT, and emits its readiness signal (incl. the worker backend pid)."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.in-critical-section",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the in-critical-section hook pauses inside a held withLease and emits its readiness signal (incl. the advisory lock key hash)."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.after-data-commit-before-cursor",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the after-data-commit-before-cursor hook pauses after the durable data commit returns, before the cursor advance, and emits its readiness signal (incl. the committed sequence)."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.after-cursor-before-data",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the after-cursor-before-data hook pauses after the cursor advance, before the later data commit, and emits its readiness signal (T5 negative/reference case)."
+    }
+  ],
+  "deferred": []
+}
