@@ -11,6 +11,7 @@ import {
   type SaveCheckpointOptions,
 } from "../../../src/interfaces/checkpoint-store.js";
 import { ConnectionError } from "../../../src/interfaces/storage-errors.js";
+import { TransactionFaultError } from "../../../src/interfaces/transaction-lease.js";
 import { PgWatermarks } from "../../../src/postgres/watermarks.js";
 import { translatePostgresError } from "../../../src/postgres/errors.js";
 import {
@@ -60,8 +61,9 @@ import {
  * 2.2 (`[[crash.pg-kill-save.retry-benign-duplicate]]`): the lost-COMMIT-ack window is NOT
  * deterministically hittable (`design.md` §2.2), so this uses the SANCTIONED SIMULATION — a save
  * that provably committed, re-invoked with identical content — NOT a timed kill. It asserts the
- * benign identical-content duplicate at the next seq, correct `load(latest)`, and a STATIC check
- * that `save` is excluded from any auto-retry allowlist. The WHERE-gated no-duplicate-with-key
+ * benign identical-content duplicate at the next seq, correct `load(latest)`, and BOTH a STATIC
+ * check that `save` is excluded from any auto-retry allowlist AND a RUNTIME oracle proving `save` is
+ * not auto-retried (a retriable 40001 surfaces exactly once, leaving no duplicate manifest -- BLOCK 2). The WHERE-gated no-duplicate-with-key
  * scenario (`[[crash.pg-kill-save.no-duplicate-with-idempotency-key]]`) is skipped-pending-feature.
  *
  * TEST-HONESTY: every durable-state assertion observes a FRESH client STRICTLY AFTER the kill/commit
@@ -257,6 +259,111 @@ function assertSaveNotInAnyAutoRetryAllowlist(): void {
   ).not.toMatch(/\b(withRetry|autoRetry|withBackoff|retryable|retriable|RETRYABLE)\s*\(/i);
 }
 
+// -- Runtime auto-retry-exclusion oracle (acceptance C5 / I2) -- change-level re-audit BLOCK 2 -----
+// The static scan above is a SUPPLEMENTARY guard for the common literal retry/backoff forms; by its
+// own admission an alias / renamed retry util / dynamic dispatch evades it. This runtime oracle is
+// the PRIMARY, non-defeatable proof: it DRIVES `save` into a retriable-class transient -- a
+// serialization failure (SQLSTATE 40001), the canonical error an auto-retry wrapper retries -- by
+// injecting it into save's FIRST transaction attempt through a client PROXY (no `src/` change, the
+// same Proxy technique `crash-worker.ts` uses), and proves save surfaces it EXACTLY ONCE (a single
+// transaction, one typed `TransactionFaultError(faultKind "serialization-failure")`) and produces NO
+// checkpoint manifest. If save were auto-retried, its SECOND attempt -- on which the injected fault
+// no longer fires -- would COMMIT a manifest and return success, flipping every assertion below RED.
+// It cannot be evaded by renaming the retry utility, because it observes BEHAVIOUR, not source text.
+type C5AnyFn = (...args: unknown[]) => unknown;
+
+/** Wraps a postgres.js transaction handle so the FIRST checkpoint-manifest INSERT it issues rejects
+ *  with a synthetic serialization_failure (40001) driver error; every other statement (and every
+ *  non-tagged call such as `sql(schema)` / `sql(batch, ...)`) forwards verbatim, so `src/` runs
+ *  unchanged. `.code`/`.severity` are set so `isPgDriverError` recognises it and
+ *  `translatePostgresError` maps 40001 -> `TransactionFaultError("serialization-failure")`. */
+function wrapTxFailManifestInsertOnce(realTx: object): object {
+  let fired = false;
+  const target = realTx as unknown as C5AnyFn;
+  return new Proxy(target, {
+    apply(fn, thisArg, args) {
+      const first = args[0];
+      const isTagged = Array.isArray(first) && Object.prototype.hasOwnProperty.call(first, "raw");
+      if (!isTagged) return Reflect.apply(fn, thisArg, args);
+      const raw = (first as readonly string[]).join(" ").toLowerCase();
+      const isManifestInsert = raw.includes("ckpt_manifests") && raw.includes("insert into");
+      if (!isManifestInsert || fired) return Reflect.apply(fn, thisArg, args);
+      fired = true;
+      // A thenable so the awaited manifest INSERT rejects with the retriable driver error.
+      return {
+        then(onFulfilled: (v: unknown) => unknown, onRejected: (e: unknown) => unknown) {
+          const err = Object.assign(
+            new Error("could not serialize access due to read/write dependencies among transactions"),
+            { code: "40001", severity: "ERROR" },
+          );
+          return Promise.reject(err).then(onFulfilled, onRejected);
+        },
+      };
+    },
+    get(fn, prop, receiver) {
+      const value = Reflect.get(fn, prop, receiver);
+      return typeof value === "function" ? (value as C5AnyFn).bind(fn) : value;
+    },
+  });
+}
+
+/** Wraps a client so its `begin` is COUNTED and, on the FIRST transaction only, hands the callback a
+ *  fault-injecting transaction handle. Every other member forwards verbatim, so the store sees an
+ *  ordinary client. `beginCount()` reports how many transactions save actually opened. */
+function makeSerializationFaultInjectingClient(real: UmbraDBSql): { client: UmbraDBSql; beginCount: () => number } {
+  let begins = 0;
+  const proxy = new Proxy(real as unknown as object, {
+    get(fn, prop, receiver) {
+      if (prop === "begin") {
+        return (...args: unknown[]): unknown => {
+          begins += 1;
+          const injectThisAttempt = begins === 1;
+          const beginFn = Reflect.get(fn, "begin", receiver) as C5AnyFn;
+          // postgres.js begin(cb) / begin(options, cb): the callback is the last function arg.
+          const cbIdx = args.length >= 2 && typeof args[1] === "function" ? 1 : 0;
+          const cb = args[cbIdx] as (tx: object) => unknown;
+          const wrapped = (realTx: object): unknown =>
+            cb(injectThisAttempt ? wrapTxFailManifestInsertOnce(realTx) : realTx);
+          const newArgs = args.slice();
+          newArgs[cbIdx] = wrapped;
+          return beginFn.apply(fn, newArgs);
+        };
+      }
+      const value = Reflect.get(fn, prop, receiver);
+      return typeof value === "function" ? (value as C5AnyFn).bind(fn) : value;
+    },
+  });
+  return { client: proxy as unknown as UmbraDBSql, beginCount: () => begins };
+}
+
+/** Behavioral C5 oracle: `save` driven into a retriable 40001 surfaces it ONCE, opens exactly ONE
+ *  transaction, and leaves NO manifest (no silent retry, no duplicate/extra checkpoint). */
+async function assertSaveNotAutoRetriedUnderRetriableFault(
+  rawPool: UmbraDBSql, verifySql: UmbraDBSql, walletId: string, networkId: string,
+): Promise<void> {
+  const { client: faultClient, beginCount } = makeSerializationFaultInjectingClient(rawPool);
+  const faultStore = new PgCheckpointStore(faultClient, new PgTransactionLeaseLayer(faultClient), TEST_SCHEMA);
+
+  let threw = false;
+  let caught: unknown;
+  try {
+    await withSuiteWatchdog(() => faultStore.save(walletId, networkId, randomBytes(400)), {
+      label: "c5-runtime-nonretry-save", timeoutMs: 20_000,
+    });
+  } catch (err) { threw = true; caught = err; }
+
+  // (1) save SURFACED the retriable-class failure to the caller -- it did not swallow it via a retry.
+  expect(threw, "save must surface the injected retriable 40001, not silently retry it away").toBe(true);
+  expect(caught).toBeInstanceOf(TransactionFaultError);
+  expect((caught as TransactionFaultError).faultKind).toBe("serialization-failure"); // the retriable class
+  expect((caught as TransactionFaultError).code).toBe("TRANSACTION_FAULT");
+  // (2) EXACTLY ONE transaction was opened -- an auto-retry wrapper would open a second.
+  expect(beginCount(), "save opened exactly ONE transaction; a second begin means it auto-retried").toBe(1);
+  // (3) NO checkpoint manifest was produced. Under an auto-retry, attempt 2 (fault no longer fires)
+  //     would COMMIT a duplicate/extra manifest here.
+  expect(await completeManifestCount(verifySql, walletId, networkId)).toBe(0);
+}
+
 describe("Postgres-kill mid-save surfaces a typed error + the retry-duplication contract (T2 / design.md §2.2)", () => {
   // -- 2.1: typed ConnectionError + all-or-nothing --------------------------------------------------
   it("[[crash.pg-kill-save.typed-connection-error]] Postgres killed mid-save (backend terminated strictly BEFORE the failing op): the in-flight save rejects with a TYPED ConnectionError, and after recovery the checkpoint is all-or-nothing with load(latest) returning the prior committed bytes", async () => {
@@ -403,7 +510,7 @@ describe("Postgres-kill mid-save surfaces a typed error + the retry-duplication 
   }, 120_000);
 
   // -- 2.2: retry-duplication contract, 1.0.0 documented-unsafe form --------------------------------
-  it("[[crash.pg-kill-save.retry-benign-duplicate]] the lost-COMMIT-ack state (sanctioned simulation: a provably-committed save re-invoked with identical content — NOT a timed kill) yields a BENIGN identical-content duplicate at the next seq; load(latest) correct either way; save is statically excluded from any auto-retry allowlist", async () => {
+  it("[[crash.pg-kill-save.retry-benign-duplicate]] the lost-COMMIT-ack state (sanctioned simulation: a provably-committed save re-invoked with identical content — NOT a timed kill) yields a BENIGN identical-content duplicate at the next seq; load(latest) correct either way; save is statically excluded from any auto-retry allowlist AND a RUNTIME oracle proves save is NOT auto-retried (a retriable 40001 surfaces exactly once, no duplicate manifest)", async () => {
     const walletId = `t2-dup-${randomUUID()}`;
     const networkId = "n";
     const content = randomBytes(400);
@@ -444,11 +551,23 @@ describe("Postgres-kill mid-save surfaces a typed error + the retry-duplication 
     expect(latest.sequence).toBe(2);
     expect(Buffer.from(latest.data).equals(content)).toBe(true);
 
-    // ---- Step 3: STATIC auto-retry-exclusion check (acceptance C5 / I2) --------------------------
+    // ---- Step 3: STATIC auto-retry-exclusion check (acceptance C5 / I2) -- a SUPPLEMENTARY guard --
     // The 1.0.0 contract is documented-unsafe (the idempotency-key fix is Sprint 9): a blind retry
     // duplicates, and save must be excluded from any auto-retry wrapper so the storage layer never
-    // silently produces this duplicate on the caller's behalf.
+    // silently produces this duplicate on the caller's behalf. This static scan catches the common
+    // literal retry/backoff forms; it is KEPT as a documented SUPPLEMENTARY guard.
     assertSaveNotInAnyAutoRetryAllowlist();
+
+    // ---- Step 4: RUNTIME auto-retry-exclusion oracle (acceptance C5 / I2) -- the PRIMARY, non-
+    //     defeatable proof (change-level re-audit BLOCK 2). Unlike the static text scan (which an
+    //     alias / renamed retry util / dynamic dispatch can evade), this DRIVES save into a
+    //     retriable-class transient (a serialization failure, SQLSTATE 40001, injected into save's
+    //     FIRST transaction attempt via a client proxy) and proves BEHAVIOURALLY that save surfaces
+    //     it EXACTLY ONCE (one transaction, one typed TransactionFaultError) and produces NO
+    //     checkpoint manifest -- so a future auto-retry (whose second attempt would commit a
+    //     duplicate manifest and return success) turns this RED. A fresh wallet keeps it isolated
+    //     from the benign-duplicate assertions above.
+    await assertSaveNotAutoRetriedUnderRetriableFault(pool(), getSql(), `t2-c5rt-${randomUUID()}`, networkId);
   }, 120_000);
 
   // -- 2.2 WHERE-gated optional-feature scenario — skipped-pending-feature (Sprint 9) ---------------

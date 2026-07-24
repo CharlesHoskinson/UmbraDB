@@ -372,6 +372,26 @@ async function main(): Promise<void> {
         await sql.end({ timeout: 5 });
         return;
       }
+      if (mode === "save-tx-commit-control") {
+        // T1 SAME-PATH NEGATIVE CONTROL (change-level re-audit BLOCK 1). Exercise the EXACT
+        // co-transactional `save(..., { tx })` path the killed `before-commit` (T1) leg uses, but
+        // COMMIT it -- no observer, no pause, no kill. Open the caller transaction, issue the save
+        // on it via `{ tx }`, and RETURN so `withTransaction` COMMITs. The ONLY difference from the
+        // crash leg is the absence of the SIGKILL, so the control's PRESENT seq vs the crash leg's
+        // ABSENT seq isolates the kill as the cause for the `{tx}` path ITSELF -- closing the hole
+        // where a broken `{tx}` branch (one that returned without writing) would make the killed leg
+        // absent regardless of the kill while a plain `save()` control still committed (a vacuous
+        // T1). Reuses the interrupted seq: the killed tx rolled its seq allocation back, so this
+        // `{tx}` save re-claims the same seq the crash leg left absent.
+        let savedSequence: number | undefined;
+        await txLayer.withTransaction(async (tx) => {
+          const summary = await checkpoints.save(walletId, networkId, data, { tx }); // Op1 via the {tx} path -> COMMITTED
+          savedSequence = summary.sequence;
+        });
+        signalReady({ hook: null, mode, pid: process.pid, savedSequence, walletId, networkId });
+        await sql.end({ timeout: 5 });
+        return;
+      }
       // NO HOOK: an ordinary, uninterrupted `save` on its own internal transaction (commits and
       // returns), then a clean shutdown. Proves the worker is a normal writer when no fault is
       // requested. Natural return (no process.exit) so stdout flushes before exit.

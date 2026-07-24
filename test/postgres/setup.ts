@@ -218,8 +218,13 @@ export interface SpawnCrashWorkerOptions {
    *     write and the cursor write inside the ONE uncommitted tx, signals readiness, then blocks
    *     for the parent's SIGKILL (change-level audit BLOCK 1 — G5 atomicity crash test).
    *   - `co-tx-full-flow` — no-pause, no-kill negative control for `co-tx-crash`: runs the SAME
-   *     `saveAndAdvance` to completion so BOTH the checkpoint and the cursor land. */
-  mode?: "t5-full-flow" | "co-tx-crash" | "co-tx-full-flow";
+   *     `saveAndAdvance` to completion so BOTH the checkpoint and the cursor land.
+   *   - `save-tx-commit-control` — no-pause, no-kill SAME-PATH negative control for the T1
+   *     `before-commit` kill (change-level re-audit BLOCK 1): opens a caller `withTransaction` and
+   *     runs `save(..., { tx })` on it, then COMMITs -- the EXACT co-transactional `{tx}` path the
+   *     killed leg uses, differing from it ONLY by the absence of the SIGKILL, so a present control
+   *     seq vs the crash leg's absent seq isolates the kill as the cause for the `{tx}` path itself. */
+  mode?: "t5-full-flow" | "co-tx-crash" | "co-tx-full-flow" | "save-tx-commit-control";
   walletId?: string;
   networkId?: string;
   /** Watermark cursor (kind, key, value) for the T5 hooks; `cursorValue` is JSON. */

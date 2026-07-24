@@ -366,9 +366,10 @@ afterEach(async () => {
 // ============================================================================================
 
 interface CurrentState {
-  /** EXHAUSTIVE: EVERY `kv_current` row for the scope, keyed by `${ns} ${key}` → value. Reading the
-   *  FULL set (raw SELECT, not an expected-key subset) means an extra/stale row on ONLY one side
-   *  breaks equality. Excludes `version` and all `kv_history`. */
+  /** EXHAUSTIVE: EVERY `kv_current` row for BOTH the churn scope AND the sync writer's per-batch KV
+   *  scope (SYNC_KV_NS), keyed by `${ns} ${key}` → value. Reading the FULL set (raw SELECT, not an
+   *  expected-key subset) means an extra/stale/MISSING row on ONLY one side breaks equality — incl.
+   *  a lost historical `item:b`. Excludes `version` and all `kv_history`. */
   kvAll: Record<string, JsonValue>;
   /** EXHAUSTIVE: EVERY `watermarks` row for the cursor key, keyed by `kind` → value. */
   watermarksAll: Record<string, JsonValue>;
@@ -380,11 +381,17 @@ async function readCurrentState(
   a: Adapters,
   wallet: string,
   scope: string,
+  syncKvScope: string,
   cursorKey: string,
 ): Promise<CurrentState> {
+  // Read the FULL kv_current for BOTH the churn scope AND the sync writer's per-batch KV scope
+  // (change-level re-audit BLOCK 3). Keyed by `${ns} ${key}` — the churn scope being CHURN_NS and the
+  // sync-KV scope SYNC_KV_NS, the two never collide, yet a lost/corrupted HISTORICAL item:b
+  // (SYNC_KV_NS) now breaks equality exactly as a churn divergence does.
   const kvRows = await withSuiteWatchdog(
     a.sql<{ ns: string; key: string; value: JsonValue }[]>`
-      SELECT ns, key, value FROM ${a.sql(TEST_SCHEMA)}.kv_current WHERE scope = ${scope}`,
+      SELECT ns, key, value FROM ${a.sql(TEST_SCHEMA)}.kv_current
+      WHERE scope = ${scope} OR scope = ${syncKvScope}`,
     { label: "readCurrentState-kv", timeoutMs: OP_WATCHDOG_MS },
   );
   const kvAll: Record<string, JsonValue> = {};
@@ -405,14 +412,15 @@ async function readCurrentState(
   return { kvAll, watermarksAll, latestPayload: Buffer.from(record.data) };
 }
 
-/** Equal iff the FULL kv_current value set agrees, the latest complete checkpoint payload bytes are
- *  identical, and the FULL watermarks value set agrees. `kv_history`/`version` are excluded because
- *  they legitimately diverge (`council/B` §1: an unconditioned `put` is a version-bumping upsert;
- *  the soak's concurrency + reference's independent run produce different version counters and
- *  spurious `kv_history` rows, but the CURRENT value is identical). The sync writer's per-batch KV
- *  datum lives under its OWN scope (SYNC_KV_NS/`syncKvScope`) which this predicate does NOT compare
- *  (it compares the churn scope) — it is auxiliary evidence for the T5 sample, not part of the
- *  fault-free-reference equality, so the reference does not replay it. */
+/** Equal iff the FULL kv_current value set (the churn scope AND the sync writer's per-batch KV scope)
+ *  agrees, the latest complete checkpoint payload bytes are identical, and the FULL watermarks value
+ *  set agrees. `kv_history`/`version` are excluded because they legitimately diverge (`council/B` §1:
+ *  an unconditioned `put` is a version-bumping upsert; the soak's concurrency + reference's
+ *  independent run produce different version counters and spurious `kv_history` rows, but the CURRENT
+ *  value is identical). The sync writer's per-batch KV datum (SYNC_KV_NS/`syncKvScope`) IS compared
+ *  here now (change-level re-audit BLOCK 3): the reference replays the SAME item:b writes into its own
+ *  sync-KV scope, so a lost/corrupted HISTORICAL item:b — one whose cursor watermark long since
+ *  passed — breaks this equality instead of being silently ignored. */
 function assertCurrentStateEqual(actual: CurrentState, reference: CurrentState): void {
   expect(actual.kvAll).toEqual(reference.kvAll);
   expect(actual.latestPayload.equals(reference.latestPayload)).toBe(true);
@@ -489,6 +497,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       const refWallet = `ref-sw-${runId}`;
       const refSyncKey = `ref-sk-${runId}`;
       const refChurnScope = `ref-cs-${runId}`;
+      const refSyncKvScope = `ref-skv-${runId}`; // BLOCK 3: the reference replays item:b here
 
       // One dedicated pool for the concurrent actors + one small pool for the sampler (its reads are
       // not starved by actor saturation). Both against the SHARED container.
@@ -1007,8 +1016,16 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       //      The reference is a genuine fault-free replay of the SAME recorded write sequence, via
       //      UmbraDB's OWN adapters, into the separate reference identity — NO prune, NO concurrency,
       //      NO imported store (design.md §4). ----
-      // Replay the sync/full-sync write-batch sequence 1..batchMax (checkpoint payload + watermark).
+      // Replay the sync/full-sync write-batch sequence 1..batchMax: the per-batch KV datum item:b
+      // (KV half, written FIRST — the SAME order the sync actor used) THEN the checkpoint payload +
+      // watermark. Replaying item:b into the reference's own sync-KV scope is what makes the two
+      // schedules truly match, so the end-state predicate (which now compares the sync-KV scope) is a
+      // genuine SAME-INPUT equality rather than one that silently tolerates a lost item (BLOCK 3).
       for (const b of syncBatches) {
+        await withSuiteWatchdog(() => a.kv.put(SYNC_KV_NS, refSyncKvScope, itemKey(b), itemValue(b)), {
+          label: `ref-sync-kv-b${b}`,
+          timeoutMs: OP_WATCHDOG_MS,
+        });
         await withSuiteWatchdog(
           () =>
             saveAndAdvance(
@@ -1045,8 +1062,8 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
 
       // Read both current states from a FRESH client and assert equality on the predicate.
       const fresh = adaptersOf(newPool(uri, 4));
-      const soakState = await readCurrentState(fresh, syncWallet, churnScope, syncKey);
-      const refState = await readCurrentState(fresh, refWallet, refChurnScope, refSyncKey);
+      const soakState = await readCurrentState(fresh, syncWallet, churnScope, syncKvScope, syncKey);
+      const refState = await readCurrentState(fresh, refWallet, refChurnScope, refSyncKvScope, refSyncKey);
       assertCurrentStateEqual(soakState, refState);
 
       // EXHAUSTIVENESS teeth (test-honesty): the predicate compares the FULL current state, so an
@@ -1068,6 +1085,25 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       expect(refState.watermarksAll[SYNC_KIND]).toEqual(batchMax);
       expect(soakState.latestPayload.equals(payload(salt, batchMax))).toBe(true);
       expect(refState.latestPayload.equals(payload(salt, batchMax))).toBe(true);
+
+      // FALSIFIABILITY (change-level re-audit BLOCK 3): a silently-LOST historical sync-KV item must
+      // break the end-state predicate. Delete item:37 (37 << batchMax — a long-covered HISTORICAL
+      // batch whose cursor watermark passed ~160 batches ago) from the fault run's DURABLE sync-KV
+      // scope, re-read the current state, and assert the exhaustive predicate now THROWS. Before this
+      // fix the sync-KV scope was EXCLUDED from the predicate and UNREPLAYED by the reference, so this
+      // exact loss left the current item, max checkpoint label, churn comparison, checkpoint and
+      // watermark all equal — and the required soak passed despite durable batch 37 being missing.
+      const LOST_ITEM = 37;
+      expect(LOST_ITEM).toBeLessThan(batchMax); // genuinely historical: the watermark is far past it
+      expect(soakState.kvAll[`${SYNC_KV_NS} ${itemKey(LOST_ITEM)}`]).toBeDefined(); // it WAS compared
+      await withSuiteWatchdog(
+        fresh.sql`DELETE FROM ${fresh.sql(TEST_SCHEMA)}.kv_current
+                  WHERE ns = ${SYNC_KV_NS} AND scope = ${syncKvScope} AND key = ${itemKey(LOST_ITEM)}`,
+        { label: "falsify-delete-historical-item", timeoutMs: OP_WATCHDOG_MS },
+      );
+      const soakAfterLoss = await readCurrentState(fresh, syncWallet, churnScope, syncKvScope, syncKey);
+      expect(soakAfterLoss.kvAll[`${SYNC_KV_NS} ${itemKey(LOST_ITEM)}`]).toBeUndefined(); // the datum is gone
+      expect(() => assertCurrentStateEqual(soakAfterLoss, refState)).toThrow(); // the predicate CATCHES it
 
       // ---- Diagnostics (evidence for the orchestrator): what actually ran ----
       // eslint-disable-next-line no-console

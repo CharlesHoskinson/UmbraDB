@@ -27,8 +27,8 @@ import {
  * TEST-HONESTY (the dominant risk in this change): every assertion observes durable state from a
  * FRESH client (a new pool) STRICTLY AFTER the SIGKILL is confirmed (`exit.signal === "SIGKILL"`);
  * (a) is written so it FAILS if the harness rollback were broken (a committed killed txn would put
- * a complete manifest at the interrupted seq); and a mandatory NEGATIVE CONTROL runs the SAME
- * second save to completion WITHOUT the kill and asserts the OPPOSITE outcome of (a) at the SAME
+ * a complete manifest at the interrupted seq); and a mandatory SAME-PATH NEGATIVE CONTROL runs the
+ * SAME co-transactional `save({ tx })` path to completion (commit, no kill) and asserts the OPPOSITE outcome of (a) at the SAME
  * seq — proving the kill CAUSED the absence, not that `save` is broken. Every DB op is wrapped in
  * `withSuiteWatchdog` so a half-dead backend fails the op typed rather than hanging the gate.
  */
@@ -218,17 +218,23 @@ describe("process-kill mid-save leaves no partially-visible checkpoint (T1 / des
     expect(await danglingChunkCount(freshPool)).toBe(0);  // no chunk left unreferenced by any junction
     expect(await junctionRowCount(freshPool)).toBe(1);    // exactly seq 1's single junction row — none from the killed save
 
-    // ---- Step 4: NEGATIVE CONTROL (mandatory) — WITHOUT the kill the SAME second save IS visible --
-    // Run the same second save to COMPLETION via a fresh NO-HOOK worker: the SAME worker entrypoint,
-    // differing from the killed run ONLY by the absence of the fault hook and the SIGKILL. Because
-    // the killed txn's seq allocation ALSO rolled back, the (w, net) counter is still at 2, so this
-    // save reuses the SAME interrupted seq (2) — the exact seq that was ABSENT in (a) is now PRESENT
-    // and complete. This is the OPPOSITE outcome of (a) at the SAME seq, proving the kill CAUSED the
-    // absence in (a) rather than `save` being broken.
-    const control = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, walletId, networkId });
+    // ---- Step 4: SAME-PATH NEGATIVE CONTROL (mandatory) — WITHOUT the kill the SAME `save({ tx })`
+    //     path COMMITS (change-level re-audit BLOCK 1). Run the second save to COMPLETION via the
+    //     `save-tx-commit-control` worker: it opens a caller `withTransaction` and issues
+    //     `save(..., { tx })` on it, then COMMITs — the EXACT co-transactional `{tx}` path the killed
+    //     `before-commit` leg exercised, differing from it ONLY by the absence of the SIGKILL (NOT a
+    //     different, plain-`save()` code path as before). This closes the vacuity where a broken
+    //     `{tx}` branch (one returning without writing) would leave the KILLED leg absent regardless
+    //     of the kill while an ordinary `save()` control still committed — a T1 that passed without
+    //     the kill being the cause. Because the killed txn's seq allocation ALSO rolled back, the
+    //     (w, net) counter is still at 2, so this `{tx}` save reuses the SAME interrupted seq (2) —
+    //     the exact seq ABSENT in (a) is now PRESENT and complete VIA THE SAME PATH. This is the
+    //     OPPOSITE outcome of (a) at the SAME seq on the SAME path, proving the kill CAUSED the
+    //     absence in (a) rather than the `{tx}` save path being broken.
+    const control = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, mode: "save-tx-commit-control", walletId, networkId });
     const controlReady = await control.waitForReady();
-    expect(controlReady.hook).toBeNull();
-    expect(controlReady.savedSequence).toBe(2); // reuses the interrupted seq ⇒ the seq counter rolled back too
+    expect(controlReady.hook).toBeNull();                 // a mode control, not a pause hook
+    expect(controlReady.savedSequence).toBe(2); // the {tx} save reused the interrupted seq ⇒ the seq counter rolled back too
     const controlExit = await withSuiteWatchdog(control.waitForExit(), { label: "control-worker-exit", timeoutMs: 15_000 });
     expect(controlExit.code).toBe(0); // the uninterrupted save committed and exited cleanly
 

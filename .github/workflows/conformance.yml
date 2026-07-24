@@ -70,13 +70,27 @@ jobs:
   mutation:
     # StrykerJS durability mutation gate (v1.0.0-recovery-testing Task 7.3; guideline §2.3/§3.6).
     # A SEPARATE still-required job (never optional, never live-gated) so mutation cost is off the
-    # `test` job's clock. SCOPED to the single co-transactional save+cursor combinator
-    # `src/postgres/save-and-advance.ts` (the durability keystone) with a narrow vitest config
-    # (`save-and-advance.test.ts` only), keeping the run to seconds. `break` is committed at 90
-    # (measured baseline 100.00%; guideline floor is break:60). Uses testcontainers via the same
-    # ubuntu-latest Docker daemon as the `test` job — no `services:` block needed.
+    # `test` job's clock. SCOPE: the FIVE durability adapters `stryker.conf.json` mutates —
+    # save-and-advance.ts (the co-transactional save+cursor keystone), checkpoint-store.ts,
+    # watermarks.ts, transaction-lease.ts, temporal-kv.ts — each paired with its own fast `.test.ts`
+    # unit suite (`vitest.mutation.config.ts`). `break` is committed at 65 in `stryker.conf.json`
+    # (measured AGGREGATE 70.68% over 726 mutants; guideline floor is break:60) and is enforced here
+    # on the aggregate across all five adapters.
+    #
+    # RUNTIME / TIMEOUT: this job runs the five adapters PER-ADAPTER (`npm run test:mutation:ci` ->
+    # `scripts/mutation-per-adapter.mjs`) — one `stryker run --mutate <file>` each, so every adapter
+    # reuses ONE Testcontainers Postgres. That is the MEASURED, reliably-completing path: ~1,384s
+    # (~23 min) wall-clock on a 24-core host (per-adapter 17s/85s/348s/323s/611s), versus the single
+    # interleaved `stryker run` (`npm run test:mutation`) that churns a container per file switch and
+    # is slower/unbounded — which is why the old 20-min budget could kill the gate before it produced
+    # a threshold verdict. `break:65` is applied to the AGGREGATE score only: an adapter run in
+    # isolation lacks the sibling-suite coverage the interleaved config gives it (transaction-lease
+    # alone is 64.83%), so the runner sums all adapters and gates the aggregate (a conservative lower
+    # bound). `timeout-minutes: 45` sits safely above the ~23 min measurement with headroom for a
+    # slower CI runner, so the gate always finishes and emits its pass/fail. Uses testcontainers via
+    # the same ubuntu-latest Docker daemon as the `test` job — no `services:` block needed.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -87,5 +101,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run scoped StrykerJS mutation gate (save-and-advance.ts; break:90)
-        run: npm run test:mutation
+      - name: Run StrykerJS mutation gate (5 durability adapters, per-adapter; aggregate break:65)
+        run: npm run test:mutation:ci
