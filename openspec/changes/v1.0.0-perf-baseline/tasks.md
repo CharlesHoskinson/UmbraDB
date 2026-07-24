@@ -5,7 +5,7 @@ against this change's `design.md`; code quality/docs/test coverage). A task is C
 both auditors approve, or their findings are fixed and re-reviewed. Matches Sprint 1-4's own
 review cadence.
 
-**Critical-path ordering (from `ROADMAP-v1.0.0-CONSOLIDATED.md` §"Critical path", step 3
+**Critical-path ordering (from `ROADMAP.md` §"Critical path", step 3
 "G13 → G14"):** the three G13 perf-correctness fixes (§1) land *before* the baseline is recorded
 (§3). Within the whole 1.0.0 program this change runs after G5/G6/G7/G8 (durability) and before
 the G9/G10/G11 crash/soak suite. The harness (§2) may be *stood up* in parallel with earlier
