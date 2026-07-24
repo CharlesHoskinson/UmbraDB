@@ -72,11 +72,26 @@ export interface HotRatio {
   note: string;
 }
 
+/** A physical-size + dead-tuple observation on a high-churn same-key table (`design.md` §4; task
+ *  2.2), demonstrating the `fillfactor = 90` + HOT tuning keeps the table from bloating under
+ *  repeated same-key updates. Recorded as an OBSERVATION, not a causal isolation of fillfactor
+ *  (Sprint 4 task 0.2's precedent). */
+export interface BloatStability {
+  table: string;
+  /** `pg_relation_size` of the table's main heap fork, in bytes. */
+  relationSizeBytes: number;
+  /** `pg_stat_user_tables.n_dead_tup` after a forced stats flush. */
+  deadTuples: number;
+  /** Number of watermark `set` updates applied before the measurement. */
+  updates: number;
+  note: string;
+}
+
 /** The pinned environment the baseline was recorded against (`design.md` §5). */
 export interface EnvironmentBlock {
   postgresImage: string;
-  /** The resolved local image id (best-effort via `docker inspect`), since the image is pinned by
-   *  tag against a locally-cached layer set in this offline environment; null if unavailable. */
+  /** The resolved local image id (best-effort via `docker inspect`), recorded as corroboration for
+   *  the digest pin the container actually starts from (`bench/environment.ts`); null if unavailable. */
   postgresImageId: string | null;
   postgresServerVersion: string;
   settings: { shared_buffers: string; work_mem: string; max_wal_size: string };
@@ -105,6 +120,8 @@ export interface Baseline {
     checkpointDedupRatio: { referenced: number; written: number; ratio: number; note: string };
     kvCurrentHotRatio: HotRatio;
     watermarksHotRatio: HotRatio;
+    /** Bloat-stability of `watermarks` under repeated same-key updates (task 2.2). */
+    watermarksBloatStability: BloatStability;
     transactionHistoryGinWriteP99Ms: number;
   };
   gcCurve: GcCurve;

@@ -14,6 +14,18 @@ import type { GcCurve, GcPoint } from "../types.js";
 const K = 2.0;
 const D_MS = 5000;
 
+/**
+ * The declared GC scale envelope (`design.md` §5, HP-6): `10^5`–`10^6` live chunks. Exported as
+ * explicit named constants so both the harness's `targetEnvelope` and the cliff adjudication use one
+ * source of truth. The cliff determination is computed SOLELY over points inside this envelope —
+ * points BELOW it (e.g. the 10k / 50k context points) are still measured and recorded in the curve's
+ * `points`, but a `K`/`D` breach there is out-of-envelope and MUST NOT be read as an in-envelope
+ * cliff (which, per B8, would falsely trigger the conditional batched-GC remediation).
+ */
+export const ENVELOPE_MIN_CHUNKS = 100_000;
+export const ENVELOPE_MAX_CHUNKS = 1_000_000;
+export const GC_DECLARED_ENVELOPE: [number, number] = [ENVELOPE_MIN_CHUNKS, ENVELOPE_MAX_CHUNKS];
+
 // Fixture chunks are backdated 25 minutes (a trusted literal, > prune's 15-minute grace window) so
 // prune's reclaim actually runs the NOT EXISTS ANTI-JOIN over every live chunk rather than
 // short-circuiting on `created_at`, while the chunks still survive because each is referenced —
@@ -67,7 +79,13 @@ export async function runGcScale(sql: UmbraDBSql, opts: GcScaleOpts): Promise<Gc
     points.push({ liveChunks: populated, passMs });
   }
 
-  const determination = adjudicate(points, K, D_MS);
+  // Adjudicate the cliff ONLY over points inside the declared envelope (design.md §5, HP-6). Points
+  // below targetEnvelope[0] (10k / 50k) are kept in `points` for context but excluded here so a
+  // sub-envelope breach cannot be misread as an in-envelope cliff (and falsely trigger B8's
+  // conditional batched-GC remediation). All measured points remain in the returned curve's `points`.
+  const [envMin, envMax] = opts.targetEnvelope;
+  const inEnvelopePoints = points.filter((p) => p.liveChunks >= envMin && p.liveChunks <= envMax);
+  const determination = adjudicate(inEnvelopePoints, K, D_MS);
   const actualMax = points.length > 0 ? points[points.length - 1]!.liveChunks : 0;
   const cappedBelowTarget = actualMax < opts.targetEnvelope[1];
 
@@ -159,6 +177,6 @@ function adjudicate(points: GcPoint[], k: number, d: number): GcCurve["cliffDete
     met: false,
     reason: "none",
     firstMetLiveChunks: null,
-    note: `no cliff across ${points.length} points up to ${maxChunks} live chunks: no pass exceeded D=${d}ms and pass-duration growth stayed within K=${k}x of chunk-count growth. The single-statement anti-join delete is retained; SC-2 documents the O(live-chunks) cost.`,
+    note: `no cliff across ${points.length} in-envelope points up to ${maxChunks} live chunks: no pass exceeded D=${d}ms and pass-duration growth stayed within K=${k}x of chunk-count growth. Adjudicated only over the declared 10^5-10^6 envelope (sub-envelope context points excluded). The single-statement anti-join delete is retained; SC-2 documents the O(live-chunks) cost.`,
   };
 }

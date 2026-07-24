@@ -62,26 +62,39 @@ describe("BLOCK 1+2 — empty-safe + bind-param-cap-safe batched inserts (design
     expect(hist[0]!.byteLength).toBe(0);
   }, 30_000);
 
-  it("param-cap: a save of 30,000 junction rows exceeds the old single-statement bind-param cap and now succeeds", async () => {
-    // 30,000 chunks of 1 byte -> 30,000 junction rows -> 90,000 bind params in a single INSERT,
-    // which exceeds PostgreSQL's 65,535 protocol cap (the old unconditional single statement would
-    // throw). The batched loop issues ceil(30000/10000)=3 junction inserts, each well under the cap.
+  it("large-N: a save of 30,000 junction rows emits EXACTLY 1 chunk + 1 junction statement (true chunk-count independence, not batches) and round-trips", async () => {
+    // 30,000 chunks of 1 byte -> 30,000 junction rows. A pre-HP-1 single row-tuple VALUES INSERT
+    // would bind 90,000 params and throw past PostgreSQL's 65,535 protocol cap; the sub-batched
+    // interim fix would emit ceil(30000/10000)=3 junction statements. The unnest(sql.array(...))
+    // form binds the arrays as SINGLE parameters, so it is ONE chunk statement + ONE junction
+    // statement regardless of N -- proving true chunk-count independence (A1), not 3 batches.
     // (With chunkSize:1 the unique chunk hashes are <=256, so the chunk table stays tiny; the
     // junction table holds all 30,000 positions.)
-    const s = store(getSql());
-    const data = payload(30_000);
-    const summary = await s.save("w-big", "net", data, { chunkSize: 1 });
-    expect(summary.chunkCount).toBe(30_000);
+    const counts = { chunkInsert: 0, junctionInsert: 0 };
+    const sql = debugClient((query) => {
+      if (/insert\s+into\s+\S*ckpt_manifest_chunks\b/i.test(query)) counts.junctionInsert++;
+      else if (/insert\s+into\s+\S*ckpt_chunks\b/i.test(query)) counts.chunkInsert++;
+    });
+    try {
+      const data = payload(30_000);
+      const summary = await store(sql).save("w-big", "net", data, { chunkSize: 1 });
+      expect(summary.chunkCount).toBe(30_000);
+      expect(counts.chunkInsert).toBe(1); // ONE statement for the <=256 unique 1-byte chunks
+      expect(counts.junctionInsert).toBe(1); // ONE statement for ALL 30,000 junction positions
 
-    const loaded = await s.load("w-big", "net");
-    expect(Buffer.from(loaded.data)).toEqual(Buffer.from(data));
+      const loaded = await store(sql).load("w-big", "net");
+      expect(Buffer.from(loaded.data)).toEqual(Buffer.from(data));
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
   }, 120_000);
 });
 
 describe("BLOCK 3 — HP-1 acceptance A1–A4 (design.md §1)", () => {
   it("A1: statement count is CONSTANT across N (exactly 1 chunk-insert + 1 junction-insert per save, N in {1,16,64})", async () => {
-    // Each N <= INSERT_ROW_BATCH (10,000), so the batched loops emit exactly one statement each,
-    // independent of N — the round count does not grow with N (was 2N single-row awaits pre-HP-1).
+    // The unnest(sql.array(...)) inserts emit exactly one statement each, independent of N — the
+    // round count does not grow with N (was 2N single-row awaits pre-HP-1). The large-N test above
+    // proves the same holds at 30,000 rows: one statement each, not ceil(N/batch) batches.
     for (const n of [1, 16, 64]) {
       const counts = { chunkInsert: 0, junctionInsert: 0 };
       const sql = debugClient((query) => {
@@ -153,6 +166,67 @@ describe("BLOCK 3 — HP-1 acceptance A1–A4 (design.md §1)", () => {
     expect(before).toHaveLength(1);
     expect(after).toHaveLength(1); // still exactly one row — a DO UPDATE, not a duplicate insert
     expect(after[0]!.created_at.getTime()).toBeGreaterThan(before[0]!.created_at.getTime());
+  }, 30_000);
+
+  it("A4 mixed dedup: ONE chunk statement upserts a MIX of pre-existing (ON CONFLICT refresh) AND brand-new chunks", async () => {
+    // A4 requires proving a SINGLE chunk statement handles a MIX — some hashes already exist
+    // (ON CONFLICT -> created_at refresh) and some are newly inserted — not the fully-identical
+    // re-save above. Content A and B share ONE chunk (chunkY) and each carries one chunk the other
+    // lacks (chunkX in A, chunkZ in B). Chunk storage is a single GLOBAL cross-wallet pool, so when
+    // B saves, its unnest chunk upsert sees chunkY already present (refresh) and chunkZ absent
+    // (insert) — the mix, in one statement.
+    const chunkX = Buffer.from([10, 10, 10, 10]);
+    const chunkY = Buffer.from([20, 20, 20, 20]);
+    const chunkZ = Buffer.from([30, 30, 30, 30]);
+    const hY = sha256(chunkY);
+    const hZ = sha256(chunkZ);
+
+    const s = store(getSql());
+    const sqlRead = getSql();
+    await s.save("w-a4mix", "net", Buffer.concat([chunkX, chunkY]), { chunkSize: 4 }); // content A
+    const beforeY = await sqlRead<{ created_at: Date }[]>`
+      SELECT created_at FROM ${sqlRead(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${hY}
+    `;
+    const zBefore = await sqlRead<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${sqlRead(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${hZ}
+    `;
+    expect(beforeY).toHaveLength(1); // chunkY exists after A
+    expect(zBefore[0]!.n).toBe(0); // chunkZ does NOT exist before B
+
+    await new Promise((r) => setTimeout(r, 25)); // guarantee a measurable now() tick between saves
+
+    // Save content B on a debug-counting client so we can prove the MIX is ONE chunk statement.
+    const counts = { chunkInsert: 0, junctionInsert: 0 };
+    const dbg = debugClient((query) => {
+      if (/insert\s+into\s+\S*ckpt_manifest_chunks\b/i.test(query)) counts.junctionInsert++;
+      else if (/insert\s+into\s+\S*ckpt_chunks\b/i.test(query)) counts.chunkInsert++;
+    });
+    const contentB = Buffer.concat([chunkY, chunkZ]);
+    try {
+      // no duplicate-key error despite chunkY already existing
+      await expect(store(dbg).save("w-a4mix-b", "net", contentB, { chunkSize: 4 })).resolves.toBeDefined();
+      expect(counts.chunkInsert).toBe(1); // the MIX (existing chunkY + new chunkZ) in ONE statement
+      expect(counts.junctionInsert).toBe(1);
+    } finally {
+      await dbg.end({ timeout: 5 });
+    }
+
+    // shared chunkY: created_at REFRESHED (ON CONFLICT DO UPDATE fired for the existing row)
+    const afterY = await sqlRead<{ created_at: Date }[]>`
+      SELECT created_at FROM ${sqlRead(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${hY}
+    `;
+    expect(afterY).toHaveLength(1); // still one row, not a duplicate
+    expect(afterY[0]!.created_at.getTime()).toBeGreaterThan(beforeY[0]!.created_at.getTime());
+
+    // new chunkZ: INSERTED by that same statement
+    const zAfter = await sqlRead<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${sqlRead(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${hZ}
+    `;
+    expect(zAfter[0]!.n).toBe(1);
+
+    // load of B round-trips byte-identically (both the refreshed and the newly-inserted chunk)
+    const loaded = await s.load("w-a4mix-b", "net");
+    expect(Buffer.from(loaded.data)).toEqual(contentB);
   }, 30_000);
 
   it("HP-1 equivalence: the batched save stores identical junction positions and load round-trips", async () => {

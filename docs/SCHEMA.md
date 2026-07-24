@@ -13,7 +13,7 @@ its own `<schema>._migrations` bookkeeping table:
 
 | Lineage | Schema (conventional name) | Migrations | Status |
 |---|---|---|---|
-| **tier1_wallet** | `tier1_wallet` | `src/postgres/migrations/000_schema.ts` … `004_transaction_history.ts` | Merged to `main`, in production use |
+| **tier1_wallet** | `tier1_wallet` | `src/postgres/migrations/000_schema.ts` … `006_ckpt_chunks_size_bytes.ts` | `000`–`004` merged to `main`, in production use; `005_kv_current_fillfactor` + `006_ckpt_chunks_size_bytes` added by the `v1.0.0-perf-baseline` change |
 | **chain_archive** ("Tier-1.5") | `chain_archive` | `src/postgres/migrations/chain_archive/001_chain_archive_core.ts` | **Not yet on `main`** — see note below |
 
 > **Provenance note on `chain_archive`.** As of this writing, the `chain_archive` schema, its
@@ -59,7 +59,7 @@ the Tier-2 indexer fork.
 
 ## tier1_wallet lineage
 
-Source: `src/postgres/migrations/000_schema.ts` – `004_transaction_history.ts`, plus the runtime
+Source: `src/postgres/migrations/000_schema.ts` – `006_ckpt_chunks_size_bytes.ts`, plus the runtime
 adapters `src/postgres/temporal-kv.ts`, `src/postgres/checkpoint-store.ts`,
 `src/postgres/watermarks.ts`, `src/postgres/transaction-history-storage.ts`,
 `src/postgres/wallet-state-envelope.ts`.
@@ -185,16 +185,24 @@ ordered list of chunk references plus a hash over that ordered list.
 **`ckpt_chunks`** (migration `002_checkpoint_store`):
 
 ```sql
+-- 002_checkpoint_store creates the table; 006_ckpt_chunks_size_bytes later adds size_bytes.
 CREATE TABLE ckpt_chunks (
   hash       bytea PRIMARY KEY,
   data       bytea NOT NULL,
+  size_bytes integer GENERATED ALWAYS AS (octet_length(data)) STORED,  -- added by migration 006
   created_at timestamptz NOT NULL DEFAULT now()
 )
 ```
 
 - `hash` is the SHA-256 (32 bytes) of `data`, computed application-side (`checkpoint-store.ts`'s
-  `sha256()`) — not a generated column here (contrast `chain_archive.chain_blobs`, which does use
-  a generated `size_bytes`; this table predates that pattern).
+  `sha256()`) rather than by a generated column — it is the content address `save()`'s chunker
+  emits, and `load()` re-verifies it against the fetched bytes.
+- `size_bytes integer GENERATED ALWAYS AS (octet_length(data)) STORED` is a stored generated column
+  **added by migration `006_ckpt_chunks_size_bytes`** (IS-2, `v1.0.0-perf-baseline`), matching the
+  `chain_archive.chain_blobs` pattern. `history()`'s aggregate sums this stored column so it never
+  detoasts the `data` bytea just to length it (HP-2); the `GENERATED … STORED` expression backfills
+  existing rows at migration time and is computed for all future inserts, so it never drifts from
+  `data`.
 - Content-addressed and globally deduplicated: `save()` splits the caller's payload into
   `DEFAULT_CHUNK_SIZE = 4 MiB` chunks (configurable per-save via `opts.chunkSize`), hashes each,
   and upserts every chunk with `INSERT ... ON CONFLICT (hash) DO UPDATE SET created_at = now()` — a

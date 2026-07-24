@@ -16,10 +16,12 @@ schema-conforming artifact; no latency/throughput number is compared.
 
 ## Environment pinning (for reproduction)
 
-- **Image**: `postgres:17-alpine`, pinned by tag against the locally-cached layer set. A registry
-  digest is not reachable in the offline build environment, so the harness records the resolved
-  local image id into the baseline's `environment.postgresImageId` — that recorded id is the
-  structural pin. In a networked environment, pin by `@sha256:` digest instead.
+- **Image**: pinned by **digest** —
+  `postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`, the exact
+  17-alpine image that produced this baseline (resolved from the local image's RepoDigest). The
+  harness container **starts from this digest** (`bench/environment.ts`), so the pin is enforced at
+  run time rather than merely recorded after the fact; the resolved local image id is additionally
+  recorded in the baseline's `environment.postgresImageId` as corroboration.
 - **Server settings** (pinned for run-to-run comparability): `shared_buffers=256MB`,
   `work_mem=16MB`, `max_wal_size=2GB`, `max_parallel_workers_per_gather=0`.
 - **Microbench library**: `tinybench` (an explicit UmbraDB `devDependency`, warmup-aware; NOT the

@@ -8,13 +8,15 @@ import { runMigrations } from "../src/postgres/migrate.js";
 export const BENCH_SCHEMA = "umbradb_bench";
 
 /**
- * Pinned Postgres image (`design.md` §4). Pinned here by TAG against the locally-cached layer set
- * in this offline environment (the same `postgres:17-alpine` the conformance suite already pulls
- * — `test/postgres/setup.ts`); the resolved local image id is captured into the baseline's
- * environment block so the pin is recorded structurally even though a registry digest is not
- * reachable offline. See `Performance/CEILINGS.md` for the pinning note.
+ * Pinned Postgres image (`design.md` §4), pinned by DIGEST. This `postgres@sha256:742f40…2193` is
+ * the exact 17-alpine image that produced the committed baseline, resolved from the local image
+ * (`docker image inspect postgres:17-alpine` — its RepoDigest). The Testcontainers container now
+ * STARTS from this digest, so the pin is enforced at run time rather than merely recorded after the
+ * fact. The resolved local image id is still captured into the baseline's
+ * `environment.postgresImageId` as corroboration. See `Performance/CEILINGS.md` for the pinning note.
  */
-export const POSTGRES_IMAGE = "postgres:17-alpine";
+export const POSTGRES_IMAGE =
+  "postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193";
 
 /** Server settings pinned for run-to-run comparability (`design.md` §4). */
 export const PG_SETTINGS = {

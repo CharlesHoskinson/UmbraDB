@@ -62,11 +62,32 @@ async function main(): Promise<void> {
     await env.stop();
   }
 
-  const baseline = loadBaseline();
+  const loaded = loadBaseline();
   console.log("=== bench smoke guard (COARSE, NON-RELEASE-GATING) ===");
+
+  // Distinguish an ARTIFACT failure (baseline missing / unreadable / malformed) from a genuine
+  // no-regression pass: an unavailable baseline makes the advisory comparison VACUOUS, so the log
+  // must NOT read like a clean pass. Still exit 0 — this guard is non-gating either way, and a
+  // missing/corrupt artifact is an infrastructure/repo problem, not a measured perf result.
+  if (loaded.status !== "ok") {
+    const detail =
+      loaded.status === "missing"
+        ? `baseline artifact not found at ${loaded.path}`
+        : `baseline artifact at ${loaded.path} is unreadable/malformed: ${String(loaded.error)}`;
+    console.warn("  [WARN] baseline artifact unavailable — comparison skipped, THIS IS NOT A PERF RESULT.");
+    console.warn(`         ${detail}`);
+    console.warn("         The guard ran and measured the p99s below, but with NO baseline to compare");
+    console.warn("         against, this run neither passes nor fails a regression check. (Non-gating; exit 0.)");
+    for (const [name, m] of Object.entries(measured)) {
+      console.log(`  ${name.padEnd(36)} p99=${m.p99.toFixed(3)}ms  (measured; no baseline to compare)`);
+    }
+    process.exit(0);
+  }
+
+  const baseline = loaded.baseline;
   let flags = 0;
   for (const [name, m] of Object.entries(measured)) {
-    const base = baseline?.workloads[name];
+    const base = baseline.workloads[name];
     if (!base) {
       console.log(`  ${name.padEnd(36)} p99=${m.p99.toFixed(3)}ms  (no baseline entry; skipped)`);
       continue;
@@ -78,9 +99,6 @@ async function main(): Promise<void> {
       `  ${name.padEnd(36)} p99=${m.p99.toFixed(3)}ms  baseline=${base.p99.toFixed(3)}ms  x${ratio.toFixed(2)}  ${suspect ? "WARN: >10x — inspect" : "ok"}`,
     );
   }
-  if (!baseline) {
-    console.log(`  (no committed baseline.${HARNESS_VERSION}.json found — smoke ran, comparison skipped)`);
-  }
   console.log(
     flags > 0
       ? `\n${flags} workload(s) exceeded ${REGRESSION_FACTOR}x — NON-GATING warning only; not a release blocker. The calibrated CV-aware gate is deferred post-1.0.0.`
@@ -90,12 +108,26 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-function loadBaseline(): Baseline | null {
+/** A missing OR corrupt baseline is an ARTIFACT failure distinct from a clean no-regression pass —
+ *  callers must not report it as a pass. `missing` = file absent; `corrupt` = present but unreadable
+ *  or not valid JSON. */
+type BaselineLoad =
+  | { status: "ok"; baseline: Baseline }
+  | { status: "missing"; path: string }
+  | { status: "corrupt"; path: string; error: unknown };
+
+function loadBaseline(): BaselineLoad {
+  const path = fileURLToPath(new URL(`./baseline.${HARNESS_VERSION}.json`, import.meta.url));
+  let raw: string;
   try {
-    const path = fileURLToPath(new URL(`./baseline.${HARNESS_VERSION}.json`, import.meta.url));
-    return JSON.parse(readFileSync(path, "utf8")) as Baseline;
+    raw = readFileSync(path, "utf8");
   } catch {
-    return null;
+    return { status: "missing", path };
+  }
+  try {
+    return { status: "ok", baseline: JSON.parse(raw) as Baseline };
+  } catch (error) {
+    return { status: "corrupt", path, error };
   }
 }
 

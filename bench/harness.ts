@@ -4,7 +4,7 @@ import { createClient } from "../src/postgres/client.js";
 import { BENCH_SCHEMA, PG_SETTINGS, POSTGRES_IMAGE, startBenchEnv } from "./environment.js";
 import { HARNESS_VERSION, type Baseline, type LatencyStats } from "./types.js";
 import { runCheckpointWorkloads } from "./workloads/checkpoint-store.js";
-import { runGcScale } from "./workloads/gc.js";
+import { GC_DECLARED_ENVELOPE, runGcScale } from "./workloads/gc.js";
 import { runLeaseWorkloads } from "./workloads/lease.js";
 import { runTemporalKvWorkloads } from "./workloads/temporal-kv.js";
 import { runTxHistoryWorkloads } from "./workloads/transaction-history.js";
@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 
   const ckptSizes = parseNums(process.env.BENCH_CKPT_MB) ?? (quick ? [1] : [1, 16, 64, 256]);
   const gcPoints = parseNums(process.env.BENCH_GC_POINTS) ?? (quick ? [1000, 5000] : [10_000, 50_000, 100_000, 300_000, 1_000_000]);
-  const gcEnvelope: [number, number] = [100_000, 1_000_000];
+  const gcEnvelope: [number, number] = GC_DECLARED_ENVELOPE;
   const gcBudgetMs = Number(process.env.BENCH_GC_BUDGET_MS ?? (quick ? 20_000 : 240_000));
   const leaseContenders = quick ? [1, 4] : [1, 2, 4, 8, 16];
 
@@ -100,6 +100,7 @@ async function main(): Promise<void> {
         checkpointDedupRatio: ck.dedup,
         kvCurrentHotRatio: kv.hotRatio,
         watermarksHotRatio: wm.hotRatio,
+        watermarksBloatStability: wm.bloatStability,
         transactionHistoryGinWriteP99Ms: th.ginWriteP99Ms,
       },
       gcCurve: gc,
@@ -130,6 +131,7 @@ function printSummary(b: Baseline): void {
   console.log(`  dedup ratio            : ${b.measurements.checkpointDedupRatio.ratio.toFixed(4)} (written ${b.measurements.checkpointDedupRatio.written}/${b.measurements.checkpointDedupRatio.referenced})`);
   console.log(`  kv_current HOT ratio   : ${fmtRatio(b.measurements.kvCurrentHotRatio.hotRatio)} (hot ${b.measurements.kvCurrentHotRatio.n_tup_hot_upd}/${b.measurements.kvCurrentHotRatio.n_tup_upd} upd)`);
   console.log(`  watermarks HOT ratio   : ${fmtRatio(b.measurements.watermarksHotRatio.hotRatio)} (hot ${b.measurements.watermarksHotRatio.n_tup_hot_upd}/${b.measurements.watermarksHotRatio.n_tup_upd} upd)`);
+  console.log(`  watermarks bloat       : ${b.measurements.watermarksBloatStability.relationSizeBytes} bytes, ${b.measurements.watermarksBloatStability.deadTuples} dead tup after ${b.measurements.watermarksBloatStability.updates} updates`);
   console.log(`  tx-history GIN p99     : ${b.measurements.transactionHistoryGinWriteP99Ms.toFixed(3)} ms`);
   console.log("\n=== GC anti-join scale curve ===");
   for (const p of b.gcCurve.points) {

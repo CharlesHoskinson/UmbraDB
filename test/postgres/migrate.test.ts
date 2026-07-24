@@ -29,7 +29,7 @@ describe("runMigrations", () => {
         select count(*)::text as count from ${sql("idempotent_test")}._migrations
       `;
       expect(second[0]!.count).toBe(first[0]!.count);
-      expect(Number(first[0]!.count)).toBe(7); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks + 004_transaction_history
+      expect(Number(first[0]!.count)).toBe(7); // 000_schema + 001_temporal_kv + 002_checkpoint_store + 003_watermarks + 004_transaction_history + 005_kv_current_fillfactor + 006_ckpt_chunks_size_bytes
     } finally {
       await sql.end({ timeout: 5 });
     }
