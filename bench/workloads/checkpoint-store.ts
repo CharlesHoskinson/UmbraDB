@@ -20,9 +20,10 @@ async function countChunks(sql: UmbraDBSql): Promise<number> {
 }
 
 /**
- * CheckpointStore workloads (`design.md` §4): `save` at increasing sizes (exercising the §1
- * batched UNNEST path), `load` round-trip, `history(limit=50)` (must be ~flat after §2), a
- * `prune`/GC pass, and the dedup-ratio measurement.
+ * CheckpointStore workloads (`design.md` §4): `save` at the full declared 1/16/64/256 MB sizes
+ * (256 MiB = 64 chunks at the 4 MiB default; exercising the §1 batched insert path), `load`
+ * round-trip, `history(limit=50)` (must be ~flat after §2), a `prune`/GC pass, and the dedup-ratio
+ * measurement.
  *
  * Each measured `save` iteration mutates one byte per 4 MiB chunk so every chunk hashes differently
  * — the save writes GENUINELY NEW chunk rows each iteration, measuring the batched INSERT cost HP-1

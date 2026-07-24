@@ -168,7 +168,7 @@ lands first.
   run passing is not sufficient evidence on its own, per every prior sprint's close-out standard.
   Confirm the two hard-rule invariants explicitly: (a) the baseline exists and *no perf number
   gates the release*; (b) the batching fixes (§1) merged *before* the baseline was recorded (§3.1).
-- [x] 4.2 Update `ROADMAP-v1.0.0-CONSOLIDATED.md`'s gate checklist — mark G13 and G14 addressed
+- [x] 4.2 Update `ROADMAP.md`'s gate checklist — mark G13 and G14 addressed
   (G13 fixes landed; baseline recorded; ceilings documented; CV-aware regression gate explicitly
   deferred post-1.0.0) — and cross-link this change from the roadmap's §"Critical path" step 3 so
   the roadmap doesn't drift from what's been built.

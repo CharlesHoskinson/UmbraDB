@@ -20,8 +20,8 @@ import { runWatermarkWorkloads } from "./workloads/watermarks.js";
  *
  * Env overrides (all optional; defaults produce the committed full-profile baseline):
  *   BENCH_PROFILE=quick   — a fast subset (used by the smoke guard).
- *   BENCH_CKPT_MB=1,16,64 — checkpoint save sizes (MB). Default 1,16,64 (256 MB is the declared
- *                           ceiling, not run — design.md §4 runtime-sanity allowance).
+ *   BENCH_CKPT_MB=1,16,64,256 — checkpoint save sizes (MB). Default 1,16,64,256 (256 MiB = 64
+ *                           chunks at the 4 MiB default; design.md §4's full declared save-size set).
  *   BENCH_GC_POINTS=...   — live-chunk counts for the GC curve. Default 10000,50000,100000,300000,1000000.
  *   BENCH_GC_BUDGET_MS=.. — wall-clock budget for the GC curve. Default 240000.
  *   BENCH_OUT=/path.json  — override the artifact path.
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   const profile = process.env.BENCH_PROFILE ?? "full";
   const quick = profile === "quick";
 
-  const ckptSizes = parseNums(process.env.BENCH_CKPT_MB) ?? (quick ? [1] : [1, 16, 64]);
+  const ckptSizes = parseNums(process.env.BENCH_CKPT_MB) ?? (quick ? [1] : [1, 16, 64, 256]);
   const gcPoints = parseNums(process.env.BENCH_GC_POINTS) ?? (quick ? [1000, 5000] : [10_000, 50_000, 100_000, 300_000, 1_000_000]);
   const gcEnvelope: [number, number] = [100_000, 1_000_000];
   const gcBudgetMs = Number(process.env.BENCH_GC_BUDGET_MS ?? (quick ? 20_000 : 240_000));
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
           checkpointSaveDeclaredCeilingMB: 256,
           gcEnvelopeTargetChunks: gcEnvelope,
           gcActualMaxChunks: gc.declaredEnvelope.actualMaxChunks,
-          note: "256 MB save + 10^6-chunk GC upper target are declared ceilings; the actual run is capped for runtime sanity per design.md §4/§5 and documented in Performance/CEILINGS.md.",
+          note: "checkpointSaveSizesMB now measures the full 1/16/64/256 MB set (256 MiB = 64 chunks at the 4 MiB default). The 10^6-chunk GC upper target remains the runtime-capped ceiling per design.md §4/§5; see Performance/CEILINGS.md.",
         },
       },
       workloads,

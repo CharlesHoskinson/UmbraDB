@@ -32,6 +32,21 @@ import { resolveTransaction } from "./transaction-lease.js";
  */
 const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
 
+/**
+ * HP-1 insert batch size (`v1.0.0-perf-baseline/design.md` §1; `tasks.md` §1.1 the sanctioned
+ * "record-the-limitation" path). design.md §1 prescribed an array-`unnest` form
+ * (`INSERT … SELECT … FROM unnest($1::bytea[], …)`) for a strict 2 statements per save, but
+ * postgres.js CANNOT bind a `bytea[]` array parameter — the driver renders such a bind as
+ * SQLSTATE 42846 ("cannot cast type record/text[] to bytea[]") against real Postgres, established
+ * empirically — so a sub-batched multi-row `VALUES` insert is the robust equivalent. It removes the
+ * pre-HP-1 O(N) per-chunk round-trips while never exceeding PostgreSQL's 65,535 bind-parameter
+ * protocol cap: the junction insert binds 3 params/row (cap hit at ≥21,846 rows) and the chunk
+ * upsert 2 params/row (cap hit at ≥32,768 rows), so a 10,000-row batch is at most 30,000 params —
+ * a comfortable margin under 65,535. Round-trips per insert are `ceil(N / INSERT_ROW_BATCH)`, i.e.
+ * exactly 1 for any realistic checkpoint (N ≤ 10,000 unique chunks / junction positions).
+ */
+const INSERT_ROW_BATCH = 10_000; // 10000 × 3 = 30000 < 65535
+
 function sha256(data: Uint8Array): Buffer {
   return createHash("sha256").update(data).digest();
 }
@@ -164,8 +179,12 @@ export class PgCheckpointStore implements CheckpointStore {
         // of created_at is load-bearing for prune's grace-window TOCTOU safety (design.md §3),
         // not just a convenience -- a plain DO NOTHING would defeat the grace window on every
         // re-referenced-but-already-existing chunk.
-        // HP-1 (v1.0.0-perf-baseline design.md §1): one multi-row upsert instead of a per-chunk
-        // loop of single-row awaits (2N round-trips -> 2). postgres.js's sql(rows, ...cols) helper
+        // HP-1 (v1.0.0-perf-baseline design.md §1; tasks.md §1.1): a BATCHED, EMPTY-SAFE multi-row
+        // upsert instead of the pre-HP-1 per-chunk loop of single-row awaits (2N round-trips ->
+        // ceil(N/INSERT_ROW_BATCH), i.e. 1 for any realistic checkpoint). See INSERT_ROW_BATCH for
+        // why sub-batched `VALUES` -- not design §1's `unnest($1::bytea[], …)` -- is the robust
+        // equivalent (postgres.js cannot bind a `bytea[]` array parameter, SQLSTATE 42846) and why
+        // 10,000 rows stays under the 65,535 bind-param cap. postgres.js's sql(rows, ...cols) helper
         // maps each Buffer to bytea; the `ON CONFLICT ... DO UPDATE SET created_at = now()` refresh
         // is carried verbatim (load-bearing for prune's grace-window TOCTOU safety, unchanged).
         // Content-addressed: a repeated chunk yields a duplicate hash, and a single multi-row
@@ -180,10 +199,17 @@ export class PgCheckpointStore implements CheckpointStore {
           seenChunkHashes.add(key);
           chunkRows.push({ hash: chunkHashes[i]!, data: chunks[i]! });
         }
-        await sql`
-          INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(chunkRows, "hash", "data")}
-          ON CONFLICT (hash) DO UPDATE SET created_at = now()
-        `;
+        // Empty-safe: chunkRows.length === 0 (a 0-chunk save of empty data) yields ZERO iterations
+        // and issues NO statement, so an empty save persists as a 0-chunk manifest that round-trips
+        // to empty -- the pre-HP-1 per-chunk loop's behaviour, and it also avoids postgres.js
+        // rendering an invalid empty `VALUES` clause for `sql([], …)`.
+        for (let i = 0; i < chunkRows.length; i += INSERT_ROW_BATCH) {
+          const batch = chunkRows.slice(i, i + INSERT_ROW_BATCH);
+          await sql`
+            INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(batch, "hash", "data")}
+            ON CONFLICT (hash) DO UPDATE SET created_at = now()
+          `;
+        }
 
         // Sequence allocation (design.md §2.2): atomic upsert-increment, gapless and monotonic
         // under concurrency by construction (the row lock is held for this whole transaction).
@@ -211,15 +237,24 @@ export class PgCheckpointStore implements CheckpointStore {
 
         // Junction rows keyed by (manifest_id, position) -- design.md §2.1's fix -- so a
         // repeated chunk hash at two different positions is representable.
-        // HP-1: one multi-row junction insert; position is preserved by the input-array index.
+        // HP-1: a BATCHED, EMPTY-SAFE multi-row junction insert; position is preserved by the
+        // input-array index. EVERY position is recorded (repeats included), unlike the by-hash
+        // dedup of the chunk write above -- so a chunk reused at two positions stays representable.
         const junctionRows = chunkHashes.map((chunk_hash, i) => ({
           manifest_id: manifest.id,
           position: i,
           chunk_hash,
         }));
-        await sql`
-          INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks ${sql(junctionRows, "manifest_id", "position", "chunk_hash")}
-        `;
+        // Empty-safe (0 chunks -> 0 iterations -> no statement, no invalid empty `VALUES`) and
+        // batched so the 3-params/row junction insert never exceeds the 65,535 bind-param cap
+        // (a single statement would otherwise throw at >= 21,846 junction rows, reachable by a
+        // large payload at a small chunkSize). Round-trips = ceil(N / INSERT_ROW_BATCH).
+        for (let i = 0; i < junctionRows.length; i += INSERT_ROW_BATCH) {
+          const batch = junctionRows.slice(i, i + INSERT_ROW_BATCH);
+          await sql`
+            INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks ${sql(batch, "manifest_id", "position", "chunk_hash")}
+          `;
+        }
 
         return toSummary(manifest, data.byteLength, chunks.length);
     };
