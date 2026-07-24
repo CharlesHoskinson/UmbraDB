@@ -32,6 +32,21 @@ import { resolveTransaction } from "./transaction-lease.js";
  */
 const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
 
+/**
+ * Chunk-insert row cap per statement. The chunk upsert is one multi-row `VALUES` (2 bind-params/row),
+ * so PostgreSQL's 65,535 bind-param protocol cap allows at most 32,767 rows per statement. This
+ * cap is UNREACHABLE at any realistic chunkSize (a 30,000-unique-chunk checkpoint is 120 GiB at the
+ * 4 MiB default -- beyond `load()`'s single-buffer heap ceiling, SC-3); it is reachable only under an
+ * explicit sub-64-KiB `chunkSize` with tens of thousands of DISTINCT chunks. Sub-batching at 30,000
+ * (= 60,000 params, a safe margin) keeps the insert to EXACTLY ONE statement for every in-model
+ * checkpoint while never exceeding the cap; only the out-of-model pathological case emits >1
+ * statement, where a single statement is physically impossible (`unnest(sql.array(bytea[]))` is out
+ * for chunk DATA -- postgres.js text-serializes it and a large payload blows V8's ~512 MiB string
+ * cap). The junction insert, which reaches large ROW counts but tiny 32-byte data, uses
+ * `unnest(sql.array())` and needs no such cap.
+ */
+const CHUNK_INSERT_MAX_ROWS = 30_000;
+
 function sha256(data: Uint8Array): Buffer {
   return createHash("sha256").update(data).digest();
 }
@@ -198,9 +213,15 @@ export class PgCheckpointStore implements CheckpointStore {
         // verbatim (load-bearing for prune's grace-window TOCTOU safety, unchanged). Empty-safe: a
         // 0-chunk save skips the statement (an empty `VALUES` is invalid SQL), persisting a 0-chunk
         // manifest that round-trips to empty -- the pre-HP-1 loop's behaviour.
-        if (chunkRows.length > 0) {
+        // Defensively sub-batched (see CHUNK_INSERT_MAX_ROWS): EXACTLY ONE statement for every
+        // in-model checkpoint, and >1 ONLY for a pathological sub-64-KiB chunkSize with tens of
+        // thousands of DISTINCT chunks -- where one statement is physically impossible. Empty-safe:
+        // 0 chunks -> 0 iterations -> no statement. seenChunkHashes dedup keeps every batch's hashes
+        // unique, so no ON CONFLICT target is touched twice (no SQLSTATE 21000).
+        for (let i = 0; i < chunkRows.length; i += CHUNK_INSERT_MAX_ROWS) {
+          const batch = chunkRows.slice(i, i + CHUNK_INSERT_MAX_ROWS);
           await sql`
-            INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(chunkRows, "hash", "data")}
+            INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(batch, "hash", "data")}
             ON CONFLICT (hash) DO UPDATE SET created_at = now()
           `;
         }

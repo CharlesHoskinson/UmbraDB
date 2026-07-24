@@ -62,6 +62,21 @@ describe("BLOCK 1+2 — empty-safe + bind-param-cap-safe batched inserts (design
     expect(hist[0]!.byteLength).toBe(0);
   }, 30_000);
 
+  it("chunk param-cap: a save of >32,767 DISTINCT chunks (small chunkSize) succeeds via defensive sub-batching and round-trips", async () => {
+    const s = store(getSql());
+    // 33,000 DISTINCT 2-byte chunks (pair i -> [i>>8, i&0xff], every i<65536 distinct) => 33,000
+    // unique chunk rows, exceeding a single VALUES' 32,767-row bind-param ceiling. The pre-fix
+    // single statement threw; the defensive sub-batch now succeeds. (The 1-byte large-N test
+    // below only yields <=256 unique chunks, so it does NOT exercise this chunk-upsert path.)
+    const N = 33_000;
+    const data = new Uint8Array(N * 2);
+    for (let i = 0; i < N; i++) { data[2 * i] = (i >> 8) & 0xff; data[2 * i + 1] = i & 0xff; }
+    const summary = await s.save("w-cap", "net", data, { chunkSize: 2 });
+    expect(summary.chunkCount).toBe(N);
+    const loaded = await s.load("w-cap", "net");
+    expect(Buffer.from(loaded.data)).toEqual(Buffer.from(data));
+  }, 60_000);
+
   it("large-N: a save of 30,000 junction rows emits EXACTLY 1 chunk + 1 junction statement (true chunk-count independence, not batches) and round-trips", async () => {
     // 30,000 chunks of 1 byte -> 30,000 junction rows. A pre-HP-1 single row-tuple VALUES INSERT
     // would bind 90,000 params and throw past PostgreSQL's 65,535 protocol cap; the sub-batched
