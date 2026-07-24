@@ -88,6 +88,7 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
       report([
         { status: "passed", title: "[[req.one]] a" },
         { status: "skipped", title: "[[req.two]] b (describe.skipIf'd)" },
+        { status: "skipped", title: "[[def.optional]] pending-feature" },
       ]),
       MANIFEST,
     );
@@ -98,7 +99,10 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
 
   it("(2b) a required test entirely MISSING from the report is a named violation", () => {
     const result = reconcile(
-      report([{ status: "passed", title: "[[req.one]] a" }]),
+      report([
+        { status: "passed", title: "[[req.one]] a" },
+        { status: "skipped", title: "[[def.optional]] pending-feature" },
+      ]),
       MANIFEST,
     );
     expect(result.ok).toBe(false);
@@ -119,7 +123,7 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
     expect(result.violations).toEqual([]);
   });
 
-  it("(3b) a deferred id entirely absent (feature not yet authored) does NOT fail the check", () => {
+  it("(3b) a deferred id entirely ABSENT from the report FAILS the check (fail-closed existence — the scenario MUST EXIST as skipped-pending-feature; acceptance C6 / round-3 BLOCK 6)", () => {
     const result = reconcile(
       report([
         { status: "passed", title: "[[req.one]] a" },
@@ -127,8 +131,36 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
       ]),
       MANIFEST,
     );
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toContainEqual({ id: "def.optional", reason: "deferred-absent", statuses: [] });
+    expect(result.summary).toContain("def.optional"); // the missing deferred scenario is NAMED
     expect(result.deferredReconciled).toContainEqual({ id: "def.optional", statuses: [], state: "missing" });
+  });
+
+  it("(3c) a deferred id present but in an unexpected (failed) state FAILS the check", () => {
+    const result = reconcile(
+      report([
+        { status: "passed", title: "[[req.one]] a" },
+        { status: "passed", title: "[[req.two]] b" },
+        { status: "failed", title: "[[def.optional]] broke" },
+      ]),
+      MANIFEST,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.violations).toContainEqual({ id: "def.optional", reason: "deferred-unexpected", statuses: ["failed"] });
+  });
+
+  it("(3d) a deferred id that PASSED (feature shipped early) does NOT fail the check", () => {
+    const result = reconcile(
+      report([
+        { status: "passed", title: "[[req.one]] a" },
+        { status: "passed", title: "[[req.two]] b" },
+        { status: "passed", title: "[[def.optional]] feature shipped early" },
+      ]),
+      MANIFEST,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.deferredReconciled).toContainEqual({ id: "def.optional", statuses: ["passed"], state: "passed" });
   });
 
   it("a required id carried by MORE THAN ONE test (id collision) is a named 'ambiguous' violation", () => {
@@ -139,6 +171,7 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
         { status: "passed", title: "[[req.one]] a" },
         { status: "passed", title: "[[req.two]] b (first test with this id)" },
         { status: "passed", title: "[[req.two]] c (a SECOND, colliding test)" },
+        { status: "skipped", title: "[[def.optional]] pending-feature" },
       ]),
       MANIFEST,
     );
@@ -154,6 +187,7 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
       report([
         { status: "passed", title: "[[req.one]] a" },
         { status: "failed", title: "[[req.two]] b" },
+        { status: "skipped", title: "[[def.optional]] pending-feature" },
       ]),
       MANIFEST,
     );

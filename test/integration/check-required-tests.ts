@@ -56,7 +56,7 @@ export interface JsonReport {
   testResults?: JsonReportFile[];
 }
 
-export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "wrong-file" | "unknown-status";
+export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "wrong-file" | "unknown-status" | "deferred-absent" | "deferred-unexpected";
 
 export interface ReconcileResult {
   ok: boolean;
@@ -97,7 +97,7 @@ export function statusesFromReport(report: JsonReport): Map<string, string[]> {
  *  manifest so silently deleting (or adding) a required entry fails the gate: {@link loadManifest}
  *  rejects a manifest whose `required` length drifts from this constant. Bump it deliberately when
  *  a required test is genuinely added/removed. */
-export const EXPECTED_REQUIRED_COUNT = 23;
+export const EXPECTED_REQUIRED_COUNT = 25;
 
 /** Normalises a file path (backslashes -> forward slashes) for cross-platform comparison. */
 function normPath(p: string): string { return p.replace(/\\/g, "/"); }
@@ -179,11 +179,21 @@ export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): 
     return { id: entry.id, statuses, state };
   });
 
+  // FAIL-CLOSED deferred EXISTENCE (change-level round-3 BLOCK 6 / acceptance C6): a deferred scenario
+  // MUST EXIST as a present-but-skipped test (`skipped-pending-feature`), or `passed` if its feature
+  // shipped early. A deferred id ENTIRELY ABSENT from the report means the scenario was deleted/retitled
+  // (losing the feature-activation wiring), so it FAILS the gate, NAMED; an `other` state fails too.
+  // Previously an absent deferred id was silently accepted — the exact fail-OPEN hole this closes.
+  for (const d of deferredReconciled) {
+    if (d.state === "missing") violations.push({ id: d.id, reason: "deferred-absent", statuses: [] });
+    else if (d.state === "other") violations.push({ id: d.id, reason: "deferred-unexpected", statuses: d.statuses });
+  }
+
   const ok = violations.length === 0;
   const summary = ok
     ? `check-required-tests: OK — all ${manifest.required.length} required test(s) executed and passed; ` +
-      `${manifest.deferred.length} deferred reconciled.`
-    : `check-required-tests: FAIL — ${violations.length} required test(s) did not execute-and-pass:\n` +
+      `${manifest.deferred.length} deferred present-and-reconciled.`
+    : `check-required-tests: FAIL — ${violations.length} gate violation(s) (required not-run/failed OR deferred absent/unexpected):\n` +
       violations.map((v) => `  - ${v.id}: ${v.reason}${v.statuses.length ? ` (status: ${v.statuses.join(", ")})` : ""}`).join("\n");
 
   return { ok, violations, deferredReconciled, summary };

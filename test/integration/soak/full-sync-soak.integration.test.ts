@@ -217,6 +217,11 @@ function itemKey(batch: number): string {
 function itemValue(batch: number): JsonValue {
   return { batch };
 }
+/** INJECTIVE current-state map key for a (ns, key) tuple (change-level round-3 BLOCK 2). `${ns} ${key}`
+ *  space-joining is NOT injective — spaces are legal in ns/key — so (ns="a b",key="c") and
+ *  (ns="a",key="b c") both collapsed to "a b c", and a lost item:b could be masked by a colliding
+ *  churn key. `JSON.stringify([ns, key])` is injective. */
+function kvMapKey(ns: string, key: string): string { return JSON.stringify([ns, key]); }
 
 function sha256(data: Uint8Array): Buffer {
   return createHash("sha256").update(data).digest();
@@ -286,21 +291,21 @@ function gaplessVersionViolations(rows: readonly HistGroup[]): string[] {
 
 /** I4 (T5), KV-INCLUSIVE (mirrors the T5 keystone `cursor-durability.crash.test.ts`): the durable
  *  watermark is never AHEAD of the max durable DATA, where "data" is BOTH the checkpoint (its label
- *  == cursor value) AND the batch's KV datum (`item:cursorValue`). `undefined` watermark (no cursor
+ *  == cursor value) AND *every* covered batch's KV datum (`item:1`..`item:watermark`, change-level round-3 BLOCK 1). `undefined` watermark (no cursor
  *  yet) is vacuously ok. Returns a message on inversion (checkpoint OR covered KV missing), else
  *  `null`. A checkpoint-seq-only check would let a LOST KV write for a cursor-covered batch pass —
  *  covering the KV half closes that hole. */
 function watermarkNotAheadViolation(
   watermark: number | undefined,
   maxDurableData: number | undefined,
-  coveredKvValue: JsonValue | undefined,
+  missingCoveredCount: number,
 ): string | null {
   if (watermark === undefined) return null;
   if (maxDurableData === undefined || watermark > maxDurableData) {
     return `I4 T5: watermark ${watermark} is AHEAD of max durable checkpoint data ${maxDurableData ?? "none"}`;
   }
-  if (!kvValueEqual(coveredKvValue, itemValue(watermark))) {
-    return `I4 T5: covered batch ${watermark}'s KV datum (item:${watermark}) is ABSENT/mismatched in durable data (got ${JSON.stringify(coveredKvValue ?? null)})`;
+  if (missingCoveredCount > 0) {
+    return `I4 T5: ${missingCoveredCount} covered-batch KV datum(s) in item:1..item:${watermark} are ABSENT/mismatched in durable data (a watermark-covered KV loss)`;
   }
   return null;
 }
@@ -367,7 +372,7 @@ afterEach(async () => {
 
 interface CurrentState {
   /** EXHAUSTIVE: EVERY `kv_current` row for BOTH the churn scope AND the sync writer's per-batch KV
-   *  scope (SYNC_KV_NS), keyed by `${ns} ${key}` → value. Reading the FULL set (raw SELECT, not an
+   *  scope (SYNC_KV_NS), keyed by `JSON.stringify([ns, key])` → value. Reading the FULL set (raw SELECT, not an
    *  expected-key subset) means an extra/stale/MISSING row on ONLY one side breaks equality — incl.
    *  a lost historical `item:b`. Excludes `version` and all `kv_history`. */
   kvAll: Record<string, JsonValue>;
@@ -385,7 +390,7 @@ async function readCurrentState(
   cursorKey: string,
 ): Promise<CurrentState> {
   // Read the FULL kv_current for BOTH the churn scope AND the sync writer's per-batch KV scope
-  // (change-level re-audit BLOCK 3). Keyed by `${ns} ${key}` — the churn scope being CHURN_NS and the
+  // (change-level re-audit BLOCK 3). Keyed by `JSON.stringify([ns, key])` — the churn scope being CHURN_NS and the
   // sync-KV scope SYNC_KV_NS, the two never collide, yet a lost/corrupted HISTORICAL item:b
   // (SYNC_KV_NS) now breaks equality exactly as a churn divergence does.
   const kvRows = await withSuiteWatchdog(
@@ -395,7 +400,7 @@ async function readCurrentState(
     { label: "readCurrentState-kv", timeoutMs: OP_WATCHDOG_MS },
   );
   const kvAll: Record<string, JsonValue> = {};
-  for (const r of kvRows) kvAll[`${r.ns} ${r.key}`] = r.value;
+  for (const r of kvRows) kvAll[kvMapKey(r.ns, r.key)] = r.value;
 
   const wmRows = await withSuiteWatchdog(
     a.sql<{ kind: string; value: JsonValue }[]>`
@@ -470,12 +475,16 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       expect(gaplessVersionViolations([{ ns: "x", scope: "s", key: "k", cur: 5n, mn: null, mx: null, cnt: null, dcnt: null }]).length)
         .toBeGreaterThan(0); // no history but kv_current at 5 ⇒ violation
       // I4 KV-inclusive T5 (BLOCK 6):
-      expect(watermarkNotAheadViolation(5, 3, { batch: 5 })).not.toBeNull(); // ahead of checkpoint ⇒ violation
-      expect(watermarkNotAheadViolation(3, 3, { batch: 3 })).toBeNull(); // equal + covered KV present ⇒ holds
-      expect(watermarkNotAheadViolation(2, 3, { batch: 2 })).toBeNull(); // behind + covered KV present ⇒ holds
-      expect(watermarkNotAheadViolation(undefined, undefined, undefined)).toBeNull(); // no cursor yet ⇒ vacuous
-      expect(watermarkNotAheadViolation(3, 3, undefined)).not.toBeNull(); // covered batch's KV datum MISSING ⇒ violation
-      expect(watermarkNotAheadViolation(3, 3, { batch: 99 })).not.toBeNull(); // covered batch's KV datum MISMATCHED ⇒ violation
+      expect(watermarkNotAheadViolation(5, 3, 0)).not.toBeNull(); // ahead of checkpoint ⇒ violation
+      expect(watermarkNotAheadViolation(3, 3, 0)).toBeNull(); // equal + covered KV present ⇒ holds
+      expect(watermarkNotAheadViolation(2, 3, 0)).toBeNull(); // behind + covered KV present ⇒ holds
+      expect(watermarkNotAheadViolation(undefined, undefined, 0)).toBeNull(); // no cursor yet ⇒ vacuous
+      expect(watermarkNotAheadViolation(3, 3, 1)).not.toBeNull(); // covered batch's KV datum MISSING ⇒ violation
+      expect(watermarkNotAheadViolation(100, 100, 1)).not.toBeNull(); // covered batch's KV datum MISMATCHED ⇒ violation
+      // injective kv-map key (change-level round-3 BLOCK 2): colliding (ns,key) tuples the OLD space-join
+      // merged are now DISTINCT, so a lost historical item:b can never be masked by a churn-key collision.
+      expect(kvMapKey("a b", "c")).not.toBe(kvMapKey("a", "b c"));
+      expect(`${"a b"} ${"c"}`).toBe(`${"a"} ${"b c"}`); // the OLD `${ns} ${key}` encoding DID collide them
       // I3 / I2:
       expect(danglingJunctionViolation(1)).not.toBeNull();
       expect(danglingJunctionViolation(0)).toBeNull();
@@ -713,7 +722,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
         // saveAndAdvance / are written before it, so a cross-statement read could otherwise report a
         // spurious inversion). The covered KV key is built from the SAME watermark value.
         const t5 = await withSuiteWatchdog(
-          sampler.sql<{ wm: number | null; maxlabel: bigint | null; covered_kv: JsonValue | null }[]>`
+          sampler.sql<{ wm: number | null; maxlabel: bigint | null; covered_kv: JsonValue | null; missing_covered: number }[]>`
             SELECT
               (SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.watermarks
                  WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) AS wm,
@@ -722,13 +731,23 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
               (SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.kv_current
                  WHERE ns = ${SYNC_KV_NS} AND scope = ${syncKvScope}
                    AND key = ('item:' || ((SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.watermarks
-                                             WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) #>> '{}'))) AS covered_kv`,
+                                             WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) #>> '{}'))) AS covered_kv,
+              -- BLOCK 1 (round-3): EVERY covered batch item:1..item:watermark must be durable with
+              -- its exact value; generate_series over the SAME watermark snapshot counts absent/mismatched
+              -- rows (0 = all covered items present) so a TRANSIENT loss of an EARLIER item is caught in-run.
+              (SELECT count(*)::int
+                 FROM generate_series(1, COALESCE(((SELECT value FROM ${sampler.sql(TEST_SCHEMA)}.watermarks
+                                                     WHERE kind = ${SYNC_KIND} AND key = ${syncKey}) #>> '{}')::int, 0)) AS g(n)
+                 LEFT JOIN ${sampler.sql(TEST_SCHEMA)}.kv_current kc
+                   ON kc.ns = ${SYNC_KV_NS} AND kc.scope = ${syncKvScope} AND kc.key = ('item:' || g.n)
+                 WHERE kc.value IS NULL OR kc.value <> jsonb_build_object('batch', g.n)) AS missing_covered`,
           { label: "sample-I4-watermark", timeoutMs: OP_WATCHDOG_MS },
         );
         const watermark = t5[0]!.wm === null ? undefined : Number(t5[0]!.wm);
         const maxDurableLabel = t5[0]!.maxlabel === null ? undefined : Number(t5[0]!.maxlabel);
         const coveredKv = t5[0]!.covered_kv === null ? undefined : t5[0]!.covered_kv;
-        const t5v = watermarkNotAheadViolation(watermark, maxDurableLabel, coveredKv);
+        const missingCovered = Number(t5[0]!.missing_covered ?? 0);
+        const t5v = watermarkNotAheadViolation(watermark, maxDurableLabel, missingCovered);
         if (t5v !== null) violations.push(t5v);
 
         // I3 — no junction row references a missing/incomplete manifest (single statement).
@@ -784,7 +803,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
           chunks,
           watermark,
           maxDurableLabel,
-          coveredKvPresent: coveredKv !== undefined,
+          coveredKvPresent: watermark !== undefined && coveredKv !== undefined && kvValueEqual(coveredKv, itemValue(watermark)),
           gaplessKeysChecked: hist.length,
           c1Checked,
           violations,
@@ -1071,7 +1090,7 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       // over the just-read states (no DB mutation) that injecting an unexpected row THROWS.
       expect(() =>
         assertCurrentStateEqual(
-          { ...soakState, kvAll: { ...soakState.kvAll, [`${CHURN_NS} ckey-stale`]: { k: "ckey-stale", v: 99 } } },
+          { ...soakState, kvAll: { ...soakState.kvAll, [kvMapKey(CHURN_NS, "ckey-stale")]: { k: "ckey-stale", v: 99 } } },
           refState,
         ),
       ).toThrow();
@@ -1095,14 +1114,14 @@ describe("G10 full-sync soak — enumerated P1–P10 SQL invariants hold under a
       // watermark all equal — and the required soak passed despite durable batch 37 being missing.
       const LOST_ITEM = 37;
       expect(LOST_ITEM).toBeLessThan(batchMax); // genuinely historical: the watermark is far past it
-      expect(soakState.kvAll[`${SYNC_KV_NS} ${itemKey(LOST_ITEM)}`]).toBeDefined(); // it WAS compared
+      expect(soakState.kvAll[kvMapKey(SYNC_KV_NS, itemKey(LOST_ITEM))]).toBeDefined(); // it WAS compared
       await withSuiteWatchdog(
         fresh.sql`DELETE FROM ${fresh.sql(TEST_SCHEMA)}.kv_current
                   WHERE ns = ${SYNC_KV_NS} AND scope = ${syncKvScope} AND key = ${itemKey(LOST_ITEM)}`,
         { label: "falsify-delete-historical-item", timeoutMs: OP_WATCHDOG_MS },
       );
       const soakAfterLoss = await readCurrentState(fresh, syncWallet, churnScope, syncKvScope, syncKey);
-      expect(soakAfterLoss.kvAll[`${SYNC_KV_NS} ${itemKey(LOST_ITEM)}`]).toBeUndefined(); // the datum is gone
+      expect(soakAfterLoss.kvAll[kvMapKey(SYNC_KV_NS, itemKey(LOST_ITEM))]).toBeUndefined(); // the datum is gone
       expect(() => assertCurrentStateEqual(soakAfterLoss, refState)).toThrow(); // the predicate CATCHES it
 
       // ---- Diagnostics (evidence for the orchestrator): what actually ran ----

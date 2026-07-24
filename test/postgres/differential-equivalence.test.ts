@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { PgCheckpointStore } from "../../src/postgres/checkpoint-store.js";
@@ -87,6 +88,11 @@ function payload(salt: string, batch: number): Buffer {
 }
 function itemKey(batch: number): string { return `item:${batch}`; }
 function itemValue(batch: number): JsonValue { return { batch }; }
+/** INJECTIVE current-state map key for a (ns, key) tuple (change-level round-3 BLOCK 2). The old
+ *  `${ns} ${key}` space-join was NOT injective — spaces are legal in ns/key (interfaces/temporal-kv),
+ *  so (ns="a b", key="c") and (ns="a", key="b c") both collapsed to "a b c" and the exhaustive
+ *  equality could pass with DIFFERENT kv_current row sets. `JSON.stringify([ns, key])` is injective. */
+function kvMapKey(ns: string, key: string): string { return JSON.stringify([ns, key]); }
 
 // ---- Seeded schedule (deterministic, reproducible — NO Math.random) --------------------------
 type Fault = "none" | "t1" | "t2" | "t5";
@@ -304,7 +310,7 @@ async function runReference(uri: string, wallet: string, salt: string, length: n
 // ---- Current-state equality predicate (`design.md` §2.3 / acceptance G4) ----------------------
 
 interface CurrentState {
-  /** EXHAUSTIVE: EVERY `kv_current` row for the scope, `${ns} ${key}` -> value. Excludes version. */
+  /** EXHAUSTIVE: EVERY `kv_current` row for the scope, `JSON.stringify([ns, key])` -> value. Excludes version. */
   kvAll: Record<string, JsonValue>;
   /** EXHAUSTIVE: EVERY `watermarks` row for the cursor key, `kind` -> value. */
   watermarksAll: Record<string, JsonValue>;
@@ -326,7 +332,7 @@ async function readCurrentState(a: Adapters, wallet: string): Promise<CurrentSta
     { label: "readCurrentState-kv-all", timeoutMs: 10_000 },
   );
   const kvAll: Record<string, JsonValue> = {};
-  for (const r of kvRows) kvAll[`${r.ns} ${r.key}`] = r.value;
+  for (const r of kvRows) kvAll[kvMapKey(r.ns, r.key)] = r.value;
 
   const wmRows = await withSuiteWatchdog(
     a.sql<{ kind: string; value: JsonValue }[]>`
@@ -370,12 +376,32 @@ async function kvVersion(a: Adapters, wallet: string, key: string): Promise<bigi
 
 // ---- Import-cleanliness static audit (acceptance G3 / `design.md` §4 boundary) ---------------
 
-/** Extracts every module specifier this file imports from. */
+/** Extracts every module specifier a source file imports from — from-clauses, bare side-effect
+ *  imports, dynamic imports, and require calls (change-level round-3 BLOCK 4: the old scan saw only
+ *  from-clauses, so a bare/dynamic/require import of a foreign module evaded it). NOTE: the quoted
+ *  specifier shapes are written only as regexes below, never spelled out in prose here, because this
+ *  file audits its OWN source text and a comment example would be mistaken for a real import. */
 function importedSpecifiers(source: string): string[] {
   const specs: string[] = [];
-  const re = /\bfrom\s+["']([^"']+)["']/g;
-  for (const m of source.matchAll(re)) specs.push(m[1]!);
+  const patterns = [
+    /\bfrom\s+["']([^"']+)["']/g,                 // from-clause
+    /\bimport\s+["']([^"']+)["']/g,               // bare side-effect import
+    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g, // dynamic import()
+    /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g, // require()
+  ];
+  for (const re of patterns) for (const m of source.matchAll(re)) specs.push(m[1]!);
   return specs;
+}
+
+/** Resolves a relative `.js`/`.mjs` specifier (as written in ESM source) to the on-disk `.ts`/`.mts`
+ *  module it refers to, so the reference module's own import CLOSURE can be re-scanned. Returns
+ *  undefined for a bare/non-relative specifier (nothing in-repo to walk). */
+function resolveRelativeTs(fromFile: string, spec: string): string | undefined {
+  if (!spec.startsWith(".")) return undefined;
+  const base = resolve(dirname(fromFile), spec);
+  const candidates = [base, base.replace(/\.js$/, ".ts"), base.replace(/\.mjs$/, ".mts"), `${base}.ts`, resolve(base, "index.ts")];
+  for (const c of candidates) if (existsSync(c)) return c;
+  return undefined;
 }
 
 // =============================================================================================
@@ -410,7 +436,7 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
     // Spell the convergence out: the cursor is fully advanced on BOTH, and the FULL kv_current state
     // is exactly item:1..N (an EXHAUSTIVE check — an extra/stale key would fail this too).
     const expectedKv: Record<string, JsonValue> = {};
-    for (let b = 1; b <= schedule.length; b++) expectedKv[`${KV_NS} ${itemKey(b)}`] = itemValue(b);
+    for (let b = 1; b <= schedule.length; b++) expectedKv[kvMapKey(KV_NS, itemKey(b))] = itemValue(b);
     expect(faultState.watermark).toBe(schedule.length);
     expect(refState.watermark).toBe(schedule.length);
     expect(faultState.kvAll).toEqual(expectedKv);
@@ -419,7 +445,7 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
     // ---- EXHAUSTIVENESS of the predicate (no DB mutation) — a stale/extra kv_current row OR an
     //      extra watermark present on ONLY one side breaks equality. --------------------------------
     expect(() => assertCurrentStateEqual(
-      { ...faultState, kvAll: { ...faultState.kvAll, [`${KV_NS} item:stale`]: { batch: 999 } } },
+      { ...faultState, kvAll: { ...faultState.kvAll, [kvMapKey(KV_NS, "item:stale")]: { batch: 999 } } },
       refState,
     )).toThrow();
     expect(() => assertCurrentStateEqual(
@@ -442,12 +468,12 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
     const faultVer = await kvVersion(adaptersFor(uri), faultW, itemKey(firstT5));
     const refVer = await kvVersion(adaptersFor(uri), refW, itemKey(firstT5));
     expect(Number(faultVer)).toBeGreaterThan(Number(refVer)); // version chain diverges (re-applied)
-    expect(faultState.kvAll[`${KV_NS} ${itemKey(firstT5)}`])
-      .toEqual(refState.kvAll[`${KV_NS} ${itemKey(firstT5)}`]); // ...but the current VALUE converges
+    expect(faultState.kvAll[kvMapKey(KV_NS, itemKey(firstT5))])
+      .toEqual(refState.kvAll[kvMapKey(KV_NS, itemKey(firstT5))]); // ...but the current VALUE converges
   }, 240_000);
 
   // ---- 6.2 NEGATIVE CONTROL (mandatory) — the check has teeth ---------------------------------
-  it("negative control: a deliberately-broken variant that genuinely DROPS a committed range (skips one faulted batch's recovery step) makes the current-state equivalence assertion FIRE", async () => {
+  it("[[differential.fault-schedule.negative-control-fires]] negative control: a deliberately-broken variant that genuinely DROPS a committed range (skips one faulted batch's recovery step) makes the current-state equivalence assertion FIRE", async () => {
     const uri = connectionUri();
     const salt = randomUUID();
     // A small deterministic schedule with a data-dropping T1 fault on batch 2, whose recovery we skip.
@@ -465,8 +491,8 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
     const refState = await readCurrentState(adaptersFor(uri), refW);
 
     // GENUINE DROP confirmed in the real durable state (not a synthetic in-memory tweak).
-    expect(brokenState.kvAll[`${KV_NS} ${itemKey(dropBatch)}`]).toBeUndefined();
-    expect(refState.kvAll[`${KV_NS} ${itemKey(dropBatch)}`]).toEqual(itemValue(dropBatch));
+    expect(brokenState.kvAll[kvMapKey(KV_NS, itemKey(dropBatch))]).toBeUndefined();
+    expect(refState.kvAll[kvMapKey(KV_NS, itemKey(dropBatch))]).toEqual(itemValue(dropBatch));
 
     // THE CHECK HAS TEETH: the SAME current-state equality assertion the positive test relies on
     // FIRES (throws) on this real divergence — so it would catch a fault that dropped a range.
@@ -474,13 +500,15 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
   }, 180_000);
 
   // ---- 6.2 import-cleanliness of the reference side (acceptance G3 / `design.md` §4 boundary) --
-  it("the reference side imports NOTHING outside the repo — no foreign consumer/indexer application", () => {
-    const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  it("[[differential.reference.import-clean]] the reference side imports NOTHING outside the repo (direct AND through its relative-import closure) — no foreign consumer/indexer/wallet application, via a scan that also catches bare/dynamic/require imports", () => {
+    const FORBIDDEN = /@midnightntwrk|indexer|consumer|wallet-sdk|mongo/i;
+    const selfPath = fileURLToPath(import.meta.url);
+    const source = readFileSync(selfPath, "utf8");
     const specs = importedSpecifiers(source);
     expect(specs.length).toBeGreaterThan(5); // the audit actually parsed this file's imports
 
-    // Every import is either a node builtin, an IN-REPO relative path, or a sanctioned test-infra
-    // devDependency. NOTHING is a foreign consumer/indexer/wallet application.
+    // Every DIRECT import is either a node builtin, an IN-REPO relative path, or a sanctioned
+    // test-infra devDependency. NOTHING is a foreign consumer/indexer/wallet application.
     const ALLOWED_BARE = new Set(["vitest", "@testcontainers/postgresql", "fast-check"]);
     const offenders: string[] = [];
     for (const s of specs) {
@@ -489,9 +517,10 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
     }
     expect(offenders, `reference side must import nothing outside the repo; offending specifiers: ${offenders.join(", ")}`).toEqual([]);
 
-    // Explicit boundary guard: never the extracted-from consumer / indexer / wallet SDK.
+    // Explicit boundary guard on the DIRECT specifiers: never the extracted-from consumer / indexer /
+    // wallet SDK — the scan above also covers bare, dynamic and require imports of a foreign module.
     for (const s of specs) {
-      expect(s, `forbidden foreign import: ${s}`).not.toMatch(/@midnightntwrk|indexer|consumer|wallet-sdk|mongo/i);
+      expect(s, `forbidden foreign import: ${s}`).not.toMatch(FORBIDDEN);
     }
     // Every relative import resolves under src/ or the test tree (in-repo) — none escapes the repo.
     for (const s of specs) {
@@ -499,5 +528,35 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
         expect(s, `relative import must stay in-repo: ${s}`).toMatch(/^\.\.?\/(?:\.\.\/)*(src|test)\/|^\.\/setup\.js$/);
       }
     }
+
+    // CLOSURE (change-level round-3 BLOCK 4): a relative helper could itself import the foreign
+    // consumer/indexer. Walk the reference module's own relative imports ONE level and re-scan each —
+    // rejecting any @midnightntwrk/indexer/consumer/wallet specifier reachable through that closure.
+    let closureScanned = 0;
+    for (const s of specs) {
+      const dep = resolveRelativeTs(selfPath, s);
+      if (dep === undefined) continue;
+      closureScanned += 1;
+      for (const d of importedSpecifiers(readFileSync(dep, "utf8"))) {
+        expect(d, `reference dependency ${s} pulls in forbidden ${d}`).not.toMatch(FORBIDDEN);
+      }
+    }
+    expect(closureScanned, "at least one relative reference dependency must be closure-scanned").toBeGreaterThan(0);
+  });
+
+  // ---- 6.2 injective current-state key encoding (change-level round-3 BLOCK 2) -----------------
+  it("injective kv-map key: colliding (ns,key) tuples the OLD `${ns} ${key}` space-join merged are now DISTINCT and detected as unequal", () => {
+    // The OLD non-injective encoding collapsed these two DISTINCT tuples to the same string:
+    const oldEncode = (ns: string, key: string): string => `${ns} ${key}`;
+    expect(oldEncode("a b", "c")).toBe(oldEncode("a", "b c")); // "a b c" === "a b c" — the collision
+    // The NEW injective encoding keeps them apart:
+    expect(kvMapKey("a b", "c")).not.toBe(kvMapKey("a", "b c"));
+    // ...so the shared predicate now CATCHES a divergence the old encoding hid: two current states with
+    // GENUINELY different kv_current row sets that both encoded to {"a b c": v} under the space-join.
+    const left: CurrentState = { kvAll: { [kvMapKey("a b", "c")]: { batch: 1 } }, watermarksAll: {}, latestPayload: Buffer.alloc(0), watermark: undefined };
+    const right: CurrentState = { kvAll: { [kvMapKey("a", "b c")]: { batch: 1 } }, watermarksAll: {}, latestPayload: Buffer.alloc(0), watermark: undefined };
+    expect(() => assertCurrentStateEqual(left, right)).toThrow();
+    // Sanity: identical tuple sets remain equal.
+    expect(() => assertCurrentStateEqual(left, { ...left, kvAll: { ...left.kvAll } })).not.toThrow();
   });
 });

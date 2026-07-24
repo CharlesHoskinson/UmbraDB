@@ -136,6 +136,11 @@ function payload(salt: string, batch: number): Buffer {
 }
 function itemKey(batch: number): string { return `item:${batch}`; }
 function itemValue(batch: number): JsonValue { return { batch }; }
+/** INJECTIVE current-state map key for a (ns, key) tuple (change-level round-3 BLOCK 2). `${ns} ${key}`
+ *  space-joining is NOT injective — spaces are legal in ns/key — so (ns="a b",key="c") and
+ *  (ns="a",key="b c") both collapsed to "a b c" and equality could pass with different row sets.
+ *  `JSON.stringify([ns, key])` is injective. */
+function kvMapKey(ns: string, key: string): string { return JSON.stringify([ns, key]); }
 
 // ---- Parent-side batch driver (safe ordering: DATA then CURSOR) ------------------------------
 
@@ -313,7 +318,7 @@ const ALL_BATCH_SPECS: readonly BatchSpec[] = ALL_BATCHES.map((b) => ({
 // ---- Current-state equality predicate (`design.md` §2.3 / acceptance D2/D3) ------------------
 
 interface CurrentState {
-  /** EXHAUSTIVE: EVERY `kv_current` row for this scope, keyed by `${ns} ${key}` -> value —
+  /** EXHAUSTIVE: EVERY `kv_current` row for this scope, keyed by `JSON.stringify([ns, key])` -> value —
    *  the FULL current KV state, NOT just the expected keys. An extra/stale row present on only one
    *  side breaks equality (a bug an expected-keys-only read would miss). Excludes version + history. */
   kvAll: Record<string, JsonValue>;
@@ -340,7 +345,7 @@ async function readCurrentState(a: Adapters, wallet: string, scope: string, curs
     { label: "readCurrentState-kv-all", timeoutMs: 10_000 },
   );
   const kvAll: Record<string, JsonValue> = {};
-  for (const r of kvRows) kvAll[`${r.ns} ${r.key}`] = r.value;
+  for (const r of kvRows) kvAll[kvMapKey(r.ns, r.key)] = r.value;
 
   const wmRows = await withSuiteWatchdog(
     a.sql<{ kind: string; value: JsonValue }[]>`
@@ -569,7 +574,7 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     // expected-keys-only read missed exactly this. Demonstrate over the just-read states (no DB
     // mutation): injecting an unexpected row on the fault side makes the predicate THROW.
     expect(() => assertCurrentStateEqual(
-      { ...faultState, kvAll: { ...faultState.kvAll, [`${KV_NS} item:stale`]: { batch: 99 } } },
+      { ...faultState, kvAll: { ...faultState.kvAll, [kvMapKey(KV_NS, "item:stale")]: { batch: 99 } } },
       refState,
     )).toThrow();
     expect(() => assertCurrentStateEqual(
@@ -582,9 +587,9 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     expect(faultState.watermark).toBe(3);
     expect(refState.watermark).toBe(3);
     expect(faultState.kvAll).toEqual({
-      [`${KV_NS} ${itemKey(1)}`]: itemValue(1),
-      [`${KV_NS} ${itemKey(2)}`]: itemValue(2),
-      [`${KV_NS} ${itemKey(3)}`]: itemValue(3),
+      [kvMapKey(KV_NS, itemKey(1))]: itemValue(1),
+      [kvMapKey(KV_NS, itemKey(2))]: itemValue(2),
+      [kvMapKey(KV_NS, itemKey(3))]: itemValue(3),
     });
 
     // ---- TOLERATED DIVERGENCE (EXCLUDED from the predicate) — asserted explicitly so the exclusion
@@ -596,7 +601,7 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const faultItem2Version = await kvVersion(adaptersFor(uri), faultW, itemKey(2));
     const refItem2Version = await kvVersion(adaptersFor(uri), refW, itemKey(2));
     expect(Number(faultItem2Version)).toBeGreaterThan(Number(refItem2Version)); // version DIVERGES (replay re-applied batch 2)
-    expect(faultState.kvAll[`${KV_NS} ${itemKey(2)}`]).toEqual(refState.kvAll[`${KV_NS} ${itemKey(2)}`]); // ...but the VALUE converges
+    expect(faultState.kvAll[kvMapKey(KV_NS, itemKey(2))]).toEqual(refState.kvAll[kvMapKey(KV_NS, itemKey(2))]); // ...but the VALUE converges
     // Checkpoint seq chain diverges too (crash's superseded seq + replay's duplicates) while the
     // LATEST payload converges — the predicate compares only the latest complete payload.
     const faultManifests = await completeManifestCount(adaptersFor(uri).sql, faultW);
