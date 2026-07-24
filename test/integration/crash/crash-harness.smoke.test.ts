@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClient, type UmbraDBSql } from "../../../src/postgres/client.js";
 import {
   backendPid,
@@ -44,24 +44,48 @@ function worker(...args: Parameters<typeof spawnCrashWorker>): CrashWorkerHandle
 
 afterEach(async () => {
   for (const w of liveWorkers) { try { w.sigkill(); } catch { /* already gone */ } }
+  // Await each worker's TERMINATION before discarding the handle, so a killed child is reaped (not
+  // left as a zombie) and its connections are released before the next test — bounded so a stuck
+  // child cannot hang teardown.
+  await Promise.all(liveWorkers.map((w) =>
+    withSuiteWatchdog(w.waitForExit(), { label: "afterEach-worker-exit", timeoutMs: 15_000 }).catch(() => {}),
+  ));
   liveWorkers = [];
   await Promise.all(openPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));
   openPools = [];
 });
 
+// Parent-side verification queries — each bounded by the suite watchdog so a half-dead Postgres
+// fails them typed rather than hanging the suite (Task 0.3 / BLOCK 4).
 async function manifestCount(w: string, net: string): Promise<number> {
-  const rows = await getSql()<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM ${getSql()(TEST_SCHEMA)}.ckpt_manifests WHERE w = ${w} AND net = ${net} AND complete`;
+  const rows = await withSuiteWatchdog(
+    getSql()<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${getSql()(TEST_SCHEMA)}.ckpt_manifests WHERE w = ${w} AND net = ${net} AND complete`,
+    { label: "manifestCount", timeoutMs: 10_000 },
+  );
   return rows[0]!.n;
 }
 async function watermarkCount(kind: string, key: string): Promise<number> {
-  const rows = await getSql()<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM ${getSql()(TEST_SCHEMA)}.watermarks WHERE kind = ${kind} AND key = ${key}`;
+  const rows = await withSuiteWatchdog(
+    getSql()<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${getSql()(TEST_SCHEMA)}.watermarks WHERE kind = ${kind} AND key = ${key}`,
+    { label: "watermarkCount", timeoutMs: 10_000 },
+  );
   return rows[0]!.n;
 }
-async function class2AdvisoryLockCount(): Promise<number> {
-  const rows = await getSql()<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND classid = 2 AND objsubid = 2 AND granted`;
+/** Count the granted class-2 advisory locks whose `objid` is EXACTLY `hashtext(leaseKey)` (the
+ *  worker reports this as `ready.lockKeyHash`). Filtering by `objid` — rather than counting ALL
+ *  class-2 locks — makes the assertion robust to a shared container / parallelism (other keys'
+ *  locks no longer count). `objid` is an unsigned 32-bit `oid`; `hashtext` returns a SIGNED int4,
+ *  so we compare on the unsigned 32-bit representation of the hash (`& 0xFFFFFFFF`). */
+async function class2AdvisoryLockCountForHash(expectedHash: number): Promise<number> {
+  const rows = await withSuiteWatchdog(
+    getSql()<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_locks
+      WHERE locktype = 'advisory' AND classid = 2 AND objsubid = 2 AND granted
+        AND objid::bigint = (${expectedHash}::bigint & 4294967295)`,
+    { label: "class2AdvisoryLockCount", timeoutMs: 10_000 },
+  );
   return rows[0]!.n;
 }
 
@@ -148,41 +172,108 @@ describe("crash-harness fault primitives + hook worker + watchdog (Task 0)", () 
   // -- 0.2: in-critical-section pauses inside a held withLease --------------------------------
   it("[[crash-harness.smoke.hook-pauses.in-critical-section]] in-critical-section pauses inside a held withLease (the advisory lock is held)", async () => {
     const leaseKey = `lease-${randomUUID()}`;
-    const before = await class2AdvisoryLockCount();
     const h = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, hook: "in-critical-section", leaseKey });
     const ready = await h.waitForReady();
     expect(ready.hook).toBe("in-critical-section");
     expect(ready.lockKey).toBe(leaseKey);
     // The reported hash matches the parent's own hashtext of the key — the readiness payload is tied
     // to the real lock, not fabricated.
-    const parentHash = (await getSql()<{ h: number }[]>`SELECT hashtext(${leaseKey})::int AS h`)[0]!.h;
+    const parentHash = (await withSuiteWatchdog(
+      getSql()<{ h: number }[]>`SELECT hashtext(${leaseKey})::int AS h`,
+      { label: "parent-hashtext", timeoutMs: 10_000 },
+    ))[0]!.h;
     expect(ready.lockKeyHash).toBe(parentHash);
-    // Real boundary: a class-2 advisory lock is genuinely held while paused inside the critical section.
-    expect(await class2AdvisoryLockCount()).toBe(before + 1);
+    // Real boundary: the class-2 advisory lock for THIS key (objid = hashtext(leaseKey)) is genuinely
+    // held while paused inside the critical section. The unique random key ⇒ exactly one such lock.
+    expect(await class2AdvisoryLockCountForHash(ready.lockKeyHash!)).toBe(1);
   });
 
-  // -- 0.2: after-data-commit-before-cursor pauses with data durable, cursor not advanced -----
-  it("[[crash-harness.smoke.hook-pauses.after-data-commit-before-cursor]] after-data-commit-before-cursor pauses with the checkpoint durable and the cursor NOT advanced", async () => {
+  // -- 0.2: after-data-commit-before-cursor — SIGKILL BETWEEN the two real ops (safe ordering) --
+  it("[[crash-harness.smoke.hook-pauses.after-data-commit-before-cursor]] after-data-commit-before-cursor: killed BETWEEN the two real ops leaves data durable and the cursor absent", async () => {
     const w = `adc-${randomUUID()}`;
     const cursorKey = `k-${randomUUID()}`;
     const h = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, hook: "after-data-commit-before-cursor", walletId: w, networkId: "n", cursorKind: "sync", cursorKey, cursorValue: 5 });
     const ready = await h.waitForReady();
     expect(ready.hook).toBe("after-data-commit-before-cursor");
     expect(ready.savedSequence).toBe(1);
-    // Real boundary: the data commit has returned (durable) but the cursor advance has not been issued.
-    expect(await manifestCount(w, "n")).toBe(1);        // data durable
-    expect(await watermarkCount("sync", cursorKey)).toBe(0); // cursor NOT advanced (watermark behind data)
+    // Boundary at the pause: Op1 (data commit) has returned (durable); Op2 (cursor advance) is the
+    // real code past the pause and has NOT been issued yet.
+    expect(await manifestCount(w, "n")).toBe(1);              // Op1 data durable
+    expect(await watermarkCount("sync", cursorKey)).toBe(0);  // Op2 cursor not yet advanced
+
+    // SIGKILL the worker WHILE it is paused between the two ops — the crash freezes the state here.
+    h.sigkill();
+    const exit = await withSuiteWatchdog(h.waitForExit(), { label: "adc-exit", timeoutMs: 15_000 });
+    expect(exit.signal).toBe("SIGKILL");
+    // Killed run: data COMMITTED (Op1), cursor NEVER ISSUED (Op2 killed before it ran). The cursor's
+    // absence is CAUSED by the crash-between-the-two-ops — see the negative control below.
+    expect(await manifestCount(w, "n")).toBe(1);              // data present
+    expect(await watermarkCount("sync", cursorKey)).toBe(0);  // cursor absent (watermark behind data)
   });
 
-  // -- 0.2: after-cursor-before-data pauses with cursor durable, data absent (unsafe ref case) -
-  it("[[crash-harness.smoke.hook-pauses.after-cursor-before-data]] after-cursor-before-data pauses with the cursor durable and the checkpoint data absent (T5 negative case)", async () => {
+  // -- 0.2: after-cursor-before-data — SIGKILL BETWEEN the two real ops (unsafe ref ordering) ---
+  it("[[crash-harness.smoke.hook-pauses.after-cursor-before-data]] after-cursor-before-data: killed BETWEEN the two real ops leaves the cursor durable and the data absent (T5 negative case)", async () => {
     const w = `acd-${randomUUID()}`;
     const cursorKey = `k-${randomUUID()}`;
     const h = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, hook: "after-cursor-before-data", walletId: w, networkId: "n", cursorKind: "sync", cursorKey, cursorValue: 9 });
     const ready = await h.waitForReady();
     expect(ready.hook).toBe("after-cursor-before-data");
-    // Real boundary: the cursor advance committed (durable) but the later data commit was not issued.
-    expect(await watermarkCount("sync", cursorKey)).toBe(1); // cursor durable (AHEAD of data)
-    expect(await manifestCount(w, "n")).toBe(0);             // data absent
+    // Boundary at the pause: Op1 (cursor advance) committed; Op2 (data save) is the real code past
+    // the pause and has NOT been issued yet.
+    expect(await watermarkCount("sync", cursorKey)).toBe(1);  // Op1 cursor durable (AHEAD of data)
+    expect(await manifestCount(w, "n")).toBe(0);              // Op2 data not yet saved
+
+    h.sigkill();
+    const exit = await withSuiteWatchdog(h.waitForExit(), { label: "acd-exit", timeoutMs: 15_000 });
+    expect(exit.signal).toBe("SIGKILL");
+    // Killed run: cursor COMMITTED (Op1), data NEVER ISSUED (Op2 killed before it ran). The data's
+    // absence is CAUSED by the crash — the negative control proves the data op lands when uninterrupted.
+    expect(await watermarkCount("sync", cursorKey)).toBe(1);  // cursor present
+    expect(await manifestCount(w, "n")).toBe(0);              // data absent
+  });
+
+  // -- 0.2: T5 NEGATIVE CONTROL — the SAME data->cursor flow, run to COMPLETION without a kill ---
+  it("[[crash-harness.smoke.t5-full-flow-negative-control]] the co-transactional data->cursor flow run to completion (no kill) lands BOTH data and cursor — proving the killed runs' absences are caused by the crash", async () => {
+    const w = `t5full-${randomUUID()}`;
+    const cursorKey = `k-${randomUUID()}`;
+    // Dedicated no-pause, no-kill `t5-full-flow` mode: save (Op1) then watermark.set (Op2), both
+    // committed, then a clean exit 0. This is the SAME co-transactional flow the killed
+    // after-data-commit run performs — but uninterrupted.
+    const h = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, mode: "t5-full-flow", walletId: w, networkId: "n", cursorKind: "sync", cursorKey, cursorValue: 5 });
+    const ready = await h.waitForReady();
+    expect(ready.hook).toBeNull();
+    expect(ready.mode).toBe("t5-full-flow");
+    const exit = await withSuiteWatchdog(h.waitForExit(), { label: "t5-full-flow-exit", timeoutMs: 15_000 });
+    expect(exit.code).toBe(0);
+    // BOTH present when the flow completes — so in the killed run the cursor's absence is caused by
+    // the crash-between-data-and-cursor, NOT by the cursor op never existing.
+    expect(await manifestCount(w, "n")).toBe(1);              // data present
+    expect(await watermarkCount("sync", cursorKey)).toBe(1);  // cursor ALSO present
+  });
+
+  // -- 0.3: the suite watchdog applies SUITE_WATCHDOG_MS as its DEFAULT bound (fast, fake timers) -
+  it("[[crash-harness.smoke.suite-watchdog-default-bound]] withSuiteWatchdog with NO override applies SUITE_WATCHDOG_MS as the default bound", async () => {
+    // Fake timers so the DEFAULT 60s bound is exercised WITHOUT a real 60s wait — proving the
+    // default is wired (the 1.5s-override test above proves the JS backstop fires before G7's 120s;
+    // this proves the bound applied when nobody passes an override is exactly SUITE_WATCHDOG_MS).
+    vi.useFakeTimers();
+    try {
+      const never = new Promise<never>(() => {}); // never settles on its own
+      let outcome: unknown = "pending";
+      const raced = withSuiteWatchdog(never, { label: "default-bound" }).then(
+        () => { outcome = "resolved"; },
+        (e: unknown) => { outcome = e; },
+      );
+      // One tick short of the default bound: still pending (the default is not SHORTER than SUITE_WATCHDOG_MS).
+      await vi.advanceTimersByTimeAsync(SUITE_WATCHDOG_MS - 1);
+      expect(outcome).toBe("pending");
+      // Exactly at the default bound: the typed timeout fires, carrying SUITE_WATCHDOG_MS.
+      await vi.advanceTimersByTimeAsync(1);
+      await raced;
+      expect(outcome).toBeInstanceOf(SuiteWatchdogTimeoutError);
+      expect((outcome as SuiteWatchdogTimeoutError).timeoutMs).toBe(SUITE_WATCHDOG_MS);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

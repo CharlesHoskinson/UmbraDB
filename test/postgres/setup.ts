@@ -99,7 +99,12 @@ export async function stopTestContainer(opts?: { timeoutMs?: number }): Promise<
  * pid this way at the fault point (`design.md` §1).
  */
 export async function backendPid(sql: UmbraDBSql): Promise<number> {
-  const rows = await sql<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
+  // Bounded by construction (`withSuiteWatchdog`), so every crash-suite caller — Tasks 1-6
+  // included — inherits the JS-level termination backstop without having to remember to wrap it.
+  const rows = await withSuiteWatchdog(
+    sql<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`,
+    { label: "backendPid" },
+  );
   return rows[0]!.pid;
 }
 
@@ -111,7 +116,10 @@ export async function backendPid(sql: UmbraDBSql): Promise<number> {
  * dedicated pool observing the drop then reconnects on its next statement.
  */
 export async function pgTerminateBackend(admin: UmbraDBSql, pid: number): Promise<boolean> {
-  const rows = await admin<{ terminated: boolean }[]>`SELECT pg_terminate_backend(${pid}) AS terminated`;
+  const rows = await withSuiteWatchdog(
+    admin<{ terminated: boolean }[]>`SELECT pg_terminate_backend(${pid}) AS terminated`,
+    { label: "pgTerminateBackend" },
+  );
   return rows[0]!.terminated;
 }
 
@@ -135,12 +143,18 @@ export interface CrashWorkerReady {
   /** The backend pid of the connection holding the paused work (present for `before-commit`) —
    *  the target for a `pg_terminate_backend`/Postgres-kill of the worker's own session (T2). */
   backendPid?: number;
-  /** The committed checkpoint sequence (present for `after-data-commit-before-cursor`). */
+  /** The committed checkpoint sequence (present for `after-data-commit-before-cursor` and the
+   *  `t5-full-flow` control). */
   savedSequence?: number;
   /** The advisory-lock key held (present for `in-critical-section`). */
   lockKey?: string;
   /** `hashtext(lockKey)` — the `objid` of the class-2 advisory lock in `pg_locks` (T3). */
   lockKeyHash?: number;
+  /** The non-pause control mode the worker ran (present for `t5-full-flow`). */
+  mode?: string;
+  /** The watermark cursor coordinates (present for the T5 hooks and the `t5-full-flow` control). */
+  cursorKind?: string;
+  cursorKey?: string;
   [k: string]: unknown;
 }
 
@@ -151,6 +165,10 @@ export interface SpawnCrashWorkerOptions {
   schema: string;
   /** The named fault hook, or omit for an ordinary uninterrupted `save`. */
   hook?: CrashHook;
+  /** A no-pause, no-kill control mode independent of {@link hook}. `t5-full-flow` runs the safe
+   *  data->cursor sequence to completion (the T5 negative control) so a killed run's cursor/data
+   *  absence is provably caused by the crash, not by a missing op. */
+  mode?: "t5-full-flow";
   walletId?: string;
   networkId?: string;
   /** Watermark cursor (kind, key, value) for the T5 hooks; `cursorValue` is JSON. */
@@ -200,20 +218,29 @@ const DEFAULT_READY_TIMEOUT_MS = 30_000;
  * program point (`UMBRADB_CRASH_HOOK`); it touches NO `src/` code.
  */
 export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHandle {
-  const env: Record<string, string> = {
-    ...process.env as Record<string, string>,
-    UMBRADB_TEST_CONNECTION_URI: opts.connectionUri,
-    UMBRADB_TEST_SCHEMA: opts.schema,
-    ...(opts.hook !== undefined ? { UMBRADB_CRASH_HOOK: opts.hook } : {}),
-    ...(opts.walletId !== undefined ? { UMBRADB_CRASH_WALLET: opts.walletId } : {}),
-    ...(opts.networkId !== undefined ? { UMBRADB_CRASH_NETWORK: opts.networkId } : {}),
-    ...(opts.cursorKind !== undefined ? { UMBRADB_CRASH_CURSOR_KIND: opts.cursorKind } : {}),
-    ...(opts.cursorKey !== undefined ? { UMBRADB_CRASH_CURSOR_KEY: opts.cursorKey } : {}),
-    ...(opts.cursorValue !== undefined ? { UMBRADB_CRASH_CURSOR_VALUE: JSON.stringify(opts.cursorValue) } : {}),
-    ...(opts.leaseKey !== undefined ? { UMBRADB_CRASH_LEASE_KEY: opts.leaseKey } : {}),
-    ...(opts.payloadBytes !== undefined ? { UMBRADB_CRASH_PAYLOAD_BYTES: String(opts.payloadBytes) } : {}),
-    ...(opts.extraEnv ?? {}),
-  };
+  // Build the child env EXPLICITLY. Start from the parent env (node/tsx need PATH etc.), then SCRUB
+  // the entire crash-worker control family so an AMBIENT variable never leaks into the child. This
+  // matters most for UMBRADB_CRASH_HOOK: if the parent process happens to have it set, a "no-hook"
+  // worker would inherit it, PAUSE at a named point, and hang the required no-hook smoke test. Only
+  // the variables set from `opts` below take effect — no-hook ⇒ guaranteed uninterrupted save.
+  const env: Record<string, string | undefined> = { ...(process.env as Record<string, string | undefined>) };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("UMBRADB_CRASH_") || key === "UMBRADB_TEST_CONNECTION_URI" || key === "UMBRADB_TEST_SCHEMA") {
+      delete env[key];
+    }
+  }
+  env.UMBRADB_TEST_CONNECTION_URI = opts.connectionUri;
+  env.UMBRADB_TEST_SCHEMA = opts.schema;
+  if (opts.hook !== undefined) env.UMBRADB_CRASH_HOOK = opts.hook;
+  if (opts.mode !== undefined) env.UMBRADB_CRASH_MODE = opts.mode;
+  if (opts.walletId !== undefined) env.UMBRADB_CRASH_WALLET = opts.walletId;
+  if (opts.networkId !== undefined) env.UMBRADB_CRASH_NETWORK = opts.networkId;
+  if (opts.cursorKind !== undefined) env.UMBRADB_CRASH_CURSOR_KIND = opts.cursorKind;
+  if (opts.cursorKey !== undefined) env.UMBRADB_CRASH_CURSOR_KEY = opts.cursorKey;
+  if (opts.cursorValue !== undefined) env.UMBRADB_CRASH_CURSOR_VALUE = JSON.stringify(opts.cursorValue);
+  if (opts.leaseKey !== undefined) env.UMBRADB_CRASH_LEASE_KEY = opts.leaseKey;
+  if (opts.payloadBytes !== undefined) env.UMBRADB_CRASH_PAYLOAD_BYTES = String(opts.payloadBytes);
+  if (opts.extraEnv !== undefined) Object.assign(env, opts.extraEnv);
 
   const child = spawn(process.execPath, ["--import", "tsx", WORKER_ENTRYPOINT], {
     cwd: REPO_ROOT,
@@ -225,32 +252,48 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
   let stderrBuf = "";
   let ready: CrashWorkerReady | undefined;
   let readyErr: Error | undefined;
+  /** Index into `stdoutBuf` up to which COMPLETE (newline-terminated) lines have been scanned for a
+   *  readiness/error record. The remainder past it is a possibly-partial final line, held until its
+   *  own newline arrives. */
+  let readyScanPos = 0;
   const readyWaiters: Array<() => void> = [];
   let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
   const exitWaiters: Array<() => void> = [];
 
   const settleReady = (): void => { while (readyWaiters.length) readyWaiters.shift()!(); };
 
+  /** Line-buffered readiness parser. The worker emits its readiness/error record as a SINGLE
+   *  `\n`-terminated line; a Node stream can split a chunk mid-line, so we `JSON.parse` ONLY
+   *  complete newline-terminated lines (never a partial record, which would raise a permanent
+   *  readiness error while the worker stays paused). Non-sentinel lines (tsx/driver log noise) are
+   *  ignored rather than treated as errors. `stdoutBuf` keeps the full stream for diagnostics. */
+  const scanForReady = (): void => {
+    if (ready !== undefined || readyErr !== undefined) return;
+    let nl: number;
+    while ((nl = stdoutBuf.indexOf("\n", readyScanPos)) >= 0) {
+      const line = stdoutBuf.slice(readyScanPos, nl); // one COMPLETE line, no trailing "\n"
+      readyScanPos = nl + 1;
+      const r = line.indexOf(CRASH_WORKER_READY_SENTINEL);
+      if (r >= 0) {
+        try { ready = JSON.parse(line.slice(r + CRASH_WORKER_READY_SENTINEL.length)) as CrashWorkerReady; }
+        catch (err) { readyErr = new Error(`crash worker readiness line was not valid JSON: ${String(err)}`); }
+        settleReady();
+        return;
+      }
+      const e = line.indexOf(CRASH_WORKER_ERROR_SENTINEL);
+      if (e >= 0) {
+        readyErr = new Error(`crash worker reported an error before readiness: ${line.slice(e + CRASH_WORKER_ERROR_SENTINEL.length).trim()}`);
+        settleReady();
+        return;
+      }
+      // else: a non-sentinel line — ignore and continue scanning subsequent complete lines.
+    }
+  };
+
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     stdoutBuf += chunk;
-    if (ready === undefined && readyErr === undefined) {
-      for (const line of stdoutBuf.split("\n")) {
-        const r = line.indexOf(CRASH_WORKER_READY_SENTINEL);
-        const e = line.indexOf(CRASH_WORKER_ERROR_SENTINEL);
-        if (r >= 0) {
-          try { ready = JSON.parse(line.slice(r + CRASH_WORKER_READY_SENTINEL.length)) as CrashWorkerReady; }
-          catch (err) { readyErr = new Error(`crash worker readiness line was not valid JSON: ${String(err)}`); }
-          settleReady();
-          return;
-        }
-        if (e >= 0) {
-          readyErr = new Error(`crash worker reported an error before readiness: ${line.slice(e + CRASH_WORKER_ERROR_SENTINEL.length).trim()}`);
-          settleReady();
-          return;
-        }
-      }
-    }
+    scanForReady();
   });
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => { stderrBuf += chunk; });
@@ -284,10 +327,18 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
           else reject(readyErr ?? new Error("crash worker readiness settled without a result"));
         };
         if (ready !== undefined || readyErr !== undefined) { done(); return; }
-        const timer = setTimeout(() => {
+        let timer: ReturnType<typeof setTimeout>;
+        const waiter = (): void => { clearTimeout(timer); done(); };
+        timer = setTimeout(() => {
+          // On a readiness timeout, REMOVE our waiter (so a late readiness line cannot re-settle
+          // this promise) AND terminate the child (so a wedged worker is not left running past its
+          // test — belt-and-suspenders vs. the worker's own orphan guard).
+          const idx = readyWaiters.indexOf(waiter);
+          if (idx >= 0) readyWaiters.splice(idx, 1);
+          try { child.kill("SIGKILL"); } catch { /* already gone */ }
           reject(new SuiteWatchdogTimeoutError("crash-worker readiness", timeoutMs));
         }, timeoutMs);
-        readyWaiters.push(() => { clearTimeout(timer); done(); });
+        readyWaiters.push(waiter);
       });
     },
     waitForExit(): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {

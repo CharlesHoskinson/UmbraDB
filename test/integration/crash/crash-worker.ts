@@ -67,7 +67,9 @@ function signalReady(payload: Record<string, unknown>): void {
 }
 
 /** Blocks forever at the current (already-paused) program point. Never resolves normally: the
- *  parent SIGKILLs the process here, or the orphan guard force-exits after `ORPHAN_GUARD_MS`. */
+ *  parent SIGKILLs the process here, or the orphan guard force-exits after `ORPHAN_GUARD_MS`.
+ *  Used by the single-operation hooks (`before-commit`, `in-critical-section`) where there is no
+ *  legitimate "not killed" continuation — an orphan there is a parent bug and exits non-zero. */
 function pauseUntilKilled(): Promise<never> {
   return new Promise<never>(() => {
     // Ref'd on purpose: guarantees the event loop stays alive until the SIGKILL, independent of
@@ -76,6 +78,20 @@ function pauseUntilKilled(): Promise<never> {
       process.stderr.write(`${ERROR_SENTINEL} orphan-guard: parent never SIGKILLed within ${ORPHAN_GUARD_MS}ms\n`);
       process.exit(75);
     }, ORPHAN_GUARD_MS);
+  });
+}
+
+/** Pause point for the T5 TWO-transaction hooks (`after-data-commit-before-cursor`,
+ *  `after-cursor-before-data`): holds at the named boundary BETWEEN the two real, separately-
+ *  committed operations so the parent can SIGKILL here deterministically. Unlike
+ *  {@link pauseUntilKilled} it RESOLVES after `ORPHAN_GUARD_MS` instead of exiting, so a NOT-killed
+ *  control run PROCEEDS to its second real operation and exits 0 — the second op is real code
+ *  reachable past the pause, not a comment. In a killed run the SIGKILL lands within a second or
+ *  two, far below this bound, so the second op never runs. */
+function pauseThenResume(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    // Ref'd timer: keeps the event loop alive across the pause (the SIGKILL normally lands first).
+    setTimeout(resolve, ORPHAN_GUARD_MS);
   });
 }
 
@@ -88,6 +104,11 @@ async function main(): Promise<void> {
     throw new Error(`crash-worker: unknown UMBRADB_CRASH_HOOK ${JSON.stringify(hookRaw)} (expected one of ${ALL_HOOKS.join(", ")})`);
   }
   const hook = hookRaw as CrashHook | undefined;
+
+  // A dedicated NO-PAUSE, NO-KILL control mode (independent of the pause hooks). `t5-full-flow`
+  // runs the SAME safe data->cursor flow to completion so the smoke suite's negative control can
+  // prove BOTH ops land when uninterrupted.
+  const mode = process.env.UMBRADB_CRASH_MODE;
 
   const walletId = process.env.UMBRADB_CRASH_WALLET ?? "crash-w";
   const networkId = process.env.UMBRADB_CRASH_NETWORK ?? "crash-n";
@@ -108,6 +129,22 @@ async function main(): Promise<void> {
 
   switch (hook) {
     case undefined: {
+      if (mode === "t5-full-flow") {
+        // T5 NEGATIVE CONTROL (no hook, no pause, no kill): the SAME safe two-transaction
+        // data->cursor flow as `after-data-commit-before-cursor`, but run to COMPLETION. Both real
+        // ops commit; the parent asserts BOTH data AND cursor present. This is what makes the kill
+        // causal: in the killed `after-data-commit-before-cursor` run the cursor is absent BECAUSE
+        // of the crash-between-the-two-ops, not because the cursor op never existed (it plainly
+        // lands here).
+        const summary = await checkpoints.save(walletId, networkId, data); // Op1: data (committed)
+        await watermarks.set(cursorKind, cursorKey, cursorValue);          // Op2: cursor (committed)
+        signalReady({
+          hook: null, mode, pid: process.pid, savedSequence: summary.sequence,
+          walletId, networkId, cursorKind, cursorKey,
+        });
+        await sql.end({ timeout: 5 });
+        return;
+      }
       // NO HOOK: an ordinary, uninterrupted `save` on its own internal transaction (commits and
       // returns), then a clean shutdown. Proves the worker is a normal writer when no fault is
       // requested. Natural return (no process.exit) so stdout flushes before exit.
@@ -161,36 +198,45 @@ async function main(): Promise<void> {
     }
 
     case "after-data-commit-before-cursor": {
-      // Safe two-transaction ordering: data FIRST (its own committed transaction), THEN cursor.
-      const summary = await checkpoints.save(walletId, networkId, data);
+      // SAFE two-transaction ordering, driven as TWO REAL, separately-committed operations with the
+      // pause BETWEEN them: data FIRST (its own committed transaction) -> pause -> THEN cursor.
+      const summary = await checkpoints.save(walletId, networkId, data); // Op1: data COMMITTED & durable
       // ---- REAL BOUNDARY (after-data-commit-before-cursor — T5, safe ordering) ----------------
-      // DONE: checkpoints.save opened its OWN transaction, COMMITTED it, and RETURNED — the
-      //       checkpoint data is DURABLE (seq = summary.sequence).
-      // NOT DONE: the watermark/cursor advance below has NOT been issued.
-      // A SIGKILL now leaves data durable and the cursor NOT advanced => the durable watermark is
-      // BEHIND the durable data (the only acceptable direction). The would-be next op is:
-      //   await watermarks.set(cursorKind, cursorKey, cursorValue);
+      // COMMITTED (durable) at this pause: the checkpoint DATA (seq = summary.sequence).
+      //       checkpoints.save opened its OWN transaction, COMMITTED it, and RETURNED.
+      // PENDING (not yet issued) at this pause: the watermark/cursor advance below (Op2, REAL code
+      //       past the pause — no longer a comment).
+      // A SIGKILL here leaves data durable and the cursor NOT advanced => the durable watermark is
+      // BEHIND the durable data (the only acceptable direction). If NOT killed, `pauseThenResume`
+      // resolves and Op2 runs, so the worker commits BOTH and exits 0.
       signalReady({
         hook, pid: process.pid, savedSequence: summary.sequence,
         walletId, networkId, cursorKind, cursorKey,
       });
-      await pauseUntilKilled();
+      await pauseThenResume();
+      await watermarks.set(cursorKind, cursorKey, cursorValue);          // Op2: cursor COMMITTED & durable
+      await sql.end({ timeout: 5 });
       return;
     }
 
     case "after-cursor-before-data": {
       // Deliberately-UNSAFE caller ordering (cursor before data) — the T5 negative/reference case
       // ONLY (a caller error the storage layer cannot prevent, out of the T5 invariant's scope).
-      await watermarks.set(cursorKind, cursorKey, cursorValue);
+      // Still driven as TWO REAL, separately-committed operations with the pause BETWEEN them:
+      // cursor FIRST -> pause -> THEN data.
+      await watermarks.set(cursorKind, cursorKey, cursorValue);          // Op1: cursor COMMITTED & durable
       // ---- REAL BOUNDARY (after-cursor-before-data — T5, unsafe reference case) ----------------
-      // DONE: the watermark/cursor advance COMMITTED (durable) for (cursorKind, cursorKey).
-      // NOT DONE: the later checkpoint data commit has NOT been issued.
-      // A SIGKILL now leaves the cursor durable with its data ABSENT => the watermark is AHEAD of
-      // durable data. This state is reachable ONLY under this unsafe caller ordering; it exists to
-      // construct the negative case, not to assert the invariant. The would-be next op is:
-      //   await checkpoints.save(walletId, networkId, data);
-      signalReady({ hook, pid: process.pid, cursorKind, cursorKey });
-      await pauseUntilKilled();
+      // COMMITTED (durable) at this pause: the watermark/cursor advance for (cursorKind, cursorKey).
+      // PENDING (not yet issued) at this pause: the later checkpoint DATA commit below (Op2, REAL
+      //       code past the pause — no longer a comment).
+      // A SIGKILL here leaves the cursor durable with its data ABSENT => the watermark is AHEAD of
+      // durable data. Reachable ONLY under this unsafe ordering; it exists to construct the negative
+      // case, not to assert the invariant. If NOT killed, `pauseThenResume` resolves and Op2 runs,
+      // so the worker commits BOTH and exits 0.
+      signalReady({ hook, pid: process.pid, cursorKind, cursorKey, walletId, networkId });
+      await pauseThenResume();
+      await checkpoints.save(walletId, networkId, data);                // Op2: data COMMITTED & durable
+      await sql.end({ timeout: 5 });
       return;
     }
   }

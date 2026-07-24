@@ -123,6 +123,24 @@ describe("check-required-tests — skip-enforcement reconciliation (Task 0.4)", 
     expect(result.deferredReconciled).toContainEqual({ id: "def.optional", statuses: [], state: "missing" });
   });
 
+  it("a required id carried by MORE THAN ONE test (id collision) is a named 'ambiguous' violation", () => {
+    // Two distinct tests both embed [[req.two]] — the id no longer identifies exactly one test, so
+    // reconcile cannot trust its status. Even though both are 'passed', this is a violation.
+    const result = reconcile(
+      report([
+        { status: "passed", title: "[[req.one]] a" },
+        { status: "passed", title: "[[req.two]] b (first test with this id)" },
+        { status: "passed", title: "[[req.two]] c (a SECOND, colliding test)" },
+      ]),
+      MANIFEST,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual([
+      { id: "req.two", reason: "ambiguous", statuses: ["passed", "passed"] },
+    ]);
+    expect(result.summary).toContain("req.two");
+  });
+
   it("a required test reported failed is a named violation", () => {
     const result = reconcile(
       report([

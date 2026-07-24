@@ -190,6 +190,13 @@ today**. `PgCheckpointStore.save` **cannot** (`checkpoint-store.ts:114-124`, cla
 **T5 has a hard dependency on G5** and cannot pass honestly before it (`council/B` §5 item 1;
 `02`-F1).
 
+> **Note (post-G5, reconciling this paragraph with the code as merged):** G5 has since landed —
+> `PgCheckpointStore.save` **now accepts** a `{ tx }` option (`checkpoint-store.ts`
+> `validateSaveOptions`, which intersects `tx?: TransactionHandle` onto `SaveCheckpointOptions`),
+> and a `saveAndAdvance` combinator exists. So the co-transactional `save(tx)` path the crash
+> worker drives at `before-commit` is **real, not fictional**; the "cannot accept a `tx`" wording
+> above records the *pre-G5* rationale for why T5 was blocked, not the current API surface.
+
 **Two definitions used by this test and reused by G10/G11 (referenced from the spec preamble):**
 
 - **Write batch.** The harness drives the run as a sequence of numbered *write batches* — one
