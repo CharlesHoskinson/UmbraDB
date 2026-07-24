@@ -150,6 +150,16 @@ set → `ConnectionError`, `02` §"Retry/idempotency"); (b) after Postgres is ba
 **all-or-nothing** (either the manifest is fully present and `load`s, or fully absent — never
 partial).
 
+> **Reconciliation note (change-level audit BLOCK 2).** Assertion (a) names a bare `ConnectionError`;
+> the code produces a sharper, correct surface and the spec is reconciled to it. A checkpoint `save`
+> always runs inside a `withTransaction`, whose deliberate Sprint-2 behavior
+> (`transaction-lease.ts:223,263-267`) wraps an in-transaction connection loss as
+> `TransactionFaultError(faultKind "connection-lost")` (code `TRANSACTION_FAULT`), PRE-EMPTING save's
+> `{tx}` `ConnectionError` translation. The reconciled C1 contract is therefore: an IN-TRANSACTION
+> connection loss (the T2 kill) surfaces `TransactionFaultError`; a PRE-/NON-transactional connection
+> failure surfaces `ConnectionError`; a raw `postgres.js` error NEVER surfaces under either leg. The
+> T2 test enforces BOTH legs (see `acceptance.md` C1's note).
+
 **Retry-duplication contract — honoring `council/B` §5 item 3 verbatim.** `save` is *not*
 idempotent under a lost COMMIT-ack: a blind retry allocates a *new* seq
 (`checkpoint-store.ts:166-172`; `(w,net,seq)` is not UNIQUE — `002_checkpoint_store.ts`) and
@@ -189,6 +199,13 @@ today**. `PgCheckpointStore.save` **cannot** (`checkpoint-store.ts:114-124`, cla
 **structurally impossible** until G5 (either `save(tx)` or a `saveAndAdvance` combinator) lands.
 **T5 has a hard dependency on G5** and cannot pass honestly before it (`council/B` §5 item 1;
 `02`-F1).
+
+> **Note (post-G5, reconciling this paragraph with the code as merged):** G5 has since landed —
+> `PgCheckpointStore.save` **now accepts** a `{ tx }` option (`checkpoint-store.ts`
+> `validateSaveOptions`, which intersects `tx?: TransactionHandle` onto `SaveCheckpointOptions`),
+> and a `saveAndAdvance` combinator exists. So the co-transactional `save(tx)` path the crash
+> worker drives at `before-commit` is **real, not fictional**; the "cannot accept a `tx`" wording
+> above records the *pre-G5* rationale for why T5 was blocked, not the current API surface.
 
 **Two definitions used by this test and reused by G10/G11 (referenced from the spec preamble):**
 
@@ -370,6 +387,25 @@ formally re-scope the gate") is two-part, both in-repo:
    §1: "the soak/differential test must compare *current state*, not history chains", because
    fault-replay legitimately diverges in `kv_history` rows/version numbers). This is `02`-T11,
    which "*depends on* F1/F2 being fixed to ever pass" — hence the **hard dependency on G5**.
+
+> **Task 6 close-out (post-implementation reconciliation of §5).** Both halves are landed and in the
+> required gate. (1) **P3 anchor** — `test/postgres/temporal-kv.property.test.ts`'s P3 (`getAt({at})`
+> equals a from-scratch fold of the put sequence) IS the replay-equivalence / fold half; it carries the
+> manifest id `[[property.p3.replay-fold-equivalence]]` (title-only tag; P3 logic unchanged) and imports
+> NO replaced/foreign store — its fold reference is written inline in the test. (2) **Fault-schedule
+> half** — `test/postgres/differential-equivalence.test.ts` applies a SEEDED (reproducible, no
+> `Math.random`) schedule mixing T1/T2/T5, re-syncs from durable state after each fault, and asserts
+> current-state equivalence to a fault-free reference run of the same schedule. **Reconciling the §5
+> wording** "using UmbraDB's own adapters and the existing `test/postgres/reference-merge.ts`":
+> `reference-merge.ts` is the transaction-HISTORY merge stand-in and does NOT model
+> KV/checkpoint/watermark current state (Task 5.1 note), so the current-state reference follows the §2.3
+> keystone discipline instead — a fault-free replay via UmbraDB's own adapters into a separate wallet.
+> It is still strictly in-repo (an in-test import audit verifies the reference side imports nothing
+> outside the repo), importing no foreign consumer/indexer engine. Equality is the §2.3 current-state
+> predicate (full `kv_current` + full `watermarks` + latest complete checkpoint payload; `kv_history`
+> and `version` excluded, their divergence shown explicitly). A mandatory negative control that
+> genuinely drops a committed range confirms the equivalence check fires. See the change's
+> `gate-notes-task6.md`.
 
 ## 6. G12 — Milestone-5 live round-trip, rescoped as manual pre-tag Preprod evidence (`01` §Cutover)
 

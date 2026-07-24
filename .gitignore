@@ -11,3 +11,13 @@ graphify-out/.graphify_python
 graphify-out/.graphify_root
 graphify-out/.graphify_labels.json
 graphify-out/cache/
+
+# v1.0.0-recovery-testing soak: per-run GC-pass duration artifact (runtime output, not source)
+test/integration/soak/artifacts/
+
+# v1.0.0-recovery-testing Task 7: coverage + mutation gate runtime outputs (not source)
+coverage/
+.conformance-report.json
+.stryker-tmp/
+reports/
+stryker.log

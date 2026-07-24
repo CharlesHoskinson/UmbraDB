@@ -483,3 +483,124 @@ describe("PgTransactionLeaseLayer leases (acquireLease / tryAcquireLease / relea
     }
   });
 });
+
+// ============================================================================================
+// tryAcquireLease branch coverage (v1.0.0-recovery-testing change-level audit — BLOCK 11 / §2.3).
+//
+// `acquireLease`'s reserve/timeout/abort forks are covered above; these exercise the SYMMETRIC —
+// and previously uncovered — forks of `tryAcquireLease` (transaction-lease.ts lines ~331-333, 358,
+// 361-372), plus its two token-minting SUCCESS paths (no-timeoutMs and with-timeoutMs), so the
+// per-file coverage floor for this durability adapter clears §2.3's binding 90% lines / 85%
+// branches. Each test mirrors an existing `acquireLease` test's proven mechanism (a dedicated
+// maxConnections:1 pool for pool-exhaustion; an unreachable endpoint for a reserve failure; a held
+// key for lock contention), applied to `tryAcquireLease`.
+// ============================================================================================
+
+describe("PgTransactionLeaseLayer.tryAcquireLease — reserve / timeout / abort / success branch coverage", () => {
+  it("tryAcquireLease with NO timeoutMs on a FREE key acquires the lease and returns a token, then releases", async () => {
+    const layer = txLayer();
+    const lease = await layer.tryAcquireLease("try-free-a");
+    expect(lease).not.toBeNull();
+    expect(lease!.key).toBe("try-free-a");
+    expect(typeof lease!.token).toBe("string");
+    await layer.releaseLease(lease!);
+    // Released → another caller can immediately take it (proves the token path really held the lock).
+    const again = await layer.acquireLease("try-free-a", { timeoutMs: 2_000 });
+    await layer.releaseLease(again);
+  }, 10_000);
+
+  it("tryAcquireLease WITH timeoutMs on a FREE key acquires the lease (the timeout branch's SUCCESS fork) and returns a token", async () => {
+    // The pg_advisory_lock (timeout) branch's success path — distinct from the no-timeout
+    // pg_try_advisory_lock path above — mints a token and does not poison statement_timeout.
+    const dedicated = createClient({ connectionString: connectionUri(), schema: TEST_SCHEMA, maxConnections: 1 });
+    try {
+      const layer = new PgTransactionLeaseLayer(dedicated);
+      const lease = await layer.tryAcquireLease("try-free-b", { timeoutMs: 2_000 });
+      expect(lease).not.toBeNull();
+      expect(lease!.key).toBe("try-free-b");
+      await layer.releaseLease(lease!);
+      // statement_timeout restored to the connection default (not left at the 2s TTL).
+      const rows = await dedicated<{ timeout: string }[]>`select current_setting('statement_timeout') as timeout`;
+      expect(rows[0]!.timeout).toBe("2min");
+    } finally {
+      await dedicated.end({ timeout: 5 });
+    }
+  }, 10_000);
+
+  it("tryAcquireLease with timeoutMs blocked purely on connection-pool exhaustion resolves null (the RESERVE_TIMED_OUT fork), not throw", async () => {
+    // The reserve-phase counterpart of tryAcquireLease's lock-phase timeout→null: a pool with no
+    // free connection makes reserveBounded time out; tryAcquireLease maps that to null, not an error.
+    const dedicated = createClient({ connectionString: connectionUri(), schema: TEST_SCHEMA, maxConnections: 1 });
+    const layer = new PgTransactionLeaseLayer(dedicated);
+    try {
+      const first = await layer.acquireLease("try-reserve-timeout-1"); // pins the only connection
+      try {
+        const start = Date.now();
+        const result = await layer.tryAcquireLease("try-reserve-timeout-2", { timeoutMs: 100 });
+        expect(result).toBeNull();
+        expect(Date.now() - start).toBeGreaterThanOrEqual(90);
+      } finally {
+        await layer.releaseLease(first);
+      }
+    } finally {
+      await dedicated.end({ timeout: 1 });
+    }
+  }, 10_000);
+
+  it("tryAcquireLease surfaces a reservation failure as LeaseFaultError(reserve-failed)", async () => {
+    const badSql = createClient({
+      connectionString: "postgres://nouser:nopass@127.0.0.1:1/nonexistent",
+      schema: TEST_SCHEMA,
+      maxConnections: 1,
+      connectTimeout: 2, // fail fast on the unreachable endpoint (WSL2 closed-port behaviour)
+    });
+    try {
+      await expect(new PgTransactionLeaseLayer(badSql).tryAcquireLease("try-reserve-fail"))
+        .rejects.toMatchObject({ code: "LEASE_FAULT", faultKind: "reserve-failed" });
+    } finally {
+      await badSql.end({ timeout: 1 });
+    }
+  }, 10_000);
+
+  it("tryAcquireLease aborting while blocked RESERVING a connection (pool exhausted) rejects with AbortError, not null", async () => {
+    // An abort is a caller cancellation, not lock contention — tryAcquireLease re-throws AbortError
+    // from the reserve phase rather than mapping it to null (the RESERVE_TIMED_OUT fork's sibling).
+    const dedicated = createClient({ connectionString: connectionUri(), schema: TEST_SCHEMA, maxConnections: 1 });
+    const layer = new PgTransactionLeaseLayer(dedicated);
+    try {
+      const first = await layer.acquireLease("try-reserve-abort-1");
+      try {
+        const controller = new AbortController();
+        const second = layer.tryAcquireLease("try-reserve-abort-2", { signal: controller.signal });
+        await tick(100); // let the reserve genuinely start blocking on the exhausted pool
+        controller.abort();
+        await expect(second).rejects.toMatchObject({ name: "AbortError" });
+      } finally {
+        await layer.releaseLease(first);
+      }
+    } finally {
+      await dedicated.end({ timeout: 1 });
+    }
+  }, 10_000);
+
+  it("tryAcquireLease with timeoutMs aborting while blocked on the HELD LOCK rejects with AbortError (the non-timeout re-throw fork) and leaks no lock", async () => {
+    // hadTimeout branch: raceAgainstAbort throws AbortError (not a statement timeout), so the inner
+    // catch re-throws it (the `throw err` fork), the outer catch unlocks/resets/releases, and the
+    // AbortError propagates — proving the aborted attempt leaves no advisory lock behind.
+    const layer = txLayer();
+    const held = await layer.acquireLease("try-lock-abort");
+    try {
+      const controller = new AbortController();
+      const waiting = layer.tryAcquireLease("try-lock-abort", { timeoutMs: 5_000, signal: controller.signal });
+      await tick(100); // let pg_advisory_lock genuinely block behind the held lock
+      controller.abort();
+      await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      await layer.releaseLease(held);
+    }
+    // A fresh acquire succeeding proves the aborted attempt released the connection and left no lock.
+    const layer2 = txLayer();
+    const third = await layer2.acquireLease("try-lock-abort", { timeoutMs: 2_000 });
+    await layer2.releaseLease(third);
+  }, 10_000);
+});

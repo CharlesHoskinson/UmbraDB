@@ -106,7 +106,7 @@ describe("TemporalKV properties (Formal/STORAGE_ALGEBRA.md §5)", () => {
     );
   }, 120_000);
 
-  it("P3 (Law T3): getAt({at}) matches a from-scratch fold of the put sequence, for an arbitrary T", async () => {
+  it("[[property.p3.replay-fold-equivalence]] P3 (Law T3): getAt({at}) matches a from-scratch fold of the put sequence, for an arbitrary T", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 2, max: 6 }), fc.integer({ min: 0, max: 5 }), async (n, cutoffIndex) => {
         const key = freshKey();

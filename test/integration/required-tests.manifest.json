@@ -1,0 +1,139 @@
+{
+  "$schema-note": "v1.0.0-recovery-testing skip-enforcement manifest (design.md §1.1, Task 0.4). This is the AUTHORITATIVE required set: 'required' lists the stable id of EVERY non-live crash/soak test that MUST execute-and-pass in the required gate (G9). check-required-tests.ts fails the gate by id if any required id is missing or reported skipped/todo/failed. 'deferred' lists WHERE-gated optional-feature ids that reconcile as skipped-pending-feature and are exempt while their feature is unshipped. Each governed test embeds its id as a [[id]] token in its title (which Vitest surfaces in assertionResults[].title/fullName). The Task-0 crash-harness smoke ids (crash-harness.smoke.*) plus the full T1/T2/T5/T3/soak/load-under-prune/P3 id set below form the contract that Tasks 1-6 tag their tests with; the ids are defined NOW so later tasks adopt them verbatim without a spec rewrite. CHANGE-LEVEL AUDIT (BLOCK 9): check-required-tests.ts now FAILS CLOSED (a missing/unparseable/empty-or-absent required set fails the gate, never reconciles as 'all 0 passed'), STRUCTURALLY PINS required.length to EXPECTED_REQUIRED_COUNT (currently 25) so silently deleting or adding a required entry fails the gate, and BINDS each required id to its 'file' so an id that executed-and-passed from a DIFFERENT file (a token moved to a trivial passing test) fails. The co-transactional saveAndAdvance crash test (crash.saveAndAdvance.co-tx-atomic, BLOCK 1) is required entry #23; the change-level round-3 differential negative-control (BLOCK 3) and reference import-clean (BLOCK 4) guards are required entries #24 and #25; every required entry MUST carry its bound 'file'.",
+  "$check-mechanism-note": "IMPORTANT: run against the CURRENT Task-0-only suite, check-required-tests.ts will correctly report the not-yet-built required ids (the crash.* / soak.* / property.p3.* entries) as `missing` — those tests are authored by Tasks 1-6. That is EXPECTED and correct: check-required-tests.ts is the G9 RELEASE gate, green only once every task has landed its tagged tests. The check MECHANISM itself is proven independently, right now, by the synthetic-payload unit tests in check-required-tests.test.ts (which use an inline manifest, not this file), so those unit tests stay green regardless of how many required ids are still unbuilt. Do NOT delete a required id to make the check pass early — that would re-open the exact self-skip hole this manifest closes.",
+  "required": [
+    {
+      "id": "crash-harness.smoke.spawn-sigkill-container-survives",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.1: spawn the crash worker, SIGKILL it, confirm the shared container is still up and a fresh client connects."
+    },
+    {
+      "id": "crash-harness.smoke.pg-terminate-backend-drops-and-recovers",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.1: pg_terminate_backend drops a targeted backend's connection and the dedicated pool recovers (reconnects with a new backend pid)."
+    },
+    {
+      "id": "crash-harness.smoke.suite-watchdog-bounds-stalled-backend",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.3: a query against a deliberately-stalled backend is bounded by a 1.5s override of the suite watchdog and throws a typed SuiteWatchdogTimeoutError before G7's 120s, not a hang."
+    },
+    {
+      "id": "crash-harness.smoke.suite-watchdog-default-bound",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.3: withSuiteWatchdog with NO explicit override applies SUITE_WATCHDOG_MS as its default bound (proven fast via fake timers, so the default is wired without a real 60s wait)."
+    },
+    {
+      "id": "crash-harness.smoke.no-hook-ordinary-save",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: without UMBRADB_CRASH_HOOK the worker performs an ordinary uninterrupted save and exits 0."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.before-commit",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the before-commit hook pauses after the manifest INSERT is issued, before COMMIT, and emits its readiness signal (incl. the worker backend pid); nothing is visible."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.in-critical-section",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the in-critical-section hook pauses inside a held withLease; exactly one class-2 advisory lock with objid = hashtext(leaseKey) is held."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.after-data-commit-before-cursor",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the after-data-commit-before-cursor hook runs TWO real ops (save then cursor) with a pause between; killed at the pause it leaves data durable and the cursor absent (watermark behind data)."
+    },
+    {
+      "id": "crash-harness.smoke.hook-pauses.after-cursor-before-data",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2: the after-cursor-before-data hook runs TWO real ops (cursor then save) with a pause between; killed at the pause it leaves the cursor durable and the data absent (T5 unsafe reference case)."
+    },
+    {
+      "id": "crash-harness.smoke.t5-full-flow-negative-control",
+      "file": "test/integration/crash/crash-harness.smoke.test.ts",
+      "description": "0.2 (test-honesty): the SAME co-transactional data->cursor flow run to completion WITHOUT a kill lands BOTH data and cursor — the negative control proving the killed T5 runs' absences are caused by the crash, not by a missing op."
+    },
+    {
+      "id": "crash.process-kill-save.no-partial-checkpoint",
+      "file": "test/integration/crash/process-kill-save.crash.test.ts",
+      "description": "T1 (Task 1.1): SIGKILL at before-commit leaves no complete=true manifest at the interrupted seq; the prior seq still loads+hash-verifies; no orphan junction rows; negative control (no kill => visible complete manifest)."
+    },
+    {
+      "id": "crash.pg-kill-save.typed-connection-error",
+      "file": "test/integration/crash/pg-kill-save.crash.test.ts",
+      "description": "T2 (Task 2.1): Postgres killed mid-save => the in-flight save rejects with a typed ConnectionError (not a raw driver error); after recovery the checkpoint is all-or-nothing and load(latest) returns correct bytes."
+    },
+    {
+      "id": "crash.pg-kill-save.retry-benign-duplicate",
+      "file": "test/integration/crash/pg-kill-save.crash.test.ts",
+      "description": "T2 (Task 2.2): the lost-COMMIT-ack state built by the sanctioned simulation (a provably-committed save re-invoked with identical content) yields a benign identical-content duplicate at the next seq; load(latest) correct either way; static check that save is excluded from any auto-retry allowlist."
+    },
+    {
+      "id": "crash.cursor-durability.watermark-never-ahead",
+      "file": "test/integration/crash/cursor-durability.crash.test.ts",
+      "description": "T5 (Task 3.1, depends on G5): killed at after-data-commit-before-cursor, the durable watermark is never ahead of durable data (every write batch with cursor <= durable watermark is present in durable data)."
+    },
+    {
+      "id": "crash.cursor-durability.replay-converges",
+      "file": "test/integration/crash/cursor-durability.crash.test.ts",
+      "description": "T5 (Task 3.1, depends on G5): replay from the durable cursor converges on a current state equal (current-state equality predicate: kv_current + latest complete checkpoint payload + watermark values; excludes kv_history/version) to a fault-free in-repo reference replay of the same write-batch sequence."
+    },
+    {
+      "id": "crash.cursor-durability.synchronous-commit-on",
+      "file": "test/integration/crash/cursor-durability.crash.test.ts",
+      "description": "T5 (Task 3.2, depends on G5): the watermark-never-ahead invariant holds under synchronous_commit = on."
+    },
+    {
+      "id": "crash.cursor-durability.synchronous-commit-off",
+      "file": "test/integration/crash/cursor-durability.crash.test.ts",
+      "description": "T5 (Task 3.2, depends on G5): under synchronous_commit = off with an UNCLEAN postmaster kill (pg_ctl stop -m immediate / in-container kill -9), a lost tail of acknowledged commits is acceptable but an inverted durability order (cursor durable, data not) is a failure."
+    },
+    {
+      "id": "crash.lease-nonwedge.no-wedge-cold-start",
+      "file": "test/integration/crash/lease-nonwedge.crash.test.ts",
+      "description": "T3 (Task 4.1): after a lease-holder is SIGKILLed, a fresh process's withLease on the same key acquires immediately (bounded wait, no wedge) and pg_locks shows the class-2 advisory lock gone."
+    },
+    {
+      "id": "soak.full-sync.invariants-hold",
+      "file": "test/integration/soak/full-sync-soak.integration.test.ts",
+      "description": "Soak (Task 5.1): a sustained concurrent mix at a declared envelope (10^5-10^6 chunks) samples a named P1-P10-derived SQL-observable invariant set DURING the run (gapless per-key version, only complete manifests loadable, no dangling junction, watermark <= max durable data); end state equals a fault-free reference; each GC-pass duration is recorded and bounded by GC_PASS_WATCHDOG_MS (no perf threshold gates)."
+    },
+    {
+      "id": "soak.load-under-prune.snapshot-isolation-safe",
+      "file": "test/integration/soak/load-under-prune.integration.test.ts",
+      "description": "Load-under-prune (Task 5.2): a FORCED, verified interleave lands the prune COMMIT inside load's open REPEATABLE READ snapshot window; load returns correct bytes and never raises ChunkIntegrityError/ChunkMissingError for a surviving checkpoint; negative control (un-snapshotted read of a reclaimed chunk DOES raise ChunkMissingError) fires."
+    },
+    {
+      "id": "property.p3.replay-fold-equivalence",
+      "file": "test/postgres/temporal-kv.property.test.ts",
+      "description": "P3 anchor (Task 6.1): the existing P3 replay/fold-equivalence property (getAt matches a from-scratch fold of the put sequence) is the differential gate's fold-equivalence anchor, satisfied WITHOUT importing the replaced store. Task 6.1 tags the existing P3 test with this id; no new test code."
+    },
+    {
+      "id": "differential.fault-schedule.state-equivalent",
+      "file": "test/postgres/differential-equivalence.test.ts",
+      "description": "Differential fault-schedule (Task 6.2, depends on G5): a SEEDED (reproducible, no Math.random) schedule mixing the G9 faults T1/T2/T5 across write batches, re-syncing from durable state after each fault, converges to a current state EQUAL (current-state predicate: full kv_current + full watermarks + latest complete checkpoint payload; excludes kv_history/version) to a fault-free in-repo reference run (a replay via UmbraDB's own adapters — NOT reference-merge.ts, which is transaction-history-merge only; no foreign consumer/indexer import, verified by an in-test import audit) of the same schedule. Mandatory negative control: a deliberately-broken variant that drops a committed range makes the equivalence assertion FIRE."
+    },
+    {
+      "id": "crash.saveAndAdvance.co-tx-atomic",
+      "file": "test/integration/crash/saveandadvance-cotx.crash.test.ts",
+      "description": "Co-transactional G5 crash (change-level audit BLOCK 1): saveAndAdvance — the single-transaction save+cursor combinator — SIGKILLed BETWEEN its internal checkpoint-data write and its cursor write (both inside the ONE uncommitted tx, paused via a test-only query observer over saveAndAdvance's own sql, NO src change) leaves NEITHER the checkpoint NOR the watermark advance durable (all-or-nothing), and a fresh saveAndAdvance on the same key then lands seq 1 committing both; a no-kill co-tx-full-flow control lands BOTH. Crash-tests G5 atomicity DIRECTLY (the two-transaction T5 tests never crash saveAndAdvance itself)."
+    },
+    {
+      "id": "differential.fault-schedule.negative-control-fires",
+      "file": "test/postgres/differential-equivalence.test.ts",
+      "description": "Differential negative control (change-level round-3 BLOCK 3): the mandatory dropped-range negative control - a deliberately-broken variant that skips one faulted batch's recovery so a committed range is genuinely dropped - makes the SAME current-state equality predicate the positive test relies on FIRE (throw). Required-enforced so deleting/skipping the control (or weakening assertCurrentStateEqual) turns the gate red by id."
+    },
+    {
+      "id": "differential.reference.import-clean",
+      "file": "test/postgres/differential-equivalence.test.ts",
+      "description": "Differential reference import-cleanliness (change-level round-3 BLOCK 4): a static audit that the in-repo reference imports nothing outside the repo - directly AND through its relative-import closure - catching bare import, dynamic import() and require(), and rejecting any @midnightntwrk/indexer/consumer/wallet specifier. Required-enforced so skipping/removing it turns the gate red by id."
+    }
+  ],
+  "deferred": [
+    {
+      "id": "crash.pg-kill-save.no-duplicate-with-idempotency-key",
+      "file": "test/integration/crash/pg-kill-save.crash.test.ts",
+      "description": "T2 WHERE-gated optional-feature scenario (Task 2.2): with a caller idempotency key present, a naive retry produces NO duplicate. Skipped-pending-feature until the idempotency key ships (Sprint 9); wired to activate on that feature flag with no spec rewrite. Exempt from the must-execute check while unshipped.",
+      "pendingFeature": "caller idempotency key (save-idempotency, deferred to Sprint 9 per council/B §6 / ROADMAP §Deferred)"
+    }
+  ]
+}

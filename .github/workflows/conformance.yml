@@ -23,6 +23,14 @@ jobs:
     # required merge gate; it never runs the env-gated live tier (`test:live`), which needs a real
     # preprod network, a funded seed, and a built midnight-wallet checkout none of which are
     # available (or wanted) in CI (`design.md` §7.4).
+    #
+    # Timeout posture (v1.0.0-recovery-testing Task 7.1): the crash (~26s), soak (~73s) and
+    # differential (~10s) suites now RUN in this gate (Testcontainers, `UMBRADB_LIVE_PREPROD`
+    # unset), plus v8 coverage instrumentation. Measured wall-clock for the whole deterministic set
+    # is ~100s on a 24-core host; on a 4-core runner with coverage it is comfortably single-digit
+    # minutes, so the soak stays in THIS job and `timeout-minutes: 30` is kept (no split needed).
+    # StrykerJS mutation is a SEPARATE still-required job (below) so its cost never competes with
+    # this one's clock.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,20 +46,60 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Run Pg-only conformance suite (test:conformance)
-        # UMBRADB_LIVE_PREPROD is deliberately left unset here -- the two live/cold-boot
-        # integration tests are gated behind it (`test/integration/live-fixtures/preprod-
-        # fixtures.ts`'s LIVE_PREPROD_ENABLED) and self-skip via `describe.skipIf`, so this
-        # command alone is exactly the Pg-only required gate, never the live tier.
+      - name: Run conformance gate (tests + coverage + required-test skip-enforcement)
+        # `npm run test:conformance` is now `scripts/conformance-gate.mjs` (Task 7.1): it runs
+        # `vitest run --coverage` with `UMBRADB_LIVE_PREPROD` UNSET (so the crash/soak/differential
+        # suites execute and do NOT self-skip), emits a Jest-compatible JSON report, then runs the
+        # `check-required-tests.ts` reconciliation over that report. The gate fails if EITHER a test
+        # fails, a `vitest.config.ts` coverage threshold (§2.3/§3.6 durability floors) is missed, OR
+        # any manifest `"required"` id did not execute-and-pass (a re-introduced `describe.skipIf`
+        # turns the gate red BY ID, not by luck). The one `WHERE`-gated optional-feature id
+        # (`crash.pg-kill-save.no-duplicate-with-idempotency-key`) is in the manifest's `"deferred"`
+        # section and reconciles as `skipped-pending-feature` — it does NOT fail the gate.
         #
-        # Additional suites that ALWAYS self-skip in CI (reported as SKIPPED in the summary --
-        # never silently counted as passed; Sol-audit fix round, Finding 4):
-        #   - test/integration/chain-archive-sync.integration.test.ts needs a live local
-        #     Midnight devnet (node RPC :9944 + indexer :8088), which this workflow does NOT
-        #     provision;
-        #   - test/integration/chain-archive-replay-decode.integration.test.ts needs a built
-        #     sibling midnight-wallet checkout (ledger-v8 WASM) plus a captured indexer SQLite
-        #     DB, neither of which exists in CI.
-        # A green CI run therefore says NOTHING about those suites beyond clean collection --
-        # they must be run in a dev environment with the devnet/checkout present.
+        # Suites that ALWAYS self-skip in CI (reported SKIPPED, never silently counted as passed;
+        # none are `"required"` manifest ids, so they cannot make the reconciliation red):
+        #   - the two live/cold-boot integration tests (gated behind UMBRADB_LIVE_PREPROD);
+        #   - test/integration/chain-archive-sync.integration.test.ts (needs a live local Midnight
+        #     devnet: node RPC :9944 + indexer :8088, not provisioned here);
+        #   - test/integration/chain-archive-replay-decode.integration.test.ts (needs a built
+        #     sibling midnight-wallet checkout + a captured indexer SQLite DB, absent in CI).
+        # A green CI run therefore says NOTHING about those suites beyond clean collection.
         run: npm run test:conformance
+
+  mutation:
+    # StrykerJS durability mutation gate (v1.0.0-recovery-testing Task 7.3; guideline §2.3/§3.6).
+    # A SEPARATE still-required job (never optional, never live-gated) so mutation cost is off the
+    # `test` job's clock. SCOPE: the FIVE durability adapters `stryker.conf.json` mutates —
+    # save-and-advance.ts (the co-transactional save+cursor keystone), checkpoint-store.ts,
+    # watermarks.ts, transaction-lease.ts, temporal-kv.ts — each paired with its own fast `.test.ts`
+    # unit suite (`vitest.mutation.config.ts`). `break` is committed at 65 in `stryker.conf.json`
+    # (measured AGGREGATE 70.68% over 726 mutants; guideline floor is break:60) and is enforced here
+    # on the aggregate across all five adapters.
+    #
+    # RUNTIME / TIMEOUT: this job runs the five adapters PER-ADAPTER (`npm run test:mutation:ci` ->
+    # `scripts/mutation-per-adapter.mjs`) — one `stryker run --mutate <file>` each, so every adapter
+    # reuses ONE Testcontainers Postgres. That is the MEASURED, reliably-completing path: ~1,384s
+    # (~23 min) wall-clock on a 24-core host (per-adapter 17s/85s/348s/323s/611s), versus the single
+    # interleaved `stryker run` (`npm run test:mutation`) that churns a container per file switch and
+    # is slower/unbounded — which is why the old 20-min budget could kill the gate before it produced
+    # a threshold verdict. `break:65` is applied to the AGGREGATE score only: an adapter run in
+    # isolation lacks the sibling-suite coverage the interleaved config gives it (transaction-lease
+    # alone is 64.83%), so the runner sums all adapters and gates the aggregate (a conservative lower
+    # bound). `timeout-minutes: 45` sits safely above the ~23 min measurement with headroom for a
+    # slower CI runner, so the gate always finishes and emits its pass/fail. Uses testcontainers via
+    # the same ubuntu-latest Docker daemon as the `test` job — no `services:` block needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run StrykerJS mutation gate (5 durability adapters, per-adapter; aggregate break:65)
+        run: npm run test:mutation:ci
