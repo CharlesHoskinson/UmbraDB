@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "v1.0.0-recovery-testing Task 7.3 — the durability mutation gate (guideline §2.3/§3.6). SCOPED to the single co-transactional save+cursor combinator src/postgres/save-and-advance.ts (the keystone durability primitive: one COMMIT makes checkpoint AND cursor durable together, so the cursor can never be ahead of its data). Mutation testing is slow (tests re-run per mutant), so the mutate set is one tight, high-value durability file and the runner uses a narrow vitest config (save-and-advance.test.ts only) — this keeps the CI job minutes, not hours (measured baseline 2026-07-24: 5 mutants, 100.00% score, ~17s wall). break is committed just-below the 100% baseline at 90 (well above guideline §2.3's break:60 floor; leaves headroom for equivalent mutants as the file grows); it ratchets up and MUST NOT be lowered to pass.",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "mutate": ["src/postgres/save-and-advance.ts"],
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "html", "json"],
+  "concurrency": 4,
+  "timeoutMS": 60000,
+  "timeoutFactor": 2.5,
+  "thresholds": { "high": 100, "low": 80, "break": 90 },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true
+}
