@@ -406,15 +406,68 @@ export class PgTransactionLeaseLayer implements TransactionLeaseLayer {
     opts?: LeaseAcquireOptions,
   ): Promise<T> {
     const lease = await this.acquireLease(key, opts);
+    // Run fn to completion, capturing its outcome, BEFORE releasing — so a release fault can be
+    // surfaced without masking fn's own error (design.md §4.3).
+    let outcome: { ok: true; value: T } | { ok: false; error: unknown };
     try {
-      return await fn(lease);
-    } finally {
-      await this.releaseLease(lease).catch(() => {
-        // Swallowed, not thrown, so it never masks fn's own error -- this project has no
-        // logging infrastructure to route it through instead (src/interfaces/transaction-lease.ts's
-        // own doc on this combinator, corrected by review from an earlier, unimplementable
-        // "logged" claim).
-      });
+      outcome = { ok: true, value: await fn(lease) };
+    } catch (error) {
+      outcome = { ok: false, error };
     }
+    let releaseFault: unknown;
+    try {
+      await this.releaseLease(lease);
+    } catch (err) {
+      releaseFault = err; // LeaseFaultError("connection-lost") when the reserved connection died.
+    }
+    if (releaseFault !== undefined) {
+      // opts.onReleaseFault is caller code; a throwing callback MUST NOT mask fn's outcome, so
+      // every invocation is guarded (audit: callback-throw masking).
+      const notifyReleaseFault = (): void => {
+        const cb = opts?.onReleaseFault;
+        if (!cb) return;
+        try {
+          const maybePromise = cb(releaseFault) as unknown;
+          // onReleaseFault is typed () => void, but TS allows an async fn there; swallow a
+          // rejected promise too so an async callback cannot escape as an unhandled rejection
+          // and terminate the process (audit).
+          if (maybePromise !== null && typeof (maybePromise as { then?: unknown }).then === "function") {
+            void Promise.resolve(maybePromise).catch(() => {});
+          }
+        } catch {
+          // a throwing onReleaseFault callback must not derail fn's primary outcome.
+        }
+      };
+      if (!outcome.ok) {
+        // fn's own error stays primary; the release fault is still surfaced, never dropped.
+        if (opts?.onReleaseFault) {
+          notifyReleaseFault();
+          throw outcome.error;
+        }
+        // No callback: attach the fault as fn's error's cause so it is not lost. A frozen/sealed/
+        // non-extensible fn error cannot take a `cause` (the assignment throws under ESM strict
+        // mode) — fall through to the AggregateError so BOTH errors are surfaced and fn's error is
+        // never masked (audit F1).
+        if (outcome.error instanceof Error && outcome.error.cause === undefined) {
+          let attached = false;
+          try {
+            (outcome.error as { cause?: unknown }).cause = releaseFault;
+            attached = true;
+          } catch {
+            // non-extensible fn error — handled by the AggregateError below.
+          }
+          if (attached) throw outcome.error;
+        }
+        throw new AggregateError([outcome.error, releaseFault], "lease fn failed and lease release also failed");
+      }
+      // fn succeeded but release failed.
+      if (opts?.onReleaseFault) {
+        notifyReleaseFault();
+        return outcome.value;
+      }
+      throw releaseFault; // default: reject with the fault — the safe direction.
+    }
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
   }
 }

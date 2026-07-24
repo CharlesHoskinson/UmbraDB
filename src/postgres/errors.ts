@@ -176,6 +176,15 @@ export function isStatementTimeout(err: unknown): boolean {
 }
 
 /**
+ * SQLSTATE `55P03` (`lock_not_available`) — a `lock_timeout` cancellation while waiting to
+ * acquire a lock (verified against PostgreSQL 17). Used by `runMigrations` to bound its
+ * advisory-lock acquire and translate the abort into a typed error, not a raw driver error.
+ */
+export function isLockTimeout(err: unknown): boolean {
+  return isPgDriverError(err) && err.code === "55P03";
+}
+
+/**
  * Connection-failure codes, translated to `ConnectionError`. Two distinct namespaces share
  * this one set (both surface via the same driver `.code` property, so one lookup covers both):
  * Node-level codes (no SQLSTATE — the driver never reached/kept a connection to the server),

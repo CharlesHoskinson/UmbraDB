@@ -456,7 +456,11 @@ describe("PgTransactionLeaseLayer leases (acquireLease / tryAcquireLease / relea
       // SHOW statement_timeout names its result column "statement_timeout", not "timeout" --
       // select current_setting(...) AS timeout gives a reliable, aliased column name instead.
       const rows = await dedicated<{ timeout: string }[]>`select current_setting('statement_timeout') as timeout`;
-      expect(rows[0]!.timeout).toBe("0"); // Postgres default: no statement_timeout
+      // Restored to the CONNECTION default, NOT left at the 5s lease TTL. Since G7 (task 2.1)
+      // createClient sets a 120s statement_timeout default, `reset statement_timeout` reverts
+      // to that ("2min"), not to "0" as before — the not-poisoned property (it differs from the
+      // 5s TTL) still holds.
+      expect(rows[0]!.timeout).toBe("2min");
     } finally {
       await dedicated.end({ timeout: 5 });
     }
@@ -471,7 +475,9 @@ describe("PgTransactionLeaseLayer leases (acquireLease / tryAcquireLease / relea
       // SHOW statement_timeout names its result column "statement_timeout", not "timeout" --
       // select current_setting(...) AS timeout gives a reliable, aliased column name instead.
       const rows = await dedicated<{ timeout: string }[]>`select current_setting('statement_timeout') as timeout`;
-      expect(rows[0]!.timeout).toBe("0");
+      // The connection default (G7 2.1: statement_timeout = 120s = "2min"), untouched by a
+      // lease that passed no timeoutMs.
+      expect(rows[0]!.timeout).toBe("2min");
     } finally {
       await dedicated.end({ timeout: 5 });
     }

@@ -39,7 +39,7 @@ export function registerSuiteLifecycle(): { sql: () => UmbraDBSql; connectionUri
   }, 120_000);
   afterAll(async () => {
     await stopTestDatabase();
-  });
+  }, 60_000); // teardown can exceed the 10s default under heavy host load (container.stop)
   // Exposed so a test that needs its OWN dedicated, small (e.g. maxConnections: 1) pool against
   // the SAME database -- rather than the shared suite pool, whose physical connection a given
   // query lands on is not deterministic -- doesn't have to spin up a second container.

@@ -1,1137 +1,1202 @@
 {
   "Formal/Lean/lake-manifest.json": {
-    "mtime": 1784729917.2995899,
+    "mtime": 1784861193.5758145,
     "ast_hash": "7ec44b551bd50697a0e30da79299a734",
     "semantic_hash": ""
   },
   "Formal/Lean/scripts/check-trust.ps1": {
-    "mtime": 1784729917.2996047,
+    "mtime": 1784861193.5758145,
     "ast_hash": "bb42e3e2caa3d2d64127d66f358cd7e4",
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6294172,
     "ast_hash": "71f13c854daf1a77845de6de39a30e5a",
     "semantic_hash": ""
   },
   "src/interfaces/checkpoint-store.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "4401142597c26eceab66c6675db4ddb4",
+    "mtime": 1784862700.6365697,
+    "ast_hash": "604de1a565ccb97dcd8b24811b96c2d7",
     "semantic_hash": ""
   },
   "src/interfaces/storage-errors.ts": {
-    "mtime": 1784568075.5062637,
+    "mtime": 1784861193.632911,
     "ast_hash": "d80d21624bd73ac6c18b430ea7964025",
     "semantic_hash": ""
   },
   "src/interfaces/temporal-kv.ts": {
-    "mtime": 1784729917.3253257,
-    "ast_hash": "57157fd278cc92005f9b0d27be8d0274",
+    "mtime": 1784863029.3025053,
+    "ast_hash": "ae607b15cad18e72039e6048c4d58934",
     "semantic_hash": ""
   },
   "src/interfaces/transaction-lease.ts": {
-    "mtime": 1784599187.5030484,
-    "ast_hash": "628a8a3a3de0bdade3f58f79a7e14a61",
+    "mtime": 1784863233.6378431,
+    "ast_hash": "3e5ba75eadee78352c088ac5d5f34df7",
     "semantic_hash": ""
   },
   "src/interfaces/watermarks.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.632911,
     "ast_hash": "44307a383c274c4cc40e3ccfbb62c94e",
     "semantic_hash": ""
   },
   "src/postgres/abort.ts": {
-    "mtime": 1784599187.5030484,
+    "mtime": 1784861193.632911,
     "ast_hash": "0d38a392e0cee1728785ab6585bc3452",
     "semantic_hash": ""
   },
   "src/postgres/checkpoint-store.ts": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "2353b40e506ffdae11585a66d31ea461",
+    "mtime": 1784862709.4128945,
+    "ast_hash": "ff1040ccbc74593f677b372f6dbca041",
     "semantic_hash": ""
   },
   "src/postgres/client.ts": {
-    "mtime": 1784729917.3253257,
-    "ast_hash": "af16b8b89ca33c94bb4f241de73804b0",
+    "mtime": 1784870007.7380166,
+    "ast_hash": "1a98fd1b8bdf023ef1839f41eba9f245",
     "semantic_hash": ""
   },
   "src/postgres/errors.ts": {
-    "mtime": 1784769439.83661,
-    "ast_hash": "e58ca32e76a2bb95e90d9d0a67dbf0e6",
+    "mtime": 1784863563.2701137,
+    "ast_hash": "120a9960c5853f763661dd552a88fca4",
     "semantic_hash": ""
   },
   "src/postgres/migrate.ts": {
-    "mtime": 1784769439.83661,
-    "ast_hash": "9f14c6d1064fc742b0152023841c6b43",
+    "mtime": 1784870007.7520344,
+    "ast_hash": "5392418c153d59c97195eb2c8e9cdaab",
     "semantic_hash": ""
   },
   "src/postgres/migrations/000_schema.ts": {
-    "mtime": 1784577516.04935,
+    "mtime": 1784861193.6333764,
     "ast_hash": "20d41b0a9d5325a8e008ab4d1f930230",
     "semantic_hash": ""
   },
   "src/postgres/migrations/001_temporal_kv.ts": {
-    "mtime": 1784593166.7352464,
+    "mtime": 1784861193.6338952,
     "ast_hash": "6e3170baad764e14b1038b438286a960",
     "semantic_hash": ""
   },
   "src/postgres/migrations/002_checkpoint_store.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6338952,
     "ast_hash": "22e515e37138d073a194b8d44f2e5f36",
     "semantic_hash": ""
   },
   "src/postgres/migrations/003_watermarks.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6338952,
     "ast_hash": "3094745a3379195a0de92bb7b0cbab4e",
     "semantic_hash": ""
   },
   "src/postgres/temporal-kv.ts": {
-    "mtime": 1784599187.5030484,
+    "mtime": 1784861193.6343539,
     "ast_hash": "0e4e2f23dc6ae0d4d8232c68cb935efa",
     "semantic_hash": ""
   },
   "src/postgres/transaction-lease.ts": {
-    "mtime": 1784599187.5030484,
-    "ast_hash": "cacee789c70868f41f12210bbe895367",
+    "mtime": 1784870007.7521732,
+    "ast_hash": "7a978693fabd20ef922d5a8beb32fc8d",
     "semantic_hash": ""
   },
   "src/postgres/watermarks.ts": {
-    "mtime": 1784729917.3253257,
-    "ast_hash": "aa509aa542513a40053f84ee0212a32e",
+    "mtime": 1784861193.6343539,
+    "ast_hash": "0a6d738801ce097b25d905c80ecd6a84",
     "semantic_hash": ""
   },
   "test/postgres/checkpoint-store.property.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "df25ccac98aa8586f677a895636f4438",
     "semantic_hash": ""
   },
   "test/postgres/checkpoint-store.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "b28deb8144abfd2b92450dc95fe0372e",
     "semantic_hash": ""
   },
   "test/postgres/client.test.ts": {
-    "mtime": 1784593166.7371264,
+    "mtime": 1784861193.636684,
     "ast_hash": "3af8fe943dd93c7188c6080cd612c40f",
     "semantic_hash": ""
   },
   "test/postgres/migrate.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "3cc785a7608d7f44c29736d711a5577a",
     "semantic_hash": ""
   },
   "test/postgres/setup.ts": {
-    "mtime": 1784599187.5070484,
-    "ast_hash": "699da8e413c2f563fa734faf58fb9f50",
+    "mtime": 1784870184.7735827,
+    "ast_hash": "6baf967933b988209096334abe9a08a7",
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.property.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "f12f8f6eddae018fbe655cea0994d367",
     "semantic_hash": ""
   },
   "test/postgres/temporal-kv.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "06d5a6da6417d30b679e6ab48816fde3",
     "semantic_hash": ""
   },
   "test/postgres/transaction-lease.property.test.ts": {
-    "mtime": 1784599187.5070484,
+    "mtime": 1784861193.636684,
     "ast_hash": "b02778ab4703ef29ebd2dd6efa11e6ce",
     "semantic_hash": ""
   },
   "test/postgres/transaction-lease.test.ts": {
-    "mtime": 1784729917.3286452,
-    "ast_hash": "873f17c70dc481fdbb5ed2e19b221f92",
+    "mtime": 1784863881.463416,
+    "ast_hash": "6019f3f747fe0c1a8eee3b9c737c1f72",
     "semantic_hash": ""
   },
   "test/postgres/watermarks.property.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "19534fa87283cad516b6845c60832910",
     "semantic_hash": ""
   },
   "test/postgres/watermarks.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "7b03c7bd9a47c79356ab1328528576d5",
     "semantic_hash": ""
   },
   "tsconfig.json": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.636684,
     "ast_hash": "51b492f032595c26916271a7aaa53db4",
     "semantic_hash": ""
   },
   "typedoc.json": {
-    "mtime": 1784568075.5144732,
+    "mtime": 1784861193.636684,
     "ast_hash": "9867ec29091760fa50600c14cdc3ff4d",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/apply.md": {
-    "mtime": 1784571343.197224,
+    "mtime": 1784861193.57155,
     "ast_hash": "8ac311f21403e9e7e0293f494febd351",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/archive.md": {
-    "mtime": 1784571343.1985276,
+    "mtime": 1784861193.5717251,
     "ast_hash": "bd3a1d00db5200806b639c40ee69b235",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/explore.md": {
-    "mtime": 1784571343.1943808,
+    "mtime": 1784861193.5717251,
     "ast_hash": "a4395a30697291e1c1a204252df4bdf5",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/propose.md": {
-    "mtime": 1784571343.1989384,
+    "mtime": 1784861193.5717251,
     "ast_hash": "96785eeeeeafa9351c23accc56f0b9a1",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/sync.md": {
-    "mtime": 1784571343.1980941,
+    "mtime": 1784861193.5717251,
     "ast_hash": "be9d6126ed90f60dd60f73a13246357a",
     "semantic_hash": ""
   },
   ".claude/commands/opsx/update.md": {
-    "mtime": 1784571343.1976776,
+    "mtime": 1784861193.5717251,
     "ast_hash": "7da86670033afd55c5e204d20eeda3c1",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-apply-change/SKILL.md": {
-    "mtime": 1784571343.1903808,
+    "mtime": 1784861193.5720353,
     "ast_hash": "73640d98e355e3e4a5ecaa6116865a82",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-archive-change/SKILL.md": {
-    "mtime": 1784571343.1903808,
+    "mtime": 1784861193.5720353,
     "ast_hash": "ee587087578ab9d2d283ad5b1f76371e",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-explore/SKILL.md": {
-    "mtime": 1784571343.1863809,
+    "mtime": 1784861193.5720353,
     "ast_hash": "c4c6fe598e86d13378e0b5ecd202cec6",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-propose/SKILL.md": {
-    "mtime": 1784571343.1903808,
+    "mtime": 1784861193.5720353,
     "ast_hash": "140ba650e1a73dbb6d77948ccc1e2e59",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-sync-specs/SKILL.md": {
-    "mtime": 1784571343.1903808,
+    "mtime": 1784861193.5720353,
     "ast_hash": "079b8e1435f5044f2563b273bd192616",
     "semantic_hash": ""
   },
   ".claude/skills/openspec-update-change/SKILL.md": {
-    "mtime": 1784571343.1903808,
+    "mtime": 1784861193.5720353,
     "ast_hash": "bad1ef5d059980feeb2852f5f42367bb",
     "semantic_hash": ""
   },
   ".claude/skills/scoped-review-manifest/SKILL.md": {
-    "mtime": 1784729917.2876046,
+    "mtime": 1784861193.5720353,
     "ast_hash": "2c2c927fa2e4690fc4c32968bca0614b",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
-    "mtime": 1784729917.2876046,
+    "mtime": 1784861193.5720353,
     "ast_hash": "2539ea3ef7981e60da44d569786b17d6",
     "semantic_hash": ""
   },
   ".github/workflows/lean.yml": {
-    "mtime": 1784729917.2904992,
+    "mtime": 1784861193.5736296,
     "ast_hash": "29e131e383f633171b6957f4997beab4",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1784729917.2904992,
+    "mtime": 1784861193.5736296,
     "ast_hash": "23b53c4882b1c17b172da67d7be9f08d",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1784729917.2904992,
+    "mtime": 1784861193.5736296,
     "ast_hash": "af7e1ddd8d780cd1cdeb4c17772298b5",
     "semantic_hash": ""
   },
   "Formal/LEAN_FORMALIZATION_PLAN.md": {
-    "mtime": 1784729917.2904992,
+    "mtime": 1784861193.5736296,
     "ast_hash": "dd821357dde9cca5b06d1491d1bafa81",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA.md": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.5758145,
     "ast_hash": "07d47870b785e351c1e37ff588360cd9",
     "semantic_hash": ""
   },
   "Formal/STORAGE_ALGEBRA_LEAN_RESEARCH.md": {
-    "mtime": 1784729917.2996047,
+    "mtime": 1784861193.5758145,
     "ast_hash": "3cf60f204767cc3206cfe203ea7dca00",
     "semantic_hash": ""
   },
   "Formal/STORAGE_TYPES.md": {
-    "mtime": 1784568127.5617466,
+    "mtime": 1784861193.5758145,
     "ast_hash": "fb5e6cb7728cda8a1a5a36017f1168d7",
     "semantic_hash": ""
   },
   "Performance/DESIGN.md": {
-    "mtime": 1784573222.8666337,
+    "mtime": 1784861193.5758145,
     "ast_hash": "93e8c75fb98593a46327b44ba62a3713",
     "semantic_hash": ""
   },
   "Performance/GC_AND_TRACING_RESEARCH.md": {
-    "mtime": 1784573160.5945172,
+    "mtime": 1784861193.576683,
     "ast_hash": "97910a57a4c7d5ba03a641c36516154a",
     "semantic_hash": ""
   },
   "Performance/README.md": {
-    "mtime": 1784570003.250849,
+    "mtime": 1784861193.576683,
     "ast_hash": "4e819e51e334bdb0a090d9961897876b",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784837406.2756217,
+    "mtime": 1784861193.576683,
     "ast_hash": "9692ab1514aa47feb5bfb0a678b6fbe3",
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784769479.5231214,
-    "ast_hash": "7861a899120c497c175bf8adfe9c452b",
+    "mtime": 1784861193.576683,
+    "ast_hash": "b47a7533e09f653d1fd4245b59ffdb66",
     "semantic_hash": ""
   },
   "design/design-algebra.md": {
-    "mtime": 1784576376.8451397,
+    "mtime": 1784861193.5782797,
     "ast_hash": "92a3165a71a139c9b7c82a4db592b22e",
     "semantic_hash": ""
   },
   "design/design-interfaces.md": {
-    "mtime": 1784729917.2996047,
+    "mtime": 1784861193.5782797,
     "ast_hash": "962271a7c0f398e0dc831a19bdc0391e",
     "semantic_hash": ""
   },
   "design/design.md": {
-    "mtime": 1784593166.7352464,
+    "mtime": 1784861193.5782797,
     "ast_hash": "7de41fe04064bc19a496414ebf2b6a6d",
     "semantic_hash": ""
   },
   "design/proposal.md": {
-    "mtime": 1784568075.489234,
+    "mtime": 1784861193.5788133,
     "ast_hash": "d6c88aebd270715e0f701fa39982396b",
     "semantic_hash": ""
   },
   "design/tasks.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "faa92efa7e112a89b489351ba2f6bb69",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m1.md": {
-    "mtime": 1784729917.3033736,
+    "mtime": 1784861193.581004,
     "ast_hash": "3f195098a915055b6d26a35c43e70cac",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m2.md": {
-    "mtime": 1784729917.3040092,
+    "mtime": 1784861193.5811143,
     "ast_hash": "f251e70f8618d2bb6daf8876acb32df8",
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/design.md": {
-    "mtime": 1784579079.5496721,
+    "mtime": 1784861193.6227493,
     "ast_hash": "6286be5d807a5ba9cbc502af93778168",
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/proposal.md": {
-    "mtime": 1784571420.5463536,
+    "mtime": 1784861193.6229048,
     "ast_hash": "528f7e20898b7ba46b8fe13934a4bd84",
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/specs/temporal-kv/spec.md": {
-    "mtime": 1784729917.3116045,
+    "mtime": 1784861193.6230524,
     "ast_hash": "99bdb3f90fb716ea5c12925d1e066e9c",
     "semantic_hash": ""
   },
   "openspec/changes/archive/2026-07-21-sprint-1-setup-and-temporal-kv/tasks.md": {
-    "mtime": 1784576333.6702268,
+    "mtime": 1784861193.6230524,
     "ast_hash": "375ecf949ca2f1a4632f6701254b234b",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/design.md": {
-    "mtime": 1784599187.4990485,
+    "mtime": 1784861193.6230524,
     "ast_hash": "7b2304abba670a108e287543d6c633f0",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/proposal.md": {
-    "mtime": 1784729917.3116045,
+    "mtime": 1784861193.6234622,
     "ast_hash": "1aa900429e5993e6318b1621450aa13b",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/specs/temporal-kv/spec.md": {
-    "mtime": 1784599187.5030484,
+    "mtime": 1784861193.6236231,
     "ast_hash": "dfb703eea860580af41048abc391b6bf",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/specs/transaction-lease/spec.md": {
-    "mtime": 1784599187.5030484,
+    "mtime": 1784861193.6236231,
     "ast_hash": "a39656312839ced3ac3a911b005aad7f",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-2-transaction-lease/tasks.md": {
-    "mtime": 1784599187.5030484,
+    "mtime": 1784861193.6236231,
     "ast_hash": "53b24219e180477cf161c655e3aa1558",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-3-checkpoint-store/design.md": {
-    "mtime": 1784729917.3116045,
+    "mtime": 1784861193.6236231,
     "ast_hash": "7ae1046fa72088fcf2425f3997df766f",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-3-checkpoint-store/proposal.md": {
-    "mtime": 1784729917.3137002,
+    "mtime": 1784861193.6240764,
     "ast_hash": "e9b8c294058f863869855f1d591c321e",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-3-checkpoint-store/specs/checkpoint-store/spec.md": {
-    "mtime": 1784729917.314568,
+    "mtime": 1784861193.6242824,
     "ast_hash": "130e264b6dfb7dd45c597da12001e6d3",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-3-checkpoint-store/tasks.md": {
-    "mtime": 1784729917.314568,
+    "mtime": 1784861193.6242824,
     "ast_hash": "1158dcac0741c56727e1578dbdfcedf4",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-4-watermarks/design.md": {
-    "mtime": 1784729917.314568,
+    "mtime": 1784861193.6242824,
     "ast_hash": "cab80e4e3d11da60914b182bb4dbcacf",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-4-watermarks/proposal.md": {
-    "mtime": 1784729917.3153627,
+    "mtime": 1784861193.6246288,
     "ast_hash": "41ca1ecbfc972c56cc5a551460f37bb1",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-4-watermarks/specs/watermarks/spec.md": {
-    "mtime": 1784729917.3156047,
+    "mtime": 1784861193.6248057,
     "ast_hash": "8db006be51de4f6f3abf98bdaedd7273",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-4-watermarks/tasks.md": {
-    "mtime": 1784729917.3156047,
+    "mtime": 1784861193.6248057,
     "ast_hash": "1b3bcdcd91618f33e886dc1350c2d1d7",
     "semantic_hash": ""
   },
   "openspec/config.yaml": {
-    "mtime": 1784571363.2872193,
+    "mtime": 1784861193.6289544,
     "ast_hash": "db6face53b0de41d06705b2f640b35dc",
     "semantic_hash": ""
   },
   "openspec/specs/temporal-kv/spec.md": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6292593,
     "ast_hash": "fbd7da5e01d30f7d9f552102ba9cd636",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3a-watermarks.md": {
-    "mtime": 1784729917.3040092,
+    "mtime": 1784861193.5811143,
     "ast_hash": "a4e918f7ef7d60c353d619b042fc5ae1",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/design.md": {
-    "mtime": 1784729917.3156047,
+    "mtime": 1784861193.6248057,
     "ast_hash": "278229f96f74ecc64d96c3973e22e628",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/proposal.md": {
-    "mtime": 1784729917.3181484,
+    "mtime": 1784861193.6250396,
     "ast_hash": "120e44fbb1b74d52b74bb4f341574861",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/specs/formal-watermarks/spec.md": {
-    "mtime": 1784729917.3199656,
+    "mtime": 1784861193.6251817,
     "ast_hash": "60649aad8bd9d9dcf6e3e16fad97af0d",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-5-formal-watermarks/tasks.md": {
-    "mtime": 1784729917.3199656,
+    "mtime": 1784861193.6251817,
     "ast_hash": "3129c4d42ad6c3dfbdd947cdf645abd9",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-21-storage-algebra-lean-m3b-checkpoint-c1.md": {
-    "mtime": 1784729917.3040092,
+    "mtime": 1784861193.5811143,
     "ast_hash": "fccec7212da7a9b317df494ba9653918",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/design.md": {
-    "mtime": 1784729917.3199656,
+    "mtime": 1784861193.6251817,
     "ast_hash": "7afef2828b26672b52ec3b4478705d94",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/proposal.md": {
-    "mtime": 1784729917.320706,
+    "mtime": 1784861193.625346,
     "ast_hash": "430bec4b935bc236f6af1a99750b1572",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/specs/formal-checkpoint-c1/spec.md": {
-    "mtime": 1784729917.3216476,
+    "mtime": 1784861193.625477,
     "ast_hash": "d932c973fe8b305c2a11047b4ca1b4b5",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-6-formal-checkpoint-c1/tasks.md": {
-    "mtime": 1784729917.3216476,
+    "mtime": 1784861193.625477,
     "ast_hash": "534699b6eadc0a3116cb9ffdf5675ac7",
     "semantic_hash": ""
   },
   "design/sprint-5-recommendation.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "883cce7935225a6adec70b706b82afc5",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-7-transaction-history-storage/design.md": {
-    "mtime": 1784729917.3216476,
+    "mtime": 1784861193.625477,
     "ast_hash": "590d8fedc8dbf64a64eda2bbe7d8526a",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-7-transaction-history-storage/proposal.md": {
-    "mtime": 1784729917.3223896,
+    "mtime": 1784861193.6256742,
     "ast_hash": "bb64ddc95f0c19ec40de75394e51346a",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-7-transaction-history-storage/specs/transaction-history-storage/spec.md": {
-    "mtime": 1784729917.3233204,
+    "mtime": 1784861193.6258242,
     "ast_hash": "91d6681b65554b4de0543985063bd627",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-7-transaction-history-storage/tasks.md": {
-    "mtime": 1784729917.3233204,
+    "mtime": 1784861193.6258242,
     "ast_hash": "ab613fd2f6c663ca2b1767bfcf2c3897",
     "semantic_hash": ""
   },
   "design/environment/versions.lock.json": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "b92ad4dd4d99bc0b8c6129732cde2793",
     "semantic_hash": ""
   },
   "src/interfaces/transaction-history-storage.ts": {
-    "mtime": 1784729917.3253257,
-    "ast_hash": "a849de37891d05e532ce09e885bf8963",
+    "mtime": 1784863020.4036906,
+    "ast_hash": "382ee0ea16da42a0af245a14d7a45ce6",
     "semantic_hash": ""
   },
   "src/interfaces/wallet-state-envelope.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.632911,
     "ast_hash": "4143dc6a2e35263855fe573f0e50c21a",
     "semantic_hash": ""
   },
   "src/postgres/migrations/004_transaction_history.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6338952,
     "ast_hash": "0c09487706c3164ffaae0c4349797761",
     "semantic_hash": ""
   },
   "src/postgres/transaction-history-storage.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6343539,
     "ast_hash": "c186d5df6b9ec6d132ed008862eeef67",
     "semantic_hash": ""
   },
   "src/postgres/wallet-state-envelope.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6343539,
     "ast_hash": "c7cb64488fb8d2aa4813e6f5597cb0f4",
     "semantic_hash": ""
   },
   "test/integration/cold-boot-recovery.integration.test.ts": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.635197,
     "ast_hash": "1392101272329ea073102f8f6bee1ca8",
     "semantic_hash": ""
   },
   "test/integration/live-fixtures/midnight-wallet-sdk-loader.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.6356175,
     "ast_hash": "33eef0d01ac4d32d3943784008aab656",
     "semantic_hash": ""
   },
   "test/integration/live-fixtures/preprod-fixtures.ts": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6356175,
     "ast_hash": "319a065950e49f2addf7a040ff77d8d3",
     "semantic_hash": ""
   },
   "test/integration/pg-tx-history-adapter.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.6356175,
     "ast_hash": "1d6a6b8d4b7f2cbc493e06228613ae76",
     "semantic_hash": ""
   },
   "test/integration/pg-tx-history-adapter.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.6356175,
     "ast_hash": "bfa406dea5d09d825750ac9b91beb77b",
     "semantic_hash": ""
   },
   "test/integration/preprod-db-sync.integration.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.6356175,
     "ast_hash": "7f2fa9721c74f4ad0eda03538881fccf",
     "semantic_hash": ""
   },
   "test/postgres/in-memory-transaction-history-storage.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "858f3fc46e1e51c361305b0c5e249898",
     "semantic_hash": ""
   },
   "test/postgres/no-sdk-import-guard.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "7e3f2de788ef624e2e5ce97b9a1edbcf",
     "semantic_hash": ""
   },
   "test/postgres/reference-merge.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "3ac3e415020f4d1bc601bf784e60966d",
     "semantic_hash": ""
   },
   "test/postgres/transaction-history-storage.property.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "5d6e97592a0c4ea23f8b8b679d792246",
     "semantic_hash": ""
   },
   "test/postgres/transaction-history-storage.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "5c675b2824e6de66373de74ec6018161",
     "semantic_hash": ""
   },
   "test/postgres/wallet-state-envelope.property.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "988dbf2d8c0a72ce4d3b81d46cb10d89",
     "semantic_hash": ""
   },
   "test/postgres/wallet-state-envelope.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "b70637f0ce2fd70613c259156f29e8bb",
     "semantic_hash": ""
   },
   ".github/workflows/conformance.yml": {
-    "mtime": 1784769439.8346117,
+    "mtime": 1784861193.5735817,
     "ast_hash": "0ed34934cfbe5f9f3561e528e2c96f7f",
     "semantic_hash": ""
   },
   "AUTONOMOUS_RUN_LOG.md": {
-    "mtime": 1784729917.2904992,
-    "ast_hash": "d574b27a18e18c9eba96cc5c15afae02",
+    "mtime": 1784870259.9175467,
+    "ast_hash": "e5657a6a7eecc5978c5dbb4a01ac42a9",
     "semantic_hash": ""
   },
   "design/environment/CHANGELOG.md": {
-    "mtime": 1784729917.2996047,
+    "mtime": 1784861193.5782797,
     "ast_hash": "e372db321e539659c450210a579c5582",
     "semantic_hash": ""
   },
   "design/environment/ENVIRONMENT.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "45ed22d6b453f0d9d53c382874de1960",
     "semantic_hash": ""
   },
   "design/environment/preprod-connection.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "c62c7a81c6009d81158ad4403fafb227",
     "semantic_hash": ""
   },
   "design/environment/verification-checklist.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "d55606ddc477f3d1e8e1f3148e82c4b8",
     "semantic_hash": ""
   },
   "design/sprint-7-preprod-toolchain-inventory.md": {
-    "mtime": 1784729917.3019729,
+    "mtime": 1784861193.5788133,
     "ast_hash": "34948b34c76522bb597769379ba2ee3a",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/design.md": {
-    "mtime": 1784729917.3236046,
+    "mtime": 1784861193.6258242,
     "ast_hash": "3d7826c7f3b835574bd414b09955b629",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/proposal.md": {
-    "mtime": 1784729917.3236046,
+    "mtime": 1784861193.6260874,
     "ast_hash": "86fda3496aa311592a21678bbb92aa12",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/specs/wallet-state-envelope/spec.md": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6262534,
     "ast_hash": "6e94dc37a2dac75cf564888954c606a0",
     "semantic_hash": ""
   },
   "openspec/changes/sprint-8-wallet-envelope-live-sync/tasks.md": {
-    "mtime": 1784729917.3253257,
+    "mtime": 1784861193.6262534,
     "ast_hash": "b41e33fb270b664bd39f6b43bc1afbf7",
     "semantic_hash": ""
   },
   "test/integration/live-fixtures/facade-merge-loader.ts": {
-    "mtime": 1784729917.3276045,
+    "mtime": 1784861193.635197,
     "ast_hash": "53824e2d996e4c0777b27a586e6f872f",
     "semantic_hash": ""
   },
   "test/postgres/reference-merge-parity.test.ts": {
-    "mtime": 1784729917.3286452,
+    "mtime": 1784861193.636684,
     "ast_hash": "ac64cbc8c1caa8a58548299bac8fcc97",
     "semantic_hash": ""
   },
   "chain-archive-sync/bootstrap.ts": {
-    "mtime": 1784769439.8346117,
+    "mtime": 1784861193.576683,
     "ast_hash": "dd4d51444cd80c2b8bf314b3de76a4b5",
     "semantic_hash": ""
   },
   "chain-archive-sync/indexer-client.test.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.577006,
     "ast_hash": "0f536738be587ab1c0915df74ca4bbac",
     "semantic_hash": ""
   },
   "chain-archive-sync/indexer-client.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.577006,
     "ast_hash": "22447349d63423e88f7235c3954fcd3a",
     "semantic_hash": ""
   },
   "chain-archive-sync/node-rpc-client.test.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.577006,
     "ast_hash": "eab3efdf896505bde7ea8c5a136df34c",
     "semantic_hash": ""
   },
   "chain-archive-sync/node-rpc-client.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.577006,
     "ast_hash": "41a32b0d0d527af85a76064474933971",
     "semantic_hash": ""
   },
   "chain-archive-sync/sync-cli.ts": {
-    "mtime": 1784825023.403681,
+    "mtime": 1784861193.577006,
     "ast_hash": "a420da7373c54090a891a74a9dd25e7e",
     "semantic_hash": ""
   },
   "chain-archive-sync/sync-service.ts": {
-    "mtime": 1784825023.403681,
+    "mtime": 1784861193.577006,
     "ast_hash": "278dca09f8e716997a3b7cada819f87b",
     "semantic_hash": ""
   },
   "chain-archive-sync/tx-replay-decoder.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.577006,
     "ast_hash": "4a7cd2cf6e81215a07fda20a1f3ea41f",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/db-sync-config.json": {
-    "mtime": 1784825023.403681,
+    "mtime": 1784861193.6030116,
     "ast_hash": "d4a1bfa9889b8861b3b65e51feaad367",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/alonzo-genesis.json": {
-    "mtime": 1784825023.403681,
+    "mtime": 1784861193.6065998,
     "ast_hash": "11b2354cebae3017730600d2a4b743ff",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/byron-genesis.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6066604,
     "ast_hash": "7613f9ac2cfbdeabeb02d68db2b5b76c",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/config-legacy.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6094172,
     "ast_hash": "ca07c08dae3d79d10378fb2cbd03f317",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/config.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6094172,
     "ast_hash": "ec2f834b1ca926b3dbcf4c858505be1d",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/conway-genesis.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6094172,
     "ast_hash": "88989336418aa1d36e7a4364c27b7c4d",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/db-sync-config.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6134171,
     "ast_hash": "c4443ec0854508aca749a6e6cbc2d0e0",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/mithril-signer-config.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6134171,
     "ast_hash": "b11648543e0d2f63635364f5c058cdf4",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/peer-snapshot.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6134171,
     "ast_hash": "7af4c71b432f1ce693c01f09a5ca6419",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/shelley-genesis.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6134171,
     "ast_hash": "d9c24151a5e3d2de2455372acd5dd74d",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/submit-api-config.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6174173,
     "ast_hash": "4ce791cd18ca5dd3fd8511a94990eb2e",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/topology.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6174173,
     "ast_hash": "5d536fc3cae4e008a1620fbf44537985",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preprod/tracer-config.json": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6174173,
     "ast_hash": "1c02a229e0cc9e21bc2828ed388e9511",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/alonzo-genesis.json": {
-    "mtime": 1784769267.9459803,
+    "mtime": 1784861193.6174173,
     "ast_hash": "11b2354cebae3017730600d2a4b743ff",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/byron-genesis.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "824f717c836ffacaddea55803212b973",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/checkpoints.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "4e1b2fef936264bdb8186e5e414a9c7a",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/config-legacy.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "215914a964e46cbb2ca0a9d24db2352c",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/config.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "8de2f68b5d6bd76347ea6d097a6f8923",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/conway-genesis.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "582a976863a3274df22811c76069c5c3",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/peer-snapshot.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "11f9c8256efe40e7c377cfd14ddd75de",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/shelley-genesis.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "47e89217325ebaa474d5f2dd3a770981",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/submit-api-config.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "2b207c5790fba89fafecbc0d038e4803",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/topology.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "e695842f21836ec722e7ba758952e816",
     "semantic_hash": ""
   },
   "nix/midnight-env/config/preview/tracer-config.json": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "12524f0f2a8221be30f6e2f10264083f",
     "semantic_hash": ""
   },
   "nix/midnight-env/scripts/backup-state.sh": {
-    "mtime": 1784769267.9461076,
+    "mtime": 1784861193.6211233,
     "ast_hash": "1a69bb0bb3fe775f2a04d4f9348ea8bc",
     "semantic_hash": ""
   },
   "nix/midnight-env/scripts/enable-db-sync-tls.sh": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6216764,
     "ast_hash": "faea4315300e113cf4edb23f153a1ea0",
     "semantic_hash": ""
   },
   "nix/midnight-env/scripts/restore-state.sh": {
-    "mtime": 1784769267.9475229,
+    "mtime": 1784861193.6216764,
     "ast_hash": "53d9791a5c62c22444b5b8af90ee2d92",
     "semantic_hash": ""
   },
   "nix/midnight-env/scripts/start-stack.sh": {
-    "mtime": 1784837343.1913652,
+    "mtime": 1784861193.6216764,
     "ast_hash": "7fa33978f2c744994f8fe710fbf2ac86",
     "semantic_hash": ""
   },
   "nix/midnight-env/scripts/stop-stack.sh": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6216764,
     "ast_hash": "2b0c7ffd3020f33b3eb831a73436235d",
     "semantic_hash": ""
   },
   "nix/midnight-env/test-wallets/preview-test-wallet.json": {
-    "mtime": 1784769267.948268,
+    "mtime": 1784861193.6224897,
     "ast_hash": "75e7c1b6bb5d96dc003f337b2559ae20",
     "semantic_hash": ""
   },
   "src/interfaces/chain-archive-store.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.6328092,
     "ast_hash": "b1bc5c5c2eb572130e2cdce8f47bba54",
     "semantic_hash": ""
   },
   "src/postgres/chain-archive-rollover.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.6333764,
     "ast_hash": "75ff5cc1ebab91e1031a2fe8f89cb422",
     "semantic_hash": ""
   },
   "src/postgres/chain-archive-store.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.6333764,
     "ast_hash": "4870c8b73a748510685340d515b8cc37",
     "semantic_hash": ""
   },
   "src/postgres/migrations/chain_archive/001_chain_archive_core.ts": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.6338952,
     "ast_hash": "53f6926a3a84218fe85e97824d106768",
     "semantic_hash": ""
   },
   "src/postgres/migrations/chain_archive/index.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.6343539,
     "ast_hash": "f518a42417ba27f389a5fa7bfbd63ffc",
     "semantic_hash": ""
   },
   "src/postgres/migrations/chain_archive/partition-config.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.6343539,
     "ast_hash": "0ad47191d0178f94e8249f28dde6be10",
     "semantic_hash": ""
   },
   "test/integration/chain-archive-preprod-cloud-crossval.integration.test.ts": {
-    "mtime": 1784825023.4080336,
+    "mtime": 1784861193.6349041,
     "ast_hash": "59bcdd63a143ceef98ddb4605ad69d4a",
     "semantic_hash": ""
   },
   "test/integration/chain-archive-replay-decode.integration.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.635197,
     "ast_hash": "b3620ccf3105efcb972e3f4544048a62",
     "semantic_hash": ""
   },
   "test/integration/chain-archive-sync-retry.integration.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.635197,
     "ast_hash": "813ccd9a3f5738ff848a35f4d8fb3060",
     "semantic_hash": ""
   },
   "test/integration/chain-archive-sync.integration.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.635197,
     "ast_hash": "4e95279c805332fcecde5db3bb2dabf9",
     "semantic_hash": ""
   },
   "test/postgres/chain-archive-migrate.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.6356175,
     "ast_hash": "ac594511314683939ee3355c5e261a6e",
     "semantic_hash": ""
   },
   "test/postgres/chain-archive-rollover.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.636684,
     "ast_hash": "2d550bdd997779514aeb29600c9e1b34",
     "semantic_hash": ""
   },
   "test/postgres/chain-archive-store.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.636684,
     "ast_hash": "6cc1d5dd42adcabada120b38de3d6a09",
     "semantic_hash": ""
   },
   "test/postgres/errors.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.636684,
     "ast_hash": "21ffbef06114badd653d3584d17738b6",
     "semantic_hash": ""
   },
   "test/postgres/no-chain-sync-import-guard.test.ts": {
-    "mtime": 1784769439.8405423,
+    "mtime": 1784861193.636684,
     "ast_hash": "f5fa9d77459bf606cd8d82d476063074",
     "semantic_hash": ""
   },
   "design/db-sync-tls-feasibility.md": {
-    "mtime": 1784825023.403681,
+    "mtime": 1784861193.577006,
     "ast_hash": "097e7ea7a8fb56aade5ebaebd0694d9b",
     "semantic_hash": ""
   },
   "design/full-chain-storage-design.md": {
-    "mtime": 1784769439.83661,
+    "mtime": 1784861193.5788133,
     "ast_hash": "7890f225c7e3877c39fbdabf12c1bf7e",
     "semantic_hash": ""
   },
   "docs/SCHEMA.md": {
-    "mtime": 1784769453.1851366,
+    "mtime": 1784861193.5801442,
     "ast_hash": "8201d9e020f10888f8a4322e750bd6a6",
     "semantic_hash": ""
   },
   "docs/features/full-chain-storage.md": {
-    "mtime": 1784769465.7670822,
+    "mtime": 1784861193.5801442,
     "ast_hash": "1206c5200a58e076f7954f221ba0e66c",
     "semantic_hash": ""
   },
   "docs/roadmapv1.html": {
-    "mtime": 1784836551.2356431,
-    "ast_hash": "b80d7e2ee66613902a40fcedb2af1e95",
+    "mtime": 1784861193.5801442,
+    "ast_hash": "c14148a9f6dcf898d738f1998594c083",
     "semantic_hash": ""
   },
   "docs/visualizations/cardano-midnight-flow.html": {
-    "mtime": 1784826435.439188,
+    "mtime": 1784861193.5813775,
     "ast_hash": "eb3473bc3a50ab17c2ab534392786d0f",
     "semantic_hash": ""
   },
   "nix/midnight-env/test-wallets/README.md": {
-    "mtime": 1784769267.9475229,
+    "mtime": 1784861193.6216764,
     "ast_hash": "80fa78f1077d1450baec8b4ca9c2d707",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-api-surface/acceptance.md": {
-    "mtime": 1784832305.2466738,
+    "mtime": 1784861193.6262534,
     "ast_hash": "1eb53ccda748ee76cf7b47408d2fb1d3",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-api-surface/design.md": {
-    "mtime": 1784832229.8345008,
+    "mtime": 1784861193.626504,
     "ast_hash": "5ba65cfb0f403f7cddfb95602178f6fa",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-api-surface/proposal.md": {
-    "mtime": 1784832238.7284906,
+    "mtime": 1784861193.626504,
     "ast_hash": "d7ced04c9db36280a5492deb5f7cfd69",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-api-surface/specs/release-contract/spec.md": {
-    "mtime": 1784832144.3385928,
+    "mtime": 1784861193.6268091,
     "ast_hash": "dfdcd681f91ea604e370a4bd964200a7",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-api-surface/tasks.md": {
-    "mtime": 1784832279.9922647,
+    "mtime": 1784861193.6268091,
     "ast_hash": "f50f78d835bd0b5bc557adf9fb353aec",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-durable-checkpoint-cursor/acceptance.md": {
-    "mtime": 1784833014.323352,
+    "mtime": 1784861193.6268091,
     "ast_hash": "7b8c49a608b2a93e544ae877e663601c",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-durable-checkpoint-cursor/design.md": {
-    "mtime": 1784832882.3145993,
+    "mtime": 1784861193.6270585,
     "ast_hash": "1be53ae939bf70bdc4ace3d3681d9f4d",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-durable-checkpoint-cursor/proposal.md": {
-    "mtime": 1784833065.1237304,
+    "mtime": 1784861193.6270585,
     "ast_hash": "5e27b2550473b1a7df224bb93cd1f2c9",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-durable-checkpoint-cursor/specs/durable-composition/spec.md": {
-    "mtime": 1784832711.1341927,
+    "mtime": 1784861193.627335,
     "ast_hash": "3ca754e9a1153f377b7220801603b5f7",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-durable-checkpoint-cursor/tasks.md": {
-    "mtime": 1784833088.7911334,
-    "ast_hash": "b3c5eec75c9f88c2d04cf2b5002e909b",
+    "mtime": 1784870259.9155998,
+    "ast_hash": "fe592393fd4f1b31c1d0260c0d0f98a8",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-infosec-signoff/acceptance.md": {
-    "mtime": 1784832417.676371,
+    "mtime": 1784861193.627335,
     "ast_hash": "dffbb4a05d9fc3939e50f941a2018a81",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-infosec-signoff/design.md": {
-    "mtime": 1784832619.7863684,
+    "mtime": 1784861193.62758,
     "ast_hash": "dc635229359fbe1db61f95053a966e46",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-infosec-signoff/proposal.md": {
-    "mtime": 1784832647.1626544,
+    "mtime": 1784861193.62758,
     "ast_hash": "3f64805c4da7c85b11d962147b68c78e",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-infosec-signoff/specs/security-posture/spec.md": {
-    "mtime": 1784832370.8813288,
+    "mtime": 1784861193.6278539,
     "ast_hash": "dd82aca69ce6c88907a92f0322977d52",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-infosec-signoff/tasks.md": {
-    "mtime": 1784832498.1313667,
+    "mtime": 1784861193.6278539,
     "ast_hash": "0354ff17e0f939831a19d89407fad995",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-perf-baseline/acceptance.md": {
-    "mtime": 1784832075.8632624,
+    "mtime": 1784861193.6278539,
     "ast_hash": "1c207c08d68bf27359d1ebc0618c3c42",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-perf-baseline/design.md": {
-    "mtime": 1784832393.6151898,
+    "mtime": 1784861193.6281116,
     "ast_hash": "cbead511541484ea32232f10aeda2566",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-perf-baseline/proposal.md": {
-    "mtime": 1784832274.4538789,
+    "mtime": 1784861193.6281116,
     "ast_hash": "5d0e42a8c139908c547c76eec1cc9c06",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-perf-baseline/specs/performance-baseline/spec.md": {
-    "mtime": 1784832381.301587,
+    "mtime": 1784861193.6283615,
     "ast_hash": "32b8d4caf2d13d6789f09bfaa08ce50e",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-perf-baseline/tasks.md": {
-    "mtime": 1784832165.278168,
+    "mtime": 1784861193.6283615,
     "ast_hash": "42e0d4c128655c1bdd840613b9886cd8",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-recovery-testing/acceptance.md": {
-    "mtime": 1784832571.915267,
+    "mtime": 1784861193.6283615,
     "ast_hash": "94c8a0a0bb76b5ba9fdf98a56b9738c8",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-recovery-testing/design.md": {
-    "mtime": 1784832343.5465312,
+    "mtime": 1784861193.6286397,
     "ast_hash": "754f89870eb664608f9b9624c5269a3f",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-recovery-testing/proposal.md": {
-    "mtime": 1784832377.7524698,
+    "mtime": 1784861193.6286397,
     "ast_hash": "58d406d8fda01065fdaa70ab5b4d0304",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-recovery-testing/specs/recovery-testing/spec.md": {
-    "mtime": 1784832128.2200072,
+    "mtime": 1784861193.6289544,
     "ast_hash": "74c37c6ee2dd411d7d896a53807ea484",
     "semantic_hash": ""
   },
   "openspec/changes/v1.0.0-recovery-testing/tasks.md": {
-    "mtime": 1784832500.404776,
+    "mtime": 1784861193.6289544,
     "ast_hash": "a9ab860ff81eb0b069b65c1e612e6c2d",
     "semantic_hash": ""
   },
   "src/postgres/save-and-advance.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.6343539,
     "ast_hash": "61741d5ff7d362ed014b11eb5cda65a7",
     "semantic_hash": ""
   },
   "test/postgres/checkpoint-store-contract-doc.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "d87442ddce6077d0a728ce6ce73137b1",
     "semantic_hash": ""
   },
   "test/postgres/checkpoint-store-cotx.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "a0060c14eb5d7645a9ddc8c66335f877",
     "semantic_hash": ""
   },
   "test/postgres/durable-cursor-crash-handoff.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "b856e581f7a4acfd17080a1d9706ac33",
     "semantic_hash": ""
   },
   "test/postgres/save-and-advance-import-guard.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "3ef33c3fe6f8fd0d3c46909bbeecf59b",
     "semantic_hash": ""
   },
   "test/postgres/save-and-advance.property.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "96d5e6c2058efb7500a34e2e9b69f8d3",
     "semantic_hash": ""
   },
   "test/postgres/save-and-advance.test.ts": {
-    "mtime": 1784848833.0293372,
+    "mtime": 1784861193.636684,
     "ast_hash": "d3191f14d85e6144e4419249711fc104",
     "semantic_hash": ""
   },
   "docs/checkpoint-store-contract.md": {
-    "mtime": 1784848833.0293372,
-    "ast_hash": "72773039fa7931665cc4698bc80a7ab4",
+    "mtime": 1784861193.5801442,
+    "ast_hash": "c8dbbd2c05e59594d67693a29875ed0b",
     "semantic_hash": ""
   },
   "docs/v1-implementation-guideline.md": {
-    "mtime": 1784838952.2576044,
+    "mtime": 1784861193.5813775,
     "ast_hash": "a73e6aaca6bd43991eebed4951370593",
     "semantic_hash": ""
   },
   "docs/v1-lessons-learned.md": {
-    "mtime": 1784838952.270605,
-    "ast_hash": "0f3aecc85c6efca00941a3ad22f3abbe",
+    "mtime": 1784861193.5813775,
+    "ast_hash": "749e103f0119de291854d0b1da324941",
+    "semantic_hash": ""
+  },
+  "src/postgres/durability-probe.ts": {
+    "mtime": 1784866352.785221,
+    "ast_hash": "45fb483346d216f9691dd558b7bcd622",
+    "semantic_hash": ""
+  },
+  "test/postgres/checkpoint-id-validation.test.ts": {
+    "mtime": 1784866640.1645055,
+    "ast_hash": "dddd1ff557b311bf618ca3338dc3837c",
+    "semantic_hash": ""
+  },
+  "test/postgres/durability-probe.test.ts": {
+    "mtime": 1784866352.9934256,
+    "ast_hash": "001a091b796be2fbba708d2d171e1a82",
+    "semantic_hash": ""
+  },
+  "test/postgres/json-depth.test.ts": {
+    "mtime": 1784866640.1645944,
+    "ast_hash": "5659e42269f830c29ba945b075b81839",
+    "semantic_hash": ""
+  },
+  "test/postgres/migration-lock-timeout.test.ts": {
+    "mtime": 1784866353.0049713,
+    "ast_hash": "4a0cc7eee90949326edb9bdccc17a1ab",
+    "semantic_hash": ""
+  },
+  "test/postgres/timeouts.test.ts": {
+    "mtime": 1784870007.7670443,
+    "ast_hash": "c422968b5ca6b6b7c254c4f4b80a37ce",
+    "semantic_hash": ""
+  },
+  "test/postgres/with-lease-release-fault.test.ts": {
+    "mtime": 1784867734.417768,
+    "ast_hash": "9ae2c3a5457b3078bd70b086cf8520c5",
+    "semantic_hash": ""
+  },
+  "docs/durability-contract.md": {
+    "mtime": 1784867734.4015043,
+    "ast_hash": "fb98689d9d4e7311701461ebcf58bd53",
+    "semantic_hash": ""
+  },
+  "docs/notes/2026-07-23-resume-checkpoint.md": {
+    "mtime": 1784861193.5801442,
+    "ast_hash": "3958343965862597813e1e0a194609ae",
+    "semantic_hash": ""
+  },
+  "docs/supply-chain/README.md": {
+    "mtime": 1784861193.5811143,
+    "ast_hash": "b92f299cf55ca3ade783e64cc611924c",
+    "semantic_hash": ""
+  },
+  "docs/supply-chain/inventory.md": {
+    "mtime": 1784861193.5813775,
+    "ast_hash": "af34253266f6a4a5b858140e8b0364e5",
+    "semantic_hash": ""
+  },
+  "docs/supply-chain/slsa.md": {
+    "mtime": 1784861193.5813775,
+    "ast_hash": "70b6a5254cb053502de92566a026f33b",
+    "semantic_hash": ""
+  },
+  "nix/midnight-env/README.md": {
+    "mtime": 1784861193.6030116,
+    "ast_hash": "9ceed9c04601a0e156b47696cb23b28b",
     "semantic_hash": ""
   }
 }

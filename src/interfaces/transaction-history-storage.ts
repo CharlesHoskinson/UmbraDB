@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { hasPostgresUnsafeText } from "./temporal-kv.js";
+import { exceedsMaxDepth, hasPostgresUnsafeText, MAX_JSON_DEPTH } from "./temporal-kv.js";
 import type { TransactionHandle } from "./transaction-lease.js";
 
 /**
@@ -121,26 +121,11 @@ export const EntryContentSchema: z.ZodType<EntryContent> = z.lazy(() => z.union(
  *  script, and considerably fewer once real call-stack usage from the rest of the application is
  *  already on the stack) — a caller genuinely needing deeper nesting than this is almost
  *  certainly sending malformed/hostile data, not a legitimate wallet section. */
-export const MAX_ENTRY_CONTENT_DEPTH = 64;
+export const MAX_ENTRY_CONTENT_DEPTH = MAX_JSON_DEPTH;
 
-/** Iterative (NOT recursive) depth walk over a raw, not-yet-validated JS value — deliberately
- *  implemented with an explicit stack rather than recursive function calls, so the guard itself
- *  cannot exhibit the exact stack-overflow failure mode it exists to prevent. Returns `true` as
- *  soon as any branch's nesting exceeds `maxDepth`, short-circuiting before visiting the rest of
- *  the tree. */
-function exceedsMaxDepth(value: unknown, maxDepth: number): boolean {
-  const stack: Array<{ v: unknown; depth: number }> = [{ v: value, depth: 0 }];
-  while (stack.length > 0) {
-    const { v, depth } = stack.pop()!;
-    if (depth > maxDepth) return true;
-    if (Array.isArray(v)) {
-      for (const item of v) stack.push({ v: item, depth: depth + 1 });
-    } else if (v !== null && typeof v === "object") {
-      for (const val of Object.values(v)) stack.push({ v: val, depth: depth + 1 });
-    }
-  }
-  return false;
-}
+// `exceedsMaxDepth` and the depth constant are hoisted to `temporal-kv.ts` and shared (G8,
+// design.md §4.2); imported above. `MAX_ENTRY_CONTENT_DEPTH` stays this module's name for the
+// same 64-level bound so its `sections` message and existing tests are unchanged.
 
 /** `sections`'s actual schema: the plain `z.record(SafeObjectKeySchema, EntryContentSchema)`
  *  wrapped in a `z.preprocess` depth guard. The depth check MUST run inside `preprocess`'s
