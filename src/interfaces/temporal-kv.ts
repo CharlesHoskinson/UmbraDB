@@ -52,6 +52,30 @@ function jsonValueHasUnsafeText(v: unknown): boolean {
   return false;
 }
 
+/** Maximum nesting depth a stored JSON value may contain before rejection with a clean
+ *  `ValidationError`. Shared by `JsonValueSchema` (TemporalKV + Watermarks) and, re-exported
+ *  as `MAX_ENTRY_CONTENT_DEPTH`, by transaction-history `sections` — one number, not two
+ *  (G8, design.md §4.2). */
+export const MAX_JSON_DEPTH = 64;
+
+/** Iterative (NOT recursive) depth walk over a raw, not-yet-validated JS value — an explicit
+ *  stack, so the guard itself cannot exhibit the stack-overflow failure mode it exists to
+ *  prevent. Returns `true` as soon as any branch exceeds `maxDepth`, short-circuiting the rest
+ *  of the tree. Hoisted here from transaction-history-storage.ts so one definition is shared. */
+export function exceedsMaxDepth(value: unknown, maxDepth: number): boolean {
+  const stack: Array<{ v: unknown; depth: number }> = [{ v: value, depth: 0 }];
+  while (stack.length > 0) {
+    const { v, depth } = stack.pop()!;
+    if (depth > maxDepth) return true;
+    if (Array.isArray(v)) {
+      for (const item of v) stack.push({ v: item, depth: depth + 1 });
+    } else if (v !== null && typeof v === "object") {
+      for (const val of Object.values(v)) stack.push({ v: val, depth: depth + 1 });
+    }
+  }
+  return false;
+}
+
 /**
  * A JSON-serializable value — the only value shape TemporalKV accepts, since both the
  * Postgres JSONB and Mongo BSON backends must round-trip it losslessly.
@@ -59,9 +83,27 @@ function jsonValueHasUnsafeText(v: unknown): boolean {
  * Postgres-safety check above so a value that would fail at the JSONB boundary is rejected
  * here as `ValidationError`, not at the driver as a raw, untranslated error.
  */
-export const JsonValueSchema = z.json().refine((v) => !jsonValueHasUnsafeText(v), {
+const JsonValueInnerSchema = z.json().refine((v) => !jsonValueHasUnsafeText(v), {
   message: `JSON value ${POSTGRES_SAFE_TEXT_MESSAGE}`,
 });
+/**
+ * Depth-bounded wrapper: `exceedsMaxDepth` runs in `z.preprocess`'s callback — which Zod
+ * invokes BEFORE `z.json()`'s recursive parse descends — so a value nested past
+ * `MAX_JSON_DEPTH` is rejected as `ValidationError` before the recursion can overflow the stack
+ * (a `.refine` would run only after that recursion; too late). Bounding here also bounds
+ * `put`/`set` values and read-side validation, since `WatermarkValueSchema` and
+ * `VersionedEntrySchema` compose this schema (G8, design.md §4.2).
+ */
+export const JsonValueSchema = z.preprocess((value, ctx) => {
+  if (exceedsMaxDepth(value, MAX_JSON_DEPTH)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `JSON value nesting exceeds the maximum supported depth of ${MAX_JSON_DEPTH} levels`,
+    });
+    return z.NEVER;
+  }
+  return value;
+}, JsonValueInnerSchema);
 export type JsonValue = z.infer<typeof JsonValueSchema>;
 
 export const NamespaceSchema = z.string().min(1).max(63)

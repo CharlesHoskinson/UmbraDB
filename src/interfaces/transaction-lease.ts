@@ -180,6 +180,15 @@ export type LeaseAcquireOptions = z.infer<typeof LeaseAcquireOptionsSchema> & {
   /** Cancellation: abort while waiting rejects with `AbortError`; if the lock was already
    *  acquired when the abort lands, the lease is released before rejecting. */
   signal?: AbortSignal;
+  /** Invoked with the {@link LeaseFaultError} when `withLease`'s `fn` succeeded but releasing
+   *  the lease then failed (connection lost) — the only surfaced hint mutual exclusion may have
+   *  lapsed. When supplied, `withLease` invokes it and resolves with `fn`'s value; when omitted
+   *  (the default), `withLease` REJECTS with the fault (the safe direction). When `fn` itself
+   *  threw, `fn`'s error stays the primary rejection and the release fault is still surfaced —
+   *  via this callback if supplied, else attached as the rejection's `cause`. A live callback,
+   *  like `signal`, is intersected on rather than declared in {@link LeaseAcquireOptionsSchema}:
+   *  it is not a serialisable data field (G8, design.md §4.3). */
+  onReleaseFault?: (err: unknown) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -256,13 +265,17 @@ export interface TransactionLeaseLayer {
   /**
    * Convenience combinator: acquire → run `fn` → always release, even on throw.
    * Prefer this over manual `acquireLease`/`releaseLease` pairs.
-   * @throws Same as {@link TransactionLeaseLayer.acquireLease}; if `fn` throws, that error
-   *   propagates after the lease is released. A release failure in this cleanup step is
-   *   swallowed (this project has no logging infrastructure to route it through — an earlier
-   *   draft of this doc claimed it would be "logged," which was never actually implementable),
-   *   so it never masks `fn`'s own error, but it is also not surfaced anywhere; callers who need
-   *   to observe release failures should call `acquireLease`/`releaseLease` manually instead of
-   *   this combinator.
+   *
+   * A release failure in the cleanup step is a {@link LeaseFaultError} ("connection-lost") —
+   * the only surfaced hint that mutual exclusion may have lapsed — and is never swallowed (G8,
+   * design.md §4.3). When `fn` SUCCEEDED and release then fails: if `opts.onReleaseFault` is
+   * supplied it is invoked with the fault and `withLease` resolves with `fn`'s value; if it is
+   * omitted (the default), `withLease` REJECTS with the fault (the safe direction). When `fn`
+   * THREW, `fn`'s error stays the primary rejection and the release fault is still surfaced —
+   * via `opts.onReleaseFault` if supplied, otherwise attached as the rejection's `cause` (or an
+   * `AggregateError` when the error already carries a cause). `fn`'s own error is never masked.
+   * @throws Same as {@link TransactionLeaseLayer.acquireLease}; plus {@link LeaseFaultError} on
+   *   a release failure when no `onReleaseFault` callback is supplied.
    */
   withLease<T>(
     key: string,

@@ -1,12 +1,34 @@
 import type { ISql, Sql } from "postgres";
-import { ValidationError } from "../interfaces/storage-errors.js";
+import { StorageError, ValidationError } from "../interfaces/storage-errors.js";
 import { assertValidSchemaName } from "./client.js";
-import { translatePostgresError } from "./errors.js";
+import { isLockTimeout, isStatementTimeout, translatePostgresError } from "./errors.js";
+import { probeDurability, type DurabilityProbeOptions, type DurabilityWarning } from "./durability-probe.js";
 import * as migration000 from "./migrations/000_schema.js";
 import * as migration001 from "./migrations/001_temporal_kv.js";
 import * as migration002 from "./migrations/002_checkpoint_store.js";
 import * as migration003 from "./migrations/003_watermarks.js";
 import * as migration004 from "./migrations/004_transaction_history.js";
+
+/** Conservative default bound (ms) for acquiring the schema-scoped migration advisory lock —
+ *  generous enough for a concurrent startup where another instance is mid-migration, short
+ *  enough to fail fast rather than hang forever (G7, design.md §3.2). Overridable via
+ *  {@link RunMigrationsOptions.migrationLockTimeoutMs}. */
+export const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
+
+/** Thrown when acquiring the migration advisory lock exceeds the acquire bound — another
+ *  instance holds it (mid-migration or wedged). Fail-fast and typed, never a raw driver error
+ *  or an indefinite hang (design.md §3.2). */
+export class MigrationLockTimeoutError extends StorageError {
+  readonly code = "MIGRATION_LOCK_TIMEOUT" as const;
+  constructor(readonly schema: string, readonly timeoutMs: number, cause?: unknown) {
+    super(
+      `did not acquire the migration lock for schema "${schema}" within its ${timeoutMs}ms bound` +
+        " — another instance may hold it, or a shorter statement_timeout or a cancellation intervened" +
+        " during the acquire",
+      cause,
+    );
+  }
+}
 
 /** Exported so a second migration lineage (e.g. `./migrations/chain_archive/index.ts`'s
  *  `chainArchiveMigrations`) can be typed against the same shape without duplicating it. */
@@ -63,6 +85,16 @@ export interface RunMigrationsOptions {
    * existed; this only makes it possible to run it, not wired to actually run it anywhere.
    */
   migrations?: Migration[];
+  /** Options for the mandatory durability probe run before any migration (G6, design.md §2). */
+  durability?: DurabilityProbeOptions;
+  /** Invoked with any non-fatal durability warnings the probe raised (e.g. a
+   *  `synchronous_commit=off` lost-tail warning). A hard durability violation instead throws a
+   *  `DurabilityContractError` before any migration runs and before this is called. */
+  onDurabilityWarning?: (warnings: readonly DurabilityWarning[]) => void;
+  /** Bound (ms) for acquiring the migration advisory lock (G7, design.md §3.2). Default
+   *  {@link DEFAULT_MIGRATION_LOCK_TIMEOUT_MS}. A concurrent caller holding the lock makes this
+   *  fail fast with {@link MigrationLockTimeoutError} instead of hanging. */
+  migrationLockTimeoutMs?: number;
 }
 
 /**
@@ -89,6 +121,21 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
     );
   }
 
+  // A non-positive or non-integer migrationLockTimeoutMs would either disable the bound
+  // (set_config('lock_timeout','0') never times out -> the acquire could hang) or fail deep in
+  // the driver; reject it up front as ValidationError (audit BLOCK).
+  if (
+    opts.migrationLockTimeoutMs !== undefined &&
+    (!Number.isInteger(opts.migrationLockTimeoutMs) ||
+      opts.migrationLockTimeoutMs <= 0 ||
+      opts.migrationLockTimeoutMs > 2_147_483_647)
+  ) {
+    throw new ValidationError(
+      `invalid migrationLockTimeoutMs for runMigrations: ${opts.migrationLockTimeoutMs} (must be a positive integer number of milliseconds)`,
+      [{ path: "migrationLockTimeoutMs", message: "must be a positive integer number of milliseconds" }],
+    );
+  }
+
   // Found by a fourth-round cross-vendor re-audit: this function never routed any of its own
   // failures through translatePostgresError, so a reserve failure, a migration-query failure, or
   // a cleanup-statement failure would all escape as raw postgres.js/Node errors — contradicting
@@ -98,6 +145,26 @@ export async function runMigrations<TTypes extends Record<string, unknown> = {}>
   // ValidationError thrown just above this point never reaches this wrapper, since it's outside
   // the try below — but if it ever did, it would still come back unchanged, not re-wrapped).
   try {
+    // The durability probe is a MANDATORY, non-skippable step of runMigrations (design.md §2.1):
+    // every consumer must call runMigrations before first use, so wiring the probe here — rather
+    // than leaving it a documented convention a caller can forget — makes the crash-safety
+    // precondition enforced, not advisory. A hard violation throws a DurabilityContractError
+    // (a StorageError, so translatePostgresError passes it through unchanged) here, before
+    // runMigrationsImpl runs a single migration; a recoverable trade (synchronous_commit=off)
+    // surfaces as a warning the caller may observe via opts.onDurabilityWarning.
+    const warnings = await probeDurability(sql, opts.durability);
+    if (warnings.length > 0 && opts.onDurabilityWarning) {
+      try {
+        const maybePromise = opts.onDurabilityWarning(warnings) as unknown;
+        // Guard an async callback's rejection too (same hazard as withLease's onReleaseFault):
+        // a throwing/rejecting onDurabilityWarning must not derail runMigrations (audit).
+        if (maybePromise !== null && typeof (maybePromise as { then?: unknown }).then === "function") {
+          void Promise.resolve(maybePromise).catch(() => {});
+        }
+      } catch {
+        // a throwing onDurabilityWarning callback must not derail runMigrations.
+      }
+    }
     return await runMigrationsImpl(sql, opts);
   } catch (err) {
     throw translatePostgresError(err);
@@ -122,8 +189,40 @@ async function runMigrationsImpl<TTypes extends Record<string, unknown> = {}>(
   // cancelled `SET search_path`.
   let lockHeld = false;
   try {
-    await reserved`select pg_advisory_lock(1, hashtext(${opts.schema}))`;
-    lockHeld = true;
+    // Bound the migration-lock acquire so two instances starting together never hang forever
+    // (design.md §3.2). A transaction-scoped SET LOCAL lock_timeout bounds the wait: the session
+    // advisory lock persists after COMMIT (verified against PostgreSQL 17) while SET LOCAL auto-
+    // reverts at COMMIT, so the migration DDL below is never left under the short acquire bound —
+    // no manual restore that could fail or be swallowed (audit BLOCK). set_config(..., true) =
+    // SET LOCAL, parameterized (no `unsafe()`/identifier interpolation). A 55P03 lock_timeout OR a
+    // 57014 statement_timeout during the acquire both mean the bounded wait expired (a shorter
+    // statement_timeout fires first — audit BLOCK).
+    const acquireBoundMs = opts.migrationLockTimeoutMs ?? DEFAULT_MIGRATION_LOCK_TIMEOUT_MS;
+    // Re-validate AT USE: opts is caller-owned and could have been mutated during the awaited
+    // probe above, so the earlier runMigrations() check is not sufficient on its own (audit).
+    if (!Number.isInteger(acquireBoundMs) || acquireBoundMs <= 0 || acquireBoundMs > 2_147_483_647) {
+      throw new ValidationError(
+        `invalid migrationLockTimeoutMs: ${acquireBoundMs} (must be a positive integer number of ` +
+          `milliseconds, at most 2147483647)`,
+        [{ path: "migrationLockTimeoutMs", message: "must be a positive integer number of milliseconds" }],
+      );
+    }
+    try {
+      await withReservedTransaction(reserved, async () => {
+        await reserved`select set_config('lock_timeout', ${String(acquireBoundMs)}, true)`;
+        await reserved`select pg_advisory_lock(1, hashtext(${opts.schema}))`;
+        // Set INSIDE the transaction, right after the session lock is granted: the lock survives
+        // a failed COMMIT / ROLLBACK (it is session-scoped), so the outer cleanup MUST still
+        // unlock it even if the COMMIT below fails on a still-alive backend — otherwise the lock
+        // leaks and wedges later migrations (audit BLOCK).
+        lockHeld = true;
+      });
+    } catch (err) {
+      if (isLockTimeout(err) || isStatementTimeout(err)) {
+        throw new MigrationLockTimeoutError(opts.schema, acquireBoundMs, err);
+      }
+      throw err;
+    }
     // btree_gist opclass resolution fix (migrations/001_temporal_kv.ts's own comment) — widen
     // this connection's search_path so CREATE EXTENSION IF NOT EXISTS's operators are visible
     // even when previously installed into `public` by something else.

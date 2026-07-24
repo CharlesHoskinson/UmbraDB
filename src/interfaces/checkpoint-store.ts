@@ -1,12 +1,44 @@
 import { z } from "zod";
 import { StorageError, ValidationError } from "./storage-errors.js";
 import type { TransactionHandle } from "./transaction-lease.js";
+import { hasPostgresUnsafeText } from "./temporal-kv.js";
 
 /** Sequence numbers are monotonic per (walletId, networkId) and start at 1. */
 export type CheckpointSequence = number;
 
 /** SHA-256 hex digest of a chunk or manifest's canonical byte content. */
 export type ContentHash = string;
+
+/** Maximum walletId/networkId length. Frozen at G1 — a wallet/network identifier, not free-form
+ *  data, so 512 chars is generous while still bounding a hostile input to a clean rejection. */
+export const MAX_CHECKPOINT_ID_LENGTH = 512;
+
+// Matches PgTemporalKV / the wallet-state envelope's NUL/lone-surrogate rejection message.
+const POSTGRES_SAFE_TEXT_MESSAGE = "must not contain a NUL byte or an unpaired UTF-16 surrogate (PostgreSQL cannot store either)";
+
+/**
+ * Identifier schema for `walletId`/`networkId` at every {@link CheckpointStore} entry point
+ * (G8, design.md §4.1). Mirrors `src/interfaces/wallet-state-envelope.ts`'s pattern for the
+ * same two ids — `z.string().min(1).refine(!hasPostgresUnsafeText)` — plus an explicit `.max()`
+ * length bound, so a NUL/lone-surrogate/over-length id is rejected here as `ValidationError`
+ * before any statement rather than escaping as a raw, untranslated driver error.
+ */
+export const CheckpointIdSchema = z
+  .string()
+  .min(1)
+  .max(MAX_CHECKPOINT_ID_LENGTH)
+  .refine((str) => !hasPostgresUnsafeText(str), { message: `id ${POSTGRES_SAFE_TEXT_MESSAGE}` });
+
+/**
+ * Validates the `walletId`/`networkId` pair at a `PgCheckpointStore` entry point, before any
+ * statement is issued, rejecting with {@link ValidationError} (never a raw driver error).
+ */
+export function assertValidCheckpointIds(walletId: string, networkId: string): void {
+  const w = CheckpointIdSchema.safeParse(walletId);
+  if (!w.success) throw ValidationError.fromZod("PgCheckpointStore walletId", w.error);
+  const n = CheckpointIdSchema.safeParse(networkId);
+  if (!n.success) throw ValidationError.fromZod("PgCheckpointStore networkId", n.error);
+}
 
 export const SaveCheckpointOptionsSchema = z.object({
   /** Target chunk size in bytes; implementations may round up to their own boundary. */

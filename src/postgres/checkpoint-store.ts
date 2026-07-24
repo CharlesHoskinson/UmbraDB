@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ISql } from "postgres";
 import { ValidationError } from "../interfaces/storage-errors.js";
 import {
+  assertValidCheckpointIds,
   CheckpointNotFoundError,
   ChunkIntegrityError,
   ChunkMissingError,
@@ -140,6 +141,7 @@ export class PgCheckpointStore implements CheckpointStore {
   async save(
     walletId: string, networkId: string, data: Uint8Array, opts?: SaveCheckpointOptions,
   ): Promise<CheckpointSummary> {
+    assertValidCheckpointIds(walletId, networkId);
     const validated = validateSaveOptions(opts);
     return withAbort(() => this.saveImpl(walletId, networkId, data, validated), validated.signal);
   }
@@ -234,6 +236,7 @@ export class PgCheckpointStore implements CheckpointStore {
     walletId: string, networkId: string, sequence?: CheckpointSequence,
     opts?: { signal?: AbortSignal },
   ): Promise<CheckpointRecord> {
+    assertValidCheckpointIds(walletId, networkId);
     return withAbort(() => this.loadImpl(walletId, networkId, sequence), opts?.signal);
   }
 
@@ -322,6 +325,7 @@ export class PgCheckpointStore implements CheckpointStore {
   async history(
     walletId: string, networkId: string, opts?: HistoryOptions,
   ): Promise<CheckpointSummary[]> {
+    assertValidCheckpointIds(walletId, networkId);
     const validated = validateHistoryOptions(opts);
     return withAbort(() => this.historyImpl(walletId, networkId, validated), validated.signal);
   }
@@ -375,6 +379,7 @@ export class PgCheckpointStore implements CheckpointStore {
     walletId: string, networkId: string, retainCount: number,
     opts?: { signal?: AbortSignal },
   ): Promise<PruneResult> {
+    assertValidCheckpointIds(walletId, networkId);
     // design.md §3: tightened to a safe-integer guard -- Number.isInteger(retainCount) alone
     // would admit magnitudes like 1e20 that are still meaningless as an OFFSET bound.
     if (!Number.isSafeInteger(retainCount) || retainCount < 1) {

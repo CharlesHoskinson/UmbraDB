@@ -62,6 +62,18 @@ export interface UmbraDBConnectionOptions {
    *  into this option at all. Omitting this option now genuinely means "postgres.js's default,"
    *  not a silently different one. */
   connectTimeout?: number;
+  /** Server-side `statement_timeout` in milliseconds (G7, design.md §3.1). Default
+   *  {@link DEFAULT_STATEMENT_TIMEOUT_MS}. Bounds any single statement; a longer legitimate
+   *  query raises this rather than being wedged by the default. */
+  statementTimeoutMs?: number;
+  /** Server-side `lock_timeout` in milliseconds. Default {@link DEFAULT_LOCK_TIMEOUT_MS}.
+   *  Bounds how long a statement waits to acquire a lock before failing fast. */
+  lockTimeoutMs?: number;
+  /** Server-side `idle_in_transaction_session_timeout` in milliseconds. Default
+   *  {@link DEFAULT_IDLE_IN_TX_TIMEOUT_MS}. Terminates a session left idle INSIDE an open
+   *  transaction; a workload legitimately holding a transaction open longer raises this
+   *  (Opus N3 — the lease / withTransaction idle-in-transaction interaction). */
+  idleInTxTimeoutMs?: number;
 }
 
 /**
@@ -99,22 +111,38 @@ export interface UmbraDBConnectionOptions {
  * (`assertValidSchemaName`), not a downstream symptom discovered later.
  */
 function assertNoConflictingSearchPath(connectionString: string): void {
-  let url: URL;
-  try {
-    url = new URL(connectionString);
-  } catch {
-    return; // Not a URL-shaped string (e.g. a bare "postgresql://" with no host) -- postgres.js's
-             // own parsing will reject it; nothing for this guard to check.
-  }
-  if (url.searchParams.has("search_path")) {
-    throw new Error(
-      "connectionString must not set a \"search_path\" query parameter -- it silently " +
-      "overrides createClient's own \"schema\" option (postgres.js merges query-string " +
-      "connection parameters after explicit ones). Pass the desired schema via the " +
-      "\"schema\" option instead.",
-    );
+  // Reject a DSN query parameter that would override createClient's own search_path or a
+  // durability timeout. postgres.js merges query-string parameters AFTER the explicit connection
+  // settings (last-write-wins), so such a parameter silently wins. A raw regex scan is used
+  // rather than new URL(): new URL() cannot parse postgres.js's multi-host DSNs (`host1,host2`)
+  // and would throw, letting the parameters through unchecked (audit). The `options=-c ...` route
+  // is not a hazard -- PostgreSQL applies individual startup runtime-parameter pairs after
+  // `options`, so the explicit pairs win (verified against the PostgreSQL docs).
+  for (const param of [
+    "search_path",
+    "statement_timeout",
+    "lock_timeout",
+    "idle_in_transaction_session_timeout",
+  ]) {
+    if (new RegExp(`[?&]${param}=`, "i").test(connectionString)) {
+      throw new Error(
+        `connectionString must not set a "${param}" query parameter -- it would silently override ` +
+          `createClient's own setting (postgres.js merges query-string parameters after the explicit ` +
+          `connection settings). Configure it via the corresponding UmbraDBConnectionOptions field instead.`,
+      );
+    }
   }
 }
+/**
+ * Conservative server-side timeout defaults (G7, design.md §3.1). Milliseconds — the unit
+ * PostgreSQL's `*_timeout` GUCs use for a bare integer. Each is overridable via
+ * {@link UmbraDBConnectionOptions} so a heavier legitimate workload is never wedged by the
+ * default; the spec fixes only non-zero-and-overridable, not these particular numbers, which
+ * are tunable against G14's declared envelope. Documented in `docs/durability-contract.md`.
+ */
+export const DEFAULT_STATEMENT_TIMEOUT_MS = 120_000; // 120s
+export const DEFAULT_LOCK_TIMEOUT_MS = 30_000; // 30s
+export const DEFAULT_IDLE_IN_TX_TIMEOUT_MS = 120_000; // 120s
 
 export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   const schema = opts.schema ?? DEFAULT_SCHEMA;
@@ -122,10 +150,35 @@ export function createClient(opts: UmbraDBConnectionOptions = {}): UmbraDBSql {
   if (opts.connectionString !== undefined) {
     assertNoConflictingSearchPath(opts.connectionString);
   }
+  // Validate the server-side timeout overrides up front (audit): 0 disables the corresponding
+  // PostgreSQL bound, silently violating UmbraDB's published non-zero timeout contract; a
+  // negative or non-integer value fails confusingly deep in the driver otherwise.
+  for (const [name, value] of [
+    ["statementTimeoutMs", opts.statementTimeoutMs],
+    ["lockTimeoutMs", opts.lockTimeoutMs],
+    ["idleInTxTimeoutMs", opts.idleInTxTimeoutMs],
+  ] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value <= 0 || value > 2_147_483_647)) {
+      throw new Error(
+        `invalid ${name}: ${value} (must be a positive integer number of milliseconds, at most ` +
+          `2147483647 (PostgreSQL int4); 0 would disable the bound, violating UmbraDB's non-zero ` +
+          `timeout contract)`,
+      );
+    }
+  }
   const options = {
     ...(opts.maxConnections !== undefined ? { max: opts.maxConnections } : {}),
     ...(opts.connectTimeout !== undefined ? { connect_timeout: opts.connectTimeout } : {}),
-    connection: { search_path: schema },
+    connection: {
+      search_path: schema,
+      // Sent as PostgreSQL startup parameters (like search_path); postgres.js types these GUCs as
+      // numbers. A bare integer is milliseconds, and RESET / SET DEFAULT on such a connection
+      // reverts to THIS value (verified against PostgreSQL 17), which is why the lease's own
+      // set/reset restores the connection default rather than unsetting the timeout (design.md §3.1).
+      statement_timeout: opts.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS,
+      lock_timeout: opts.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
+      idle_in_transaction_session_timeout: opts.idleInTxTimeoutMs ?? DEFAULT_IDLE_IN_TX_TIMEOUT_MS,
+    },
     types: { bigint: postgres.BigInt },
   };
   // Two distinct postgres() overloads (url+options vs. options-only) — a `string | undefined`

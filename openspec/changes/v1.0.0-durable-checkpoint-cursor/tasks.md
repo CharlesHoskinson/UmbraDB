@@ -15,7 +15,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
 
 ## 0. G5 — Co-transactional watermark + checkpoint data (do first; pre-freeze, signature-changing)
 
-- [ ] 0.1 Add `tx?: TransactionHandle` to `PgCheckpointStore.save`'s options and thread it through
+- [x] 0.1 Add `tx?: TransactionHandle` to `PgCheckpointStore.save`'s options and thread it through
   `saveImpl` (`design.md` §1.2): when `opts.tx` is present, resolve it via `resolveTransaction` and
   run all statements on that transaction; when absent, keep the existing internal `withTransaction`
   path byte-for-byte. Rewrite the `src/interfaces/checkpoint-store.ts:135` "deliberately do NOT accept
@@ -30,7 +30,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   task 1.1 convention); a test confirms the no-`tx` path returns the same `CheckpointSummary` shape as
   before (regression against the existing save tests).
 
-- [ ] 0.2 Implement the `saveAndAdvance` combinator in a new `src/postgres/save-and-advance.ts`
+- [x] 0.2 Implement the `saveAndAdvance` combinator in a new `src/postgres/save-and-advance.ts`
   (`design.md` §1.3): opens one `withTransaction`, calls `save` with the tx and `watermarks.set` with
   the same tx, composing only in-repo primitives (no consumer/indexer import). **Satisfies:**
   _saveAndAdvance co-commits a checkpoint and its sync cursor atomically_. **Depends on:** 0.1.
@@ -42,7 +42,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   commit leaves neither"); a static check / import-lint confirms `save-and-advance.ts` imports no
   consumer/indexer module (indexer-agnostic boundary, `council/A-release-scope.md` ruling b).
 
-- [ ] 0.3 Write the ordering + replay contract into the checkpoint-store contract docs and
+- [x] 0.3 Write the ordering + replay contract into the checkpoint-store contract docs and
   cross-reference it from `Formal/STORAGE_ALGEBRA.md` W1 (`design.md` §1.4): cursor strictly after
   data commit for manual composition; watermark-behind recovery; replay convergence judged on current
   state. **Satisfies:** _a conforming composition keeps the durable cursor from ever being ahead of
@@ -51,7 +51,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   `STORAGE_ALGEBRA.md` W1 (scenario "the ordering and replay contract is a checkable documentation
   artifact"); an auditor confirms the wording matches the spec requirement, not a weaker paraphrase.
 
-- [ ] 0.4 Property test for the cursor-never-ahead invariant under the ordering contract, fault-free
+- [x] 0.4 Property test for the cursor-never-ahead invariant under the ordering contract, fault-free
   (`design.md` §1.4). **Satisfies:** _a conforming composition keeps the durable cursor from ever
   being ahead of durable checkpoint data_. **Depends on:** 0.2. **Acceptance:** a `fast-check`
   property drives randomized interleavings of **both** (a) `saveAndAdvance` calls **and** (b) the
@@ -67,7 +67,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
 
 ## 1. G6 — Durability startup probe + binding contract
 
-- [ ] 1.1 Implement `probeDurability(sql, opts?)` in a new `src/postgres/durability-probe.ts` and wire
+- [x] 1.1 Implement `probeDurability(sql, opts?)` in a new `src/postgres/durability-probe.ts` and wire
   it as a **mandatory step of `runMigrations`** (`design.md` §2.1/§2.2): `SHOW` `fsync` (refuse on
   `off`), `synchronous_commit` (typed lost-tail warning on `off` **only**; no warning for
   `local`/`remote_write`/`remote_apply`/`on`, which are crash-durable on a primary), `full_page_writes`
@@ -88,7 +88,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   "full_page_writes=off is refused by default"); a healthy default server yields no hard violation and
   `runMigrations` proceeds.
 
-- [ ] 1.2 Implement transaction-pooler detection inside the probe (`design.md` §2.3): acquire a
+- [x] 1.2 Implement transaction-pooler detection inside the probe (`design.md` §2.3): acquire a
   session advisory lock, then confirm in a follow-up query it is visible in `pg_locks` on the same
   session; if not visible, make `runMigrations` reject with a typed error. **Satisfies:** _a
   transaction-pooling proxy is detected and refused_. **Depends on:** 1.1. **Acceptance:** a test
@@ -101,7 +101,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   impractical in CI, record the limitation in the test comment and assert the invisibility branch via
   a direct unit-level injection of the "lock not visible" condition.
 
-- [ ] 1.3 Author `docs/durability-contract.md` (`design.md` §2.4): the binding Postgres-config
+- [x] 1.3 Author `docs/durability-contract.md` (`design.md` §2.4): the binding Postgres-config
   precondition — `fsync=on`, `full_page_writes=on`, `synchronous_commit` semantics, session-mode
   pooling only, the three server-side timeouts — stating which items the probe enforces vs.
   documents. **Satisfies:** _the required Postgres configuration is published as a binding Durability
@@ -112,7 +112,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
 
 ## 2. G7 — Server-side timeouts
 
-- [ ] 2.1 Add `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` to
+- [x] 2.1 Add `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` to
   `client.ts`'s `options.connection`, with conservative documented defaults and per-option overrides
   on `UmbraDBConnectionOptions` (`design.md` §3.1). **Satisfies:** _the UmbraDB connection sets
   bounded server-side timeouts by default_. **Depends on:** none (parallel with G5/G6).
@@ -128,7 +128,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   not bounded by the shorter default (scenario "a raised idle-in-transaction default is honoured for a
   long in-transaction workload"; Opus N3 — the lease/`withTransaction` idle-in-tx interaction).
 
-- [ ] 2.2 Bound the class-1 migration advisory-lock acquire in `migrate.ts` (`design.md` §3.2):
+- [x] 2.2 Bound the class-1 migration advisory-lock acquire in `migrate.ts` (`design.md` §3.2):
   wrap the blocking `pg_advisory_lock(1, hashtext(schema))` acquire with a bounded mechanism —
   `lock_timeout`, a scoped `statement_timeout`, or a `pg_try_advisory_lock` deadline poll (all three
   are verified to abort a blocked advisory-lock acquisition, `design.md` §3.2) — translate the timeout
@@ -147,7 +147,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
 
 ## 3. G8 — Contract-integrity fixes
 
-- [ ] 3.1 Validate `walletId`/`networkId` at all four `PgCheckpointStore` entry points
+- [x] 3.1 Validate `walletId`/`networkId` at all four `PgCheckpointStore` entry points
   (`save`/`load`/`history`/`prune`) with a shared identifier schema
   (`z.string().min(1).max(...).refine(!hasPostgresUnsafeText)`) defined in
   `src/interfaces/checkpoint-store.ts`, rejecting with `ValidationError` before any statement
@@ -160,7 +160,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   passes an over-length id and asserts `ValidationError` before any statement; a regression test
   confirms a well-formed id path is unchanged for all four methods.
 
-- [ ] 3.2 Add a depth bound to `JsonValueSchema` by reusing `exceedsMaxDepth` (`design.md` §4.2):
+- [x] 3.2 Add a depth bound to `JsonValueSchema` by reusing `exceedsMaxDepth` (`design.md` §4.2):
   hoist the iterative `exceedsMaxDepth` guard and its depth constant out of
   `transaction-history-storage.ts` into `temporal-kv.ts` (or a shared json-util module) with no import
   cycle, have `transaction-history-storage.ts` import it (behaviour there unchanged), and wrap
@@ -175,7 +175,7 @@ Each task names the requirement(s) it satisfies by their spec heading.
   accepted"); the existing `transaction-history-storage` `sections` depth tests still pass unchanged
   after the hoist (regression).
 
-- [ ] 3.3 Make `withLease` surface release failures instead of swallowing them (`design.md` §4.3):
+- [x] 3.3 Make `withLease` surface release failures instead of swallowing them (`design.md` §4.3):
   replace the `.catch(() => {})` at `transaction-lease.ts:412` with the **pinned** surfacing contract
   (Fable Finding 2 / Opus N5 — the option shape is frozen at G1, so it is decided here, not left
   either/or). Add `opts.onReleaseFault?: (err: unknown) => void` to `LeaseAcquireOptions`
@@ -198,19 +198,19 @@ Each task names the requirement(s) it satisfies by their spec heading.
 
 ## 4. Change close-out
 
-- [ ] 4.1 Whole-change differential review: an Opus auditor re-reads this proposal/design/spec against
+- [x] 4.1 Whole-change differential review: an Opus auditor re-reads this proposal/design/spec against
   the actual committed code and confirms every "Acceptance" criterion above was actually checked — a
   CI run passing is not sufficient evidence on its own, per every prior sprint's close-out standard.
   Confirm explicitly that the four non-goals were honoured in code: no `idempotency_key`/UNIQUE added
   to `save`; no lease write-routing/fencing-token change (only the swallow fixed); no perf/benchmark
   work; no consumer/indexer import.
 
-- [ ] 4.2 Confirm the pre-freeze sequencing obligation is met: `save`'s final signature (0.1) and the
+- [x] 4.2 Confirm the pre-freeze sequencing obligation is met: `save`'s final signature (0.1) and the
   `withLease` option shape (3.3) are settled and recorded so the API-surface freeze change (`G1`) can
   export them without a later breaking change (`council/A-release-scope.md` §5 Phase 1 → Phase 2).
   Record the T5 (cursor-durability crash) and T12 (durability-probe) dependencies as handoffs to the
   testing-gate change (`G9`–`G12`), noting both now have the API they require.
 
-- [ ] 4.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit the
+- [x] 4.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit the
   refreshed `graphify-out/` outputs in this close-out commit, so the knowledge graph does not silently
   drift stale behind this change's new code and openspec change.
