@@ -31,6 +31,7 @@
     "test:mutation": "stryker run",
     "test:mutation:ci": "node scripts/mutation-per-adapter.mjs",
     "test:live": "UMBRADB_LIVE_PREPROD=1 vitest run test/integration/preprod-db-sync.integration.test.ts test/integration/cold-boot-recovery.integration.test.ts",
+    "test:smoke": "npm run build && node test/smoke/pack-install.mjs",
     "archive:sync": "tsx chain-archive-sync/sync-cli.ts",
     "bench": "tsx bench/harness.ts",
     "bench:smoke": "tsx bench/smoke.ts"

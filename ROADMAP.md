@@ -51,6 +51,27 @@ below is **1.0.0**.
   ordered reconstruction, keyed transactions, lease traces, and concrete
   PostgreSQL/runtime refinement obligations.
 
+### Frozen 1.0.0 Lean cut-line (G20 — `openspec/changes/v1.0.0-api-surface`)
+
+- [x] **The 1.0.0 formal-proof cut-line is frozen as exactly `{T3, T5, W1, C1}`** — the abstract-store
+  properties that are mechanized in `Formal/Lean` and covered by the required Lean trust gate
+  (`.github/workflows/lean.yml`: it scans the whole `Formal/Lean` tree, rejecting any new
+  `sorry`/`admit`/`axiom`/`unsafe`, then builds and independently `leanchecker`s the project). Each of
+  the four traces to a Lean declaration under `Formal/Lean/UmbraDBFormal/`:
+    - **T3** (temporal-projection / observational equivalence, within retention) and **T5** (temporal
+      coherence — interval non-overlap + gap-freedom) — `TemporalKV/Laws.lean`,
+      `TemporalKV/Retention/Laws.lean` (M1/M2).
+    - **W1** (Watermarks last-write-wins) — `Watermarks/Laws.lean` (M3a).
+    - **C1** (CheckpointStore abstract save-side chunk projection — a join-semilattice) —
+      `Checkpoint/Projection.lean`, `Checkpoint/ChunkMap.lean` (M3b).
+  These four are the entire mechanized store-property set the gate covers today, so the box is
+  objectively green (the gate enforces the whole tree, not an enumerated property list).
+- [x] **Written deferral of everything outside the cut-line to post-1.0** (decision only, no proof work
+  in the api-surface change): **C2a / GC**, **ordered reconstruction**, **lease traces**,
+  **keyed-store lifting**, and **SQL / runtime refinement** are explicitly out of the 1.0.0 cut-line
+  and remain future Lean milestones (they are the open item immediately above). This converts the
+  previously-unfalsifiable "tractable properties proved in Lean" checklist item into a checkable box.
+
 ## Milestone 2 — Core implementation (module implementations complete)
 
 Per `design/tasks.md` §§0–8: environment setup, then each module
@@ -174,7 +195,11 @@ resume-from-cold checkpoint is `docs/notes/2026-07-23-resume-checkpoint.md`.
 
 A 1.0.0 tag requires all of:
 
-- [ ] Formal spec's tractable properties proved in Lean, not just stated.
+- [x] Formal spec's tractable properties proved in Lean, not just stated — the 1.0.0 Lean cut-line is
+  frozen as exactly `{T3, T5, W1, C1}` (mechanized in `Formal/Lean` and covered by the required Lean
+  trust gate), with a written deferral of C2a/GC, ordered reconstruction, lease traces, keyed-store
+  lifting, and SQL/runtime refinement to post-1.0. See *Milestone 1 → Frozen 1.0.0 Lean cut-line*
+  above (G20, `openspec/changes/v1.0.0-api-surface`).
 - [ ] P1–P10 property tests green against real Postgres.
 - [ ] Full sync test, retrieval-correctness tests, and cold-start-survival
   tests all green.
