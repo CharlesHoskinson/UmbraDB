@@ -187,6 +187,30 @@ export interface SpawnCrashWorkerOptions {
  *  driver noise. Kept in sync with `crash-worker.ts`. */
 export const CRASH_WORKER_READY_SENTINEL = "@@CRASH_WORKER_READY@@";
 export const CRASH_WORKER_ERROR_SENTINEL = "@@CRASH_WORKER_ERROR@@";
+/** The POST-readiness RESULT sentinel a T2 worker prints after its post-kill in-flight `save`
+ *  (`design.md` §2.2). Kept in sync with `crash-worker.ts`. */
+export const CRASH_WORKER_RESULT_SENTINEL = "@@CRASH_WORKER_RESULT@@";
+
+/** The post-readiness RESULT payload a T2 worker prints after it has issued its post-kill in-flight
+ *  `save` (`design.md` §2.2, Task 2.1). `isConnectionError`/`errorCode` are the worker's
+ *  AUTHORITATIVE typed classification of the caught error (an `Error` cannot cross the `spawn`
+ *  boundary as a live instance), so the parent asserts a typed `ConnectionError` on the stable
+ *  discriminant, never a message substring. */
+export interface CrashWorkerResult {
+  /** True once the worker re-issued the save against the killed backend. */
+  reissued?: boolean;
+  /** Whether that in-flight save threw — it MUST (the backend is dead); `false` fails the parent. */
+  threw?: boolean;
+  /** `err.constructor.name` — expected `"ConnectionError"`. */
+  errorName?: string;
+  /** The `StorageError` `.code` discriminant — expected `"CONNECTION_ERROR"`. */
+  errorCode?: unknown;
+  /** `err instanceof ConnectionError`, evaluated in-worker against the imported class. */
+  isConnectionError?: boolean;
+  isStorageError?: boolean;
+  message?: string;
+  [k: string]: unknown;
+}
 
 export interface CrashWorkerHandle {
   readonly child: ChildProcess;
@@ -199,6 +223,13 @@ export interface CrashWorkerHandle {
   waitForExit(): Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   /** Deterministic hard kill (SIGKILL) — the "kill the app mid-op" primitive (T1/T3/T5). */
   sigkill(): void;
+  /** Writes `${line}\n` to the worker's stdin — the DETERMINISTIC parent->worker "proceed"
+   *  handshake (T2, `design.md` §2.2): the parent sends this AFTER killing the worker's backend so
+   *  the worker's subsequent in-flight save runs strictly post-kill. No-op if the child has exited. */
+  sendLine(line: string): void;
+  /** Resolves with the T2 RESULT payload once the worker has emitted it (after its post-kill
+   *  in-flight save). Rejects if the worker exits before signalling a result or `timeoutMs` elapses. */
+  waitForResult(timeoutMs?: number): Promise<CrashWorkerResult>;
   /** Everything the worker has written to stdout / stderr so far (for diagnostics). */
   stdout(): string;
   stderr(): string;
@@ -245,46 +276,64 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
   const child = spawn(process.execPath, ["--import", "tsx", WORKER_ENTRYPOINT], {
     cwd: REPO_ROOT,
     env,
-    stdio: ["ignore", "pipe", "pipe"],
+    // stdin is a PIPE (was "ignore") so the parent can send the T2 "proceed" line (`sendLine`).
+    // Existing workers never read stdin, so this is transparent to them; an open, unread stdin pipe
+    // does not keep the child's event loop alive.
+    stdio: ["pipe", "pipe", "pipe"],
   });
 
   let stdoutBuf = "";
   let stderrBuf = "";
   let ready: CrashWorkerReady | undefined;
   let readyErr: Error | undefined;
+  let result: CrashWorkerResult | undefined;
+  let resultErr: Error | undefined;
   /** Index into `stdoutBuf` up to which COMPLETE (newline-terminated) lines have been scanned for a
-   *  readiness/error record. The remainder past it is a possibly-partial final line, held until its
-   *  own newline arrives. */
-  let readyScanPos = 0;
+   *  readiness/error/result record. The remainder past it is a possibly-partial final line, held
+   *  until its own newline arrives. ONE cursor for both signals: the scanner keeps advancing PAST
+   *  readiness so the later RESULT line (T2) is still found. */
+  let scanPos = 0;
   const readyWaiters: Array<() => void> = [];
+  const resultWaiters: Array<() => void> = [];
   let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
   const exitWaiters: Array<() => void> = [];
 
   const settleReady = (): void => { while (readyWaiters.length) readyWaiters.shift()!(); };
+  const settleResult = (): void => { while (resultWaiters.length) resultWaiters.shift()!(); };
 
   /** Line-buffered readiness parser. The worker emits its readiness/error record as a SINGLE
    *  `\n`-terminated line; a Node stream can split a chunk mid-line, so we `JSON.parse` ONLY
    *  complete newline-terminated lines (never a partial record, which would raise a permanent
    *  readiness error while the worker stays paused). Non-sentinel lines (tsx/driver log noise) are
    *  ignored rather than treated as errors. `stdoutBuf` keeps the full stream for diagnostics. */
-  const scanForReady = (): void => {
-    if (ready !== undefined || readyErr !== undefined) return;
+  const scanStdout = (): void => {
     let nl: number;
-    while ((nl = stdoutBuf.indexOf("\n", readyScanPos)) >= 0) {
-      const line = stdoutBuf.slice(readyScanPos, nl); // one COMPLETE line, no trailing "\n"
-      readyScanPos = nl + 1;
-      const r = line.indexOf(CRASH_WORKER_READY_SENTINEL);
-      if (r >= 0) {
-        try { ready = JSON.parse(line.slice(r + CRASH_WORKER_READY_SENTINEL.length)) as CrashWorkerReady; }
-        catch (err) { readyErr = new Error(`crash worker readiness line was not valid JSON: ${String(err)}`); }
-        settleReady();
-        return;
+    while ((nl = stdoutBuf.indexOf("\n", scanPos)) >= 0) {
+      const line = stdoutBuf.slice(scanPos, nl); // one COMPLETE line, no trailing "\n"
+      scanPos = nl + 1;
+      if (ready === undefined && readyErr === undefined) {
+        const r = line.indexOf(CRASH_WORKER_READY_SENTINEL);
+        if (r >= 0) {
+          try { ready = JSON.parse(line.slice(r + CRASH_WORKER_READY_SENTINEL.length)) as CrashWorkerReady; }
+          catch (err) { readyErr = new Error(`crash worker readiness line was not valid JSON: ${String(err)}`); }
+          settleReady();
+          continue;
+        }
+        const e = line.indexOf(CRASH_WORKER_ERROR_SENTINEL);
+        if (e >= 0) {
+          readyErr = new Error(`crash worker reported an error before readiness: ${line.slice(e + CRASH_WORKER_ERROR_SENTINEL.length).trim()}`);
+          settleReady();
+          continue;
+        }
       }
-      const e = line.indexOf(CRASH_WORKER_ERROR_SENTINEL);
-      if (e >= 0) {
-        readyErr = new Error(`crash worker reported an error before readiness: ${line.slice(e + CRASH_WORKER_ERROR_SENTINEL.length).trim()}`);
-        settleReady();
-        return;
+      if (result === undefined && resultErr === undefined) {
+        const x = line.indexOf(CRASH_WORKER_RESULT_SENTINEL);
+        if (x >= 0) {
+          try { result = JSON.parse(line.slice(x + CRASH_WORKER_RESULT_SENTINEL.length)) as CrashWorkerResult; }
+          catch (err) { resultErr = new Error(`crash worker result line was not valid JSON: ${String(err)}`); }
+          settleResult();
+          continue;
+        }
       }
       // else: a non-sentinel line — ignore and continue scanning subsequent complete lines.
     }
@@ -293,18 +342,25 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     stdoutBuf += chunk;
-    scanForReady();
+    scanStdout();
   });
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => { stderrBuf += chunk; });
 
   child.on("exit", (code, signal) => {
     exited = { code, signal };
+    scanStdout(); // flush any complete lines buffered right up to exit (the RESULT line, T2)
     if (ready === undefined && readyErr === undefined) {
       readyErr = new Error(
         `crash worker exited (code=${String(code)}, signal=${String(signal)}) before signalling readiness.\nstderr:\n${stderrBuf}`,
       );
       settleReady();
+    }
+    if (result === undefined && resultErr === undefined) {
+      resultErr = new Error(
+        `crash worker exited (code=${String(code)}, signal=${String(signal)}) before signalling a result.\nstderr:\n${stderrBuf}`,
+      );
+      settleResult();
     }
     while (exitWaiters.length) exitWaiters.shift()!();
   });
@@ -341,6 +397,24 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
         readyWaiters.push(waiter);
       });
     },
+    waitForResult(timeoutMs = DEFAULT_READY_TIMEOUT_MS): Promise<CrashWorkerResult> {
+      return new Promise<CrashWorkerResult>((resolve, reject) => {
+        const done = (): void => {
+          if (result !== undefined) resolve(result);
+          else reject(resultErr ?? new Error("crash worker result settled without a value"));
+        };
+        if (result !== undefined || resultErr !== undefined) { done(); return; }
+        let timer: ReturnType<typeof setTimeout>;
+        const waiter = (): void => { clearTimeout(timer); done(); };
+        timer = setTimeout(() => {
+          const idx = resultWaiters.indexOf(waiter);
+          if (idx >= 0) resultWaiters.splice(idx, 1);
+          try { child.kill("SIGKILL"); } catch { /* already gone */ }
+          reject(new SuiteWatchdogTimeoutError("crash-worker result", timeoutMs));
+        }, timeoutMs);
+        resultWaiters.push(waiter);
+      });
+    },
     waitForExit(): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
       return new Promise((resolve) => {
         if (exited !== undefined) { resolve(exited); return; }
@@ -348,6 +422,9 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
       });
     },
     sigkill(): void { child.kill("SIGKILL"); },
+    sendLine(line: string): void {
+      try { child.stdin?.write(`${line}\n`); } catch { /* child already gone */ }
+    },
   };
 }
 

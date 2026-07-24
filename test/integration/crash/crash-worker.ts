@@ -28,13 +28,25 @@ import { randomBytes } from "node:crypto";
 import { PgCheckpointStore } from "../../../src/postgres/checkpoint-store.js";
 import { createClient } from "../../../src/postgres/client.js";
 import { PgTransactionLeaseLayer, resolveTransaction } from "../../../src/postgres/transaction-lease.js";
+import { TransactionFaultError } from "../../../src/interfaces/transaction-lease.js";
 import { PgWatermarks } from "../../../src/postgres/watermarks.js";
 import type { WatermarkValue } from "../../../src/interfaces/watermarks.js";
+import { ConnectionError, StorageError } from "../../../src/interfaces/storage-errors.js";
 
 /** Kept in sync with `test/postgres/setup.ts`'s `CRASH_WORKER_*_SENTINEL` — duplicated here
  *  deliberately so this process does not import `setup.ts` (which loads `vitest`/testcontainers). */
 const READY_SENTINEL = "@@CRASH_WORKER_READY@@";
 const ERROR_SENTINEL = "@@CRASH_WORKER_ERROR@@";
+/** Second, POST-readiness signal (Task 2.1 / T2, `design.md` §2.2): the worker reports the CLASS
+ *  and stable `.code` of the error its post-kill in-flight `save` threw. An `Error` cannot cross a
+ *  `spawn` boundary as a live instance, so the AUTHORITATIVE `instanceof ConnectionError` runs in
+ *  the worker and the parent asserts on the reported discriminant — never a message substring. */
+const RESULT_SENTINEL = "@@CRASH_WORKER_RESULT@@";
+/** The token the parent writes to the worker's stdin to release the T2 pause (see
+ *  {@link waitForProceed}). A DETERMINISTIC parent->worker handshake, NOT a wall-clock sleep: the
+ *  parent kills this worker's backend FIRST, then sends this, so the failing in-flight `save` is
+ *  guaranteed to run strictly AFTER the kill. */
+const PROCEED_TOKEN = "proceed";
 
 /** The four named pause points. Mirrors `CrashHook` in `setup.ts`. */
 type CrashHook =
@@ -93,6 +105,61 @@ function pauseThenResume(): Promise<void> {
     // Ref'd timer: keeps the event loop alive across the pause (the SIGKILL normally lands first).
     setTimeout(resolve, ORPHAN_GUARD_MS);
   });
+}
+
+/** T2 (`design.md` §2.2): blocks until the parent writes a "proceed" line to this worker's stdin —
+ *  the release the parent sends AFTER it has killed this backend, so the worker's subsequent
+ *  in-flight `save` runs strictly post-kill. Bounded by the orphan guard so a buggy parent cannot
+ *  hang the worker forever. This is an explicit SIGNAL wait, never a timed sleep. */
+function waitForProceed(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let buf = "";
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      process.stdin.off("data", onData);
+      process.stdin.pause();
+    };
+    const onData = (chunk: Buffer | string): void => {
+      buf += chunk.toString();
+      if (buf.includes(PROCEED_TOKEN)) { cleanup(); resolve(); }
+    };
+    const timer = setTimeout(() => { cleanup(); resolve(); }, ORPHAN_GUARD_MS);
+    process.stdin.on("data", onData);
+    process.stdin.resume();
+  });
+}
+
+/** Emits the POST-readiness RESULT record the T2 parent reads via `waitForResult`. When
+ *  `exitAfter` is set it flushes the line and exits 0 IN the write callback — deterministic even
+ *  though a killed backend / resumed stdin would otherwise keep the worker's event loop alive. */
+function signalResult(payload: Record<string, unknown>, exitAfter = false): void {
+  const line = `${RESULT_SENTINEL} ${JSON.stringify(payload)}\n`;
+  if (exitAfter) process.stdout.write(line, () => process.exit(0));
+  else process.stdout.write(line);
+}
+
+/** Serialisable description of a caught error for the RESULT signal. The AUTHORITATIVE typed check
+ *  (`instanceof ConnectionError`) and the stable `.code` discriminant are both computed HERE, in
+ *  the worker, against the imported classes — so the parent asserts a typed error, not a message. */
+function describeCaughtError(err: unknown): Record<string, unknown> {
+  const isConnErr = err instanceof ConnectionError;
+  const isTxFaultConnLost = err instanceof TransactionFaultError && err.faultKind === "connection-lost";
+  return {
+    threw: true,
+    errorName: err instanceof Error ? err.constructor.name : typeof err,
+    errorCode: err instanceof StorageError ? err.code : ((err as { code?: unknown } | null)?.code ?? null),
+    isConnectionError: isConnErr,
+    // withTransaction's DOCUMENTED @throws maps a connection loss DURING a transaction to
+    // TransactionFaultError(faultKind "connection-lost") (transaction-lease.ts:223,263-267), which
+    // pre-empts save's {tx} ConnectionError translation. Report BOTH so the parent can assert the
+    // typed connection-failure surface (the design/acceptance name ConnectionError; the code
+    // produces the TransactionFault form for a save — see the test's SPEC NOTE).
+    isTransactionFaultConnectionLost: isTxFaultConnLost,
+    isTypedConnectionFailure: isConnErr || isTxFaultConnLost,
+    faultKind: err instanceof TransactionFaultError ? err.faultKind : null,
+    isStorageError: err instanceof StorageError,
+    message: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+  };
 }
 
 async function main(): Promise<void> {
@@ -155,25 +222,65 @@ async function main(): Promise<void> {
     }
 
     case "before-commit": {
-      // Drive the co-transactional save path on THIS worker's own transaction and never let the
-      // withTransaction callback return, so no COMMIT is issued.
-      await txLayer.withTransaction(async (tx) => {
-        await checkpoints.save(walletId, networkId, data, { tx });
-        // Capture the backend pid of the very connection holding the uncommitted work (the target
-        // for a Postgres-kill of the worker's own session in T2). Read-only; commits nothing.
-        const txSql = resolveTransaction(tx);
-        const pidRows = await txSql<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
-        // ---- REAL BOUNDARY (before-commit — T1/T2) --------------------------------------------
-        // DONE: every statement of `save` — the chunk upsert, the sequence allocation, the
-        //       manifest INSERT with complete=true, and the junction inserts — has been ISSUED on
-        //       this open transaction `tx`.
-        // NOT DONE: the transaction's COMMIT (this withTransaction callback has not returned).
-        // A SIGKILL now drops the connection; Postgres aborts the in-flight transaction, so
-        // NOTHING becomes visible (no complete=true manifest at the interrupted seq, no orphan
-        // junction rows).
-        signalReady({ hook, pid: process.pid, backendPid: pidRows[0]!.pid, walletId, networkId });
-        await pauseUntilKilled();
-      });
+      // ONE hook, TWO modes (`design.md` §1 lists before-commit for BOTH T1 and T2):
+      //  - T1 (default): pause pre-COMMIT and wait for the parent's SIGKILL of THIS process.
+      //  - T2 (UMBRADB_CRASH_T2_COMMIT_AFTER_KILL=1, `design.md` §2.2): after readiness — with the in-flight
+      //    save's statements ALREADY ISSUED on this open transaction — the parent kills THIS worker's
+      //    Postgres BACKEND (pg_terminate_backend of the reported backendPid), THEN sends a "proceed"
+      //    line. The worker then RETURNS from the callback, which makes withTransaction attempt the
+      //    COMMIT of the in-flight save on the now-dead connection. The commit rejects; withTransaction
+      //    surfaces its DOCUMENTED typed connection-loss error (TransactionFaultError, faultKind
+      //    "connection-lost" — transaction-lease.ts:223,263-267), never a raw driver error. The worker
+      //    reports the caught error's typed classification for the parent's assertion. (`design.md`
+      //    §2.2(a)/acceptance C1 name "ConnectionError"; the transaction layer wraps a connection loss
+      //    DURING a transaction as TransactionFaultError instead — see the test's SPEC NOTE.)
+      const t2Commit = process.env.UMBRADB_CRASH_T2_COMMIT_AFTER_KILL === "1";
+      let t2Error: unknown;
+      let t2Threw = false;
+      let t2Committed = false;
+      try {
+        await txLayer.withTransaction(async (tx) => {
+          await checkpoints.save(walletId, networkId, data, { tx });
+          // Capture the backend pid of the very connection holding the uncommitted work (the target
+          // for a Postgres-kill of the worker's own session in T2). Read-only; commits nothing.
+          const txSql = resolveTransaction(tx);
+          const pidRows = await txSql<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
+          // ---- REAL BOUNDARY (before-commit — T1/T2) --------------------------------------------
+          // DONE: every statement of `save` — the chunk upsert, the sequence allocation, the
+          //       manifest INSERT with complete=true, and the junction inserts — has been ISSUED on
+          //       this open transaction `tx` (a genuine in-flight save; the parent independently
+          //       confirms this via pg_stat_activity 'idle in transaction').
+          // NOT DONE: the transaction's COMMIT (this withTransaction callback has not returned).
+          // A SIGKILL now (T1) drops the connection; Postgres aborts the in-flight transaction, so
+          // NOTHING becomes visible (no complete=true manifest at the interrupted seq).
+          signalReady({ hook, pid: process.pid, backendPid: pidRows[0]!.pid, walletId, networkId });
+          if (!t2Commit) {
+            // T1: block here until the parent SIGKILLs this process at the pre-commit boundary.
+            await pauseUntilKilled();
+            return;
+          }
+          // T2: DETERMINISTIC — wait for the parent to (1) kill this backend, then (2) send proceed,
+          // BEFORE the COMMIT is attempted. The kill therefore lands strictly BEFORE the failing
+          // operation (no wall-clock race). Returning here makes withTransaction attempt the COMMIT.
+          await waitForProceed();
+        });
+        // withTransaction resolved => the in-flight save's COMMIT succeeded. In T2 the backend was
+        // killed, so this MUST NOT happen; report it so the parent FAILS LOUDLY (never a false pass).
+        t2Committed = true;
+      } catch (outer) {
+        if (!t2Commit) throw outer; // T1: preserve original throwing behaviour (unreachable — SIGKILLed)
+        t2Threw = true;
+        t2Error = outer;
+      }
+      if (t2Commit) {
+        // The pool/stdin are disposable and a killed backend can make a graceful sql.end() slow, so
+        // flush the RESULT line and exit DETERMINISTICALLY (in the write callback) — Postgres reaps
+        // the abandoned backends, exactly as after the T1 SIGKILL.
+        signalResult(t2Threw
+          ? { attempted: "commit", ...describeCaughtError(t2Error) }
+          : { attempted: "commit", threw: false, committed: t2Committed }, true);
+        return;
+      }
       return;
     }
 
