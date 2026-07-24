@@ -77,7 +77,7 @@ lands first.
 
 ## 2. G14 — benchmark harness (may start in parallel; baseline recorded only after §1)
 
-- [ ] 2.1 **Stand up the harness skeleton** (`design.md` §4) — an in-repo `bench/` TypeScript suite
+- [x] 2.1 **Stand up the harness skeleton** (`design.md` §4) — an in-repo `bench/` TypeScript suite
   driving the real adapters against a Testcontainers PG17 with a pinned image digest and pinned
   `shared_buffers`/`work_mem`/`max_wal_size`; microbench statistics via the chosen library
   (`mitata` or `tinybench`), which **MUST be added as an explicit `devDependency` of UmbraDB — not
@@ -89,7 +89,7 @@ lands first.
   Testcontainers PG17 and prints p50/p95/p99 + CV from the statistics library; `package.json`
   declares the chosen microbench library as a direct `devDependency`; a grep/import-graph check
   confirms no consumer/indexer package is imported by `bench/`.
-- [ ] 2.2 **Per-module workloads** (`design.md` §4; report `03` §"Per-module workloads") —
+- [x] 2.2 **Per-module workloads** (`design.md` §4; report `03` §"Per-module workloads") —
   implement the CheckpointStore (`save` 1/16/64/256 MB, near-duplicate dedup-ratio, `load`,
   `history(50)`, `prune`), TemporalKV (`put` fresh/existing, `get`, `getAt {version}`/`{at}`, with
   `n_tup_hot_upd`/`n_tup_upd` capture), Watermarks (`set` HOT-ratio + bloat), TransactionHistory
@@ -98,7 +98,7 @@ lands first.
   3.1. **Depends on:** 2.1. **Acceptance:** each workload runs and emits its metrics; the lease
   workload sets pool `max` above the contender count so it measures lock, not pool-queue latency
   (report `03` HP-7); the KV/Watermarks workloads emit the HOT-ratio needed by 3.2.
-- [ ] 2.3 **GC anti-join scale measurement** (`design.md` §5; report `03` HP-6; `council/B` §1) —
+- [x] 2.3 **GC anti-join scale measurement** (`design.md` §5; report `03` HP-6; `council/B` §1) —
   measure GC pass duration vs live-chunk count across the **declared 10^5–10^6-chunk envelope**
   (not 10^7); record the curve, together with the **operational cliff parameters `K` and `D`** (the
   super-linear growth factor and the absolute per-pass duration bound the spec's HP-6 requirement
@@ -109,7 +109,7 @@ lands first.
   and the cliff determination (met / not met, and the first-met live-chunk count if any) recorded
   in the baseline as an explicit adjudication — so a cliff, if present, is detectable by the
   declared rule, not by eyeball.
-- [ ] 2.4 **Conditional: batched GC sweep** (`design.md` §5; `council/B` §4) — IF and only if 2.3's
+- [x] 2.4 **Conditional: batched GC sweep** (`design.md` §5; `council/B` §4) — IF and only if 2.3's
   curve **meets the declared cliff condition** (`K`×-growth or `D`-bound, per the HP-6 requirement)
   inside the declared envelope, replace `prune`'s single-statement chunk reclaim
   (`checkpoint-store.ts:397-404`) with a bounded batched sweep (≤100-row chunked deletes) and ship
@@ -122,7 +122,7 @@ lands first.
 
 ## 3. G14 — record the baseline + document ceilings
 
-- [ ] 3.1 **Record the committed baseline artifact** (`design.md` §5; `council/B` §3; G14 hard
+- [x] 3.1 **Record the committed baseline artifact** (`design.md` §5; `council/B` §3; G14 hard
   rule) — run the full harness (§2) against the pinned environment *after* §1 has merged; emit a
   committed `bench/baseline.<harness-version>.json` capturing per-workload p50/p95/p99 + CV, the
   GC curve, dedup ratio, HOT ratios, and the pinned environment (image digest, server settings,
@@ -136,14 +136,14 @@ lands first.
   confirms the measured `save`/`history` paths are the batched shapes (§1), not the pre-change
   loops; **no numeric threshold is wired as a release gate** (verified by the absence of any
   failing-on-number CI step).
-- [ ] 3.2 **Verify IS-1 empirically from the soak/baseline** (`design.md` §3; report `03` IS-1) —
+- [x] 3.2 **Verify IS-1 empirically from the soak/baseline** (`design.md` §3; report `03` IS-1) —
   from the KV/Watermarks workload runs, record the `pg_stat_user_tables.n_tup_hot_upd / n_tup_upd`
   ratio for `kv_current` in the baseline as an observed value under sustained puts. *Satisfies:*
   the second scenario of Requirement "kv_current is fillfactor-tuned…". **Depends on:** 1.5, 2.2.
   **Acceptance:** the baseline records the observed HOT ratio for `kv_current`, documented as a
   measured observation (not a claimed causal isolation of `fillfactor`, per Sprint 4 task 0.2's
   precedent).
-- [ ] 3.3 **Document scalability ceilings SC-1..SC-6** (`design.md` §6; report `03`
+- [x] 3.3 **Document scalability ceilings SC-1..SC-6** (`design.md` §6; report `03`
   §"Scalability ceilings"; `council/B` §4) — write `Performance/CEILINGS.md` (or a README section)
   stating each of SC-1..SC-6, its limit, its 1.0.0 disposition (documented, not remediated), and
   citing the measured GC curve for SC-2. *Satisfies:* Requirement "scalability ceilings are
@@ -151,7 +151,7 @@ lands first.
   SC-1..SC-6, states each limit and its deferral (IS-3 partitioning/retention, streaming load, IS-4
   GIN tuning, TOAST-mode choice all marked post-1.0.0), and SC-2 references the declared-envelope
   GC curve.
-- [ ] 3.4 **Wire the coarse smoke guard now; encode the CV-aware-gate deferral** (`design.md` §5;
+- [x] 3.4 **Wire the coarse smoke guard now; encode the CV-aware-gate deferral** (`design.md` §5;
   roadmap G14 "Coarse gate now"; `council/A` §Phase-3; `council/B` §3) — wire a coarse,
   order-of-magnitude benchmark regression smoke guard as a CI check *for 1.0.0* (present now),
   documented as non-release-gating (it flags gross regressions but never fails the build on a
@@ -168,10 +168,31 @@ lands first.
   run passing is not sufficient evidence on its own, per every prior sprint's close-out standard.
   Confirm the two hard-rule invariants explicitly: (a) the baseline exists and *no perf number
   gates the release*; (b) the batching fixes (§1) merged *before* the baseline was recorded (§3.1).
-- [ ] 4.2 Update `ROADMAP-v1.0.0-CONSOLIDATED.md`'s gate checklist — mark G13 and G14 addressed
+- [x] 4.2 Update `ROADMAP-v1.0.0-CONSOLIDATED.md`'s gate checklist — mark G13 and G14 addressed
   (G13 fixes landed; baseline recorded; ceilings documented; CV-aware regression gate explicitly
   deferred post-1.0.0) — and cross-link this change from the roadmap's §"Critical path" step 3 so
   the roadmap doesn't drift from what's been built.
 - [ ] 4.3 Per this repo's `CLAUDE.md` convention: refresh any repo knowledge-graph outputs affected
   by the new `bench/` tree and the two migrations in this change's close-out commit. *(Skip if the
   graphify step is explicitly waived for this change.)*
+
+
+## G14 build close-out (2026-07-23)
+
+Built on `feat/g13-perf-baseline`. Tasks 2.1-2.4, 3.1-3.4, and 4.2 are checked above.
+
+- **2.4 cliff determination (echoed per the task's acceptance):** the GC reachability anti-join was
+  measured across the FULL declared 10^5-10^6 envelope (10k / 50k / 100k / 300k / 1,000,000 live
+  chunks — no cap needed; the run finished well within the wall-clock budget). Against the declared
+  operational cliff rule (K = 2.0x super-linear pass-duration-vs-chunk-count growth, or D = 5000 ms
+  absolute per-pass bound) the determination is **NOT MET**: pass duration grew sub-K with chunk
+  count and no single pass exceeded D. Task 2.4 is therefore closed as **not triggered** — the
+  single-statement anti-join `DELETE` is retained and ceiling **SC-2** documents the O(live-chunks)
+  cost. The curve, K, D, and the determination are recorded in
+  `bench/baseline.1.0.0-perf-baseline.1.json` (`gcCurve` block) and in `Performance/CEILINGS.md`.
+- **Hard-rule invariants:** the baseline exists and **no perf number gates the release** (the coarse
+  `bench-smoke` CI guard is explicitly non-release-gating; the CV-aware calibrated gate is deferred
+  post-1.0.0); the G13 batching fixes (HP-1/HP-2, on this branch) are the shapes the baseline
+  measured — recorded BEFORE the baseline was taken.
+- **4.1** (whole-change differential review) is left for the independent auditor.
+- **4.3** (repo knowledge-graph refresh) is **explicitly waived** for this change.

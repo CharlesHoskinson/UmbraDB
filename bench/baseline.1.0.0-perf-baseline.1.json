@@ -1,0 +1,314 @@
+{
+  "schema": "umbradb-perf-baseline/v1",
+  "harnessVersion": "1.0.0-perf-baseline.1",
+  "generatedAt": "2026-07-24T05:58:11.269Z",
+  "environment": {
+    "postgresImage": "postgres:17-alpine",
+    "postgresImageId": "sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193",
+    "postgresServerVersion": "PostgreSQL 17.10 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "settings": {
+      "shared_buffers": "256MB",
+      "work_mem": "16MB",
+      "max_wal_size": "2GB"
+    },
+    "node": "v24.18.0",
+    "microbenchLib": "tinybench@2.9.0",
+    "harnessVersion": "1.0.0-perf-baseline.1",
+    "profile": "full",
+    "declaredCaps": {
+      "checkpointSaveSizesMB": [
+        1,
+        16,
+        64
+      ],
+      "checkpointSaveDeclaredCeilingMB": 256,
+      "gcEnvelopeTargetChunks": [
+        100000,
+        1000000
+      ],
+      "gcActualMaxChunks": 1000000,
+      "note": "256 MB save + 10^6-chunk GC upper target are declared ceilings; the actual run is capped for runtime sanity per design.md §4/§5 and documented in Performance/CEILINGS.md."
+    }
+  },
+  "workloads": {
+    "checkpointStore.save.1MB": {
+      "unit": "ms",
+      "samples": 10,
+      "min": 19.36798200000021,
+      "max": 42.82771999999977,
+      "mean": 23.389061000000037,
+      "sd": 6.959335649212202,
+      "cv": 0.2975466030556845,
+      "p50": 20.956302999999934,
+      "p95": 42.82771999999977,
+      "p99": 42.82771999999977
+    },
+    "checkpointStore.save.16MB": {
+      "unit": "ms",
+      "samples": 6,
+      "min": 221.55267300000014,
+      "max": 253.5480690000004,
+      "mean": 242.26490333333354,
+      "sd": 12.807557027654308,
+      "cv": 0.05286592012063887,
+      "p50": 248.05893800000013,
+      "p95": 253.5480690000004,
+      "p99": 253.5480690000004
+    },
+    "checkpointStore.save.64MB": {
+      "unit": "ms",
+      "samples": 3,
+      "min": 1010.2410330000002,
+      "max": 1044.010373000001,
+      "mean": 1022.6259469999999,
+      "sd": 18.596652741489294,
+      "cv": 0.018185195472542902,
+      "p50": 1013.6264349999983,
+      "p95": 1044.010373000001,
+      "p99": 1044.010373000001
+    },
+    "checkpointStore.load.16MB": {
+      "unit": "ms",
+      "samples": 8,
+      "min": 72.93258400000013,
+      "max": 89.72502600000007,
+      "mean": 78.20930137499977,
+      "sd": 5.942435875558419,
+      "cv": 0.07598119112540706,
+      "p50": 74.96422600000005,
+      "p95": 89.72502600000007,
+      "p99": 89.72502600000007
+    },
+    "checkpointStore.history.limit50": {
+      "unit": "ms",
+      "samples": 20,
+      "min": 1.3929530000004888,
+      "max": 2.1872459999995044,
+      "mean": 1.7204579499998545,
+      "sd": 0.21128151328067868,
+      "cv": 0.12280539218101584,
+      "p50": 1.6837560000003577,
+      "p95": 2.1537499999994907,
+      "p99": 2.1872459999995044
+    },
+    "checkpointStore.prune": {
+      "unit": "ms",
+      "samples": 5,
+      "min": 3.408986000000368,
+      "max": 4.348981000001004,
+      "mean": 3.7913854000002174,
+      "sd": 0.4489336229433383,
+      "cv": 0.11840885997591079,
+      "p50": 3.533527999999933,
+      "p95": 4.348981000001004,
+      "p99": 4.348981000001004
+    },
+    "temporalKV.put.fresh": {
+      "unit": "ms",
+      "samples": 114,
+      "min": 1.7469660000006115,
+      "max": 5.40087499999936,
+      "mean": 2.651745763157985,
+      "sd": 0.7518886572892949,
+      "cv": 0.2835447755722497,
+      "p50": 2.4727050000001327,
+      "p95": 3.9325950000002194,
+      "p99": 4.6152450000008685
+    },
+    "temporalKV.put.existing": {
+      "unit": "ms",
+      "samples": 195,
+      "min": 1.8064719999983936,
+      "max": 4.897437000001446,
+      "mean": 2.568521923076985,
+      "sd": 0.6274684143906193,
+      "cv": 0.24429163276867716,
+      "p50": 2.371024000000034,
+      "p95": 3.721604999998817,
+      "p99": 4.5245560000003024
+    },
+    "temporalKV.get": {
+      "unit": "ms",
+      "samples": 899,
+      "min": 0.22177900000133377,
+      "max": 0.814632999999958,
+      "mean": 0.3339150834260532,
+      "sd": 0.06330523373899338,
+      "cv": 0.18958482824275463,
+      "p50": 0.32741100000021106,
+      "p95": 0.4415160000007745,
+      "p99": 0.566225000000486
+    },
+    "temporalKV.getAt.version": {
+      "unit": "ms",
+      "samples": 695,
+      "min": 0.29977299999882234,
+      "max": 0.8005910000010772,
+      "mean": 0.43178477410071386,
+      "sd": 0.06005846980408024,
+      "cv": 0.13909353318251003,
+      "p50": 0.4257600000000821,
+      "p95": 0.5321459999995568,
+      "p99": 0.6474319999997533
+    },
+    "temporalKV.getAt.at": {
+      "unit": "ms",
+      "samples": 819,
+      "min": 0.21925800000099116,
+      "max": 0.8158240000011574,
+      "mean": 0.36637369230770067,
+      "sd": 0.07505476324472422,
+      "cv": 0.20485849508454643,
+      "p50": 0.3616889999993873,
+      "p95": 0.4901800000006915,
+      "p99": 0.6444349999983388
+    },
+    "watermarks.set.highFrequency": {
+      "unit": "ms",
+      "samples": 203,
+      "min": 1.6864130000012665,
+      "max": 5.7463299999999435,
+      "mean": 2.4712283448276193,
+      "sd": 0.7198438232703716,
+      "cv": 0.29128988617220813,
+      "p50": 2.224955999998201,
+      "p95": 3.803310999999667,
+      "p99": 4.86685099999886
+    },
+    "transactionHistory.pendingToFinalized": {
+      "unit": "ms",
+      "samples": 66,
+      "min": 5.4430130000000645,
+      "max": 15.219796999999744,
+      "mean": 7.582582000000085,
+      "sd": 1.4056949419788787,
+      "cv": 0.1853847333241979,
+      "p50": 7.477343000000474,
+      "p95": 9.148863000000347,
+      "p99": 15.219796999999744
+    },
+    "lease.acquireRelease.contenders1": {
+      "unit": "ms",
+      "samples": 30,
+      "min": 0.41823400000066613,
+      "max": 0.9305979999990086,
+      "mean": 0.5859602666664917,
+      "sd": 0.10970083296710158,
+      "cv": 0.18721548065227347,
+      "p50": 0.554004999999961,
+      "p95": 0.8669759999993403,
+      "p99": 0.9305979999990086
+    },
+    "lease.acquireRelease.contenders2": {
+      "unit": "ms",
+      "samples": 60,
+      "min": 0.5320270000011078,
+      "max": 2.192968999999721,
+      "mean": 0.9581048500000179,
+      "sd": 0.33297799993829297,
+      "cv": 0.34753816342573235,
+      "p50": 0.9031909999994241,
+      "p95": 1.4093149999989691,
+      "p99": 2.192968999999721
+    },
+    "lease.acquireRelease.contenders4": {
+      "unit": "ms",
+      "samples": 120,
+      "min": 0.48943700000018,
+      "max": 2.2617129999998724,
+      "mean": 1.166374124999993,
+      "sd": 0.4236142129373439,
+      "cv": 0.36318896643677384,
+      "p50": 1.1696589999992284,
+      "p95": 1.889126000000033,
+      "p99": 2.1610409999993863
+    },
+    "lease.acquireRelease.contenders8": {
+      "unit": "ms",
+      "samples": 240,
+      "min": 0.6145240000005288,
+      "max": 3.708466000000044,
+      "mean": 1.9851952250000597,
+      "sd": 0.8307528830275673,
+      "cv": 0.4184741493258137,
+      "p50": 1.973281999999017,
+      "p95": 3.3137950000000274,
+      "p99": 3.5577090000006137
+    },
+    "lease.acquireRelease.contenders16": {
+      "unit": "ms",
+      "samples": 480,
+      "min": 0.7882420000005368,
+      "max": 18.61294100000123,
+      "mean": 4.01932240833335,
+      "sd": 2.441597195033459,
+      "cv": 0.607464877654811,
+      "p50": 3.7924629999997705,
+      "p95": 7.309273000000758,
+      "p99": 16.061009000000922
+    }
+  },
+  "measurements": {
+    "checkpointDedupRatio": {
+      "referenced": 64,
+      "written": 1,
+      "ratio": 0.984375,
+      "note": "near-duplicate save (1 of N chunks changed); ratio = 1 - newlyWritten/referenced, newlyWritten = ckpt_chunks row-count delta (ON CONFLICT hit count)"
+    },
+    "kvCurrentHotRatio": {
+      "table": "kv_current",
+      "n_tup_upd": 230,
+      "n_tup_hot_upd": 230,
+      "hotRatio": 1,
+      "note": "measured observation under sustained puts (IS-1); NOT a causal isolation of fillfactor (Sprint 4 task 0.2 precedent)"
+    },
+    "watermarksHotRatio": {
+      "table": "watermarks",
+      "n_tup_upd": 240,
+      "n_tup_hot_upd": 240,
+      "hotRatio": 1,
+      "note": "measured observation under sustained puts (IS-1); NOT a causal isolation of fillfactor (Sprint 4 task 0.2 precedent)"
+    },
+    "transactionHistoryGinWriteP99Ms": 15.219796999999744
+  },
+  "gcCurve": {
+    "declaredEnvelope": {
+      "targetMinChunks": 100000,
+      "targetMaxChunks": 1000000,
+      "actualMinChunks": 10000,
+      "actualMaxChunks": 1000000,
+      "cappedBelowTarget": false,
+      "note": "Full declared envelope measured to 1000000 live chunks."
+    },
+    "K": 2,
+    "D_ms": 5000,
+    "points": [
+      {
+        "liveChunks": 10000,
+        "passMs": 4.860667000000831
+      },
+      {
+        "liveChunks": 50000,
+        "passMs": 15.074423000001843
+      },
+      {
+        "liveChunks": 100000,
+        "passMs": 36.483540000001085
+      },
+      {
+        "liveChunks": 300000,
+        "passMs": 110.37904700000217
+      },
+      {
+        "liveChunks": 1000000,
+        "passMs": 551.214054000011
+      }
+    ],
+    "cliffDetermination": {
+      "met": false,
+      "reason": "none",
+      "firstMetLiveChunks": null,
+      "note": "no cliff across 5 points up to 1000000 live chunks: no pass exceeded D=5000ms and pass-duration growth stayed within K=2x of chunk-count growth. The single-statement anti-join delete is retained; SC-2 documents the O(live-chunks) cost."
+    }
+  }
+}
