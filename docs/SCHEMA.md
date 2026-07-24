@@ -791,7 +791,7 @@ export interface RunMigrationsOptions {
 ```
 
 - Every existing tier1_wallet caller that omits `migrations` is unaffected — `tier1WalletMigrations`
-  (the array `[migration000, migration001, migration002, migration003, migration004]`, formerly the
+  (the array `[migration000, migration001, migration002, migration003, migration004, migration005, migration006]`, formerly the
   module's unexported default) remains the implicit default.
 - A `chain_archive` caller passes `{ schema: "chain_archive", migrations: chainArchiveMigrations }`
   explicitly. `chainArchiveMigrations` (`migrations/chain_archive/index.ts`) is

@@ -79,13 +79,16 @@ export async function runGcScale(sql: UmbraDBSql, opts: GcScaleOpts): Promise<Gc
     points.push({ liveChunks: populated, passMs });
   }
 
-  // Adjudicate the cliff ONLY over points inside the declared envelope (design.md §5, HP-6). Points
-  // below targetEnvelope[0] (10k / 50k) are kept in `points` for context but excluded here so a
-  // sub-envelope breach cannot be misread as an in-envelope cliff (and falsely trigger B8's
-  // conditional batched-GC remediation). All measured points remain in the returned curve's `points`.
+  // Adjudicate the cliff over the declared envelope (design.md §5, HP-6). D (absolute per-pass bound)
+  // is checked over IN-ENVELOPE points only, so a sub-envelope breach cannot be misread as an
+  // in-envelope cliff (and falsely trigger B8's conditional batched-GC remediation). K (super-linear
+  // growth) is checked over every consecutive pair whose LATER point is in-envelope -- INCLUDING the
+  // lower-boundary pair (50k -> 100k) whose earlier point is the last sub-envelope point: design.md
+  // §5 defines the cliff by growth "between it and the previous measured point", so the first
+  // in-envelope point IS compared against its measured predecessor rather than left uncompared. All
+  // measured points (sub-envelope included) remain in the returned curve's `points` for context.
   const [envMin, envMax] = opts.targetEnvelope;
-  const inEnvelopePoints = points.filter((p) => p.liveChunks >= envMin && p.liveChunks <= envMax);
-  const determination = adjudicate(inEnvelopePoints, K, D_MS);
+  const determination = adjudicate(points, envMin, envMax, K, D_MS);
   const actualMax = points.length > 0 ? points[points.length - 1]!.liveChunks : 0;
   const cappedBelowTarget = actualMax < opts.targetEnvelope[1];
 
@@ -141,18 +144,24 @@ async function measureGcPass(store: PgCheckpointStore): Promise<number> {
   return performance.now() - t0;
 }
 
-function adjudicate(points: GcPoint[], k: number, d: number): GcCurve["cliffDetermination"] {
-  if (points.length > 0 && points[0]!.passMs > d) {
-    return {
-      met: true,
-      reason: "D-absolute",
-      firstMetLiveChunks: points[0]!.liveChunks,
-      note: `first measured pass (${points[0]!.passMs.toFixed(1)}ms at ${points[0]!.liveChunks} chunks) exceeded the absolute bound D=${d}ms`,
-    };
-  }
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]!;
-    const cur = points[i]!;
+function adjudicate(
+  allPoints: GcPoint[],
+  envMin: number,
+  envMax: number,
+  k: number,
+  d: number,
+): GcCurve["cliffDetermination"] {
+  const inEnvelope = (p: GcPoint): boolean => p.liveChunks >= envMin && p.liveChunks <= envMax;
+  const inEnvelopePoints = allPoints.filter(inEnvelope);
+  // One ascending pass, preserving per-point D-then-K precedence. D (absolute per-pass bound) is
+  // adjudicated over IN-ENVELOPE points only. K (super-linear growth) is adjudicated over every
+  // consecutive pair whose LATER point is in-envelope -- so the lower-boundary pair (the last
+  // sub-envelope point -> the first in-envelope point, e.g. 50k -> 100k) IS checked, per design.md
+  // §5's "growth between it and the previous measured point". Sub-envelope points stay in the
+  // returned curve's `points` for context but are never themselves adjudicated as a cliff.
+  for (let i = 0; i < allPoints.length; i++) {
+    const cur = allPoints[i]!;
+    if (!inEnvelope(cur)) continue;
     if (cur.passMs > d) {
       return {
         met: true,
@@ -161,22 +170,25 @@ function adjudicate(points: GcPoint[], k: number, d: number): GcCurve["cliffDete
         note: `pass duration ${cur.passMs.toFixed(1)}ms at ${cur.liveChunks} chunks exceeded the absolute bound D=${d}ms`,
       };
     }
-    const chunkGrowth = cur.liveChunks / Math.max(prev.liveChunks, 1);
-    const durGrowth = cur.passMs / Math.max(prev.passMs, 0.001);
-    if (chunkGrowth > 1 && durGrowth > k * chunkGrowth) {
-      return {
-        met: true,
-        reason: "K-superlinear",
-        firstMetLiveChunks: cur.liveChunks,
-        note: `pass-duration grew ${durGrowth.toFixed(2)}x vs chunk-count ${chunkGrowth.toFixed(2)}x (> K=${k}x, super-linear) between ${prev.liveChunks} and ${cur.liveChunks} chunks`,
-      };
+    if (i >= 1) {
+      const prev = allPoints[i - 1]!;
+      const chunkGrowth = cur.liveChunks / Math.max(prev.liveChunks, 1);
+      const durGrowth = cur.passMs / Math.max(prev.passMs, 0.001);
+      if (chunkGrowth > 1 && durGrowth > k * chunkGrowth) {
+        return {
+          met: true,
+          reason: "K-superlinear",
+          firstMetLiveChunks: cur.liveChunks,
+          note: `pass-duration grew ${durGrowth.toFixed(2)}x vs chunk-count ${chunkGrowth.toFixed(2)}x (> K=${k}x, super-linear) between ${prev.liveChunks} and ${cur.liveChunks} chunks`,
+        };
+      }
     }
   }
-  const maxChunks = points.length > 0 ? points[points.length - 1]!.liveChunks : 0;
+  const maxChunks = inEnvelopePoints.length > 0 ? inEnvelopePoints[inEnvelopePoints.length - 1]!.liveChunks : 0;
   return {
     met: false,
     reason: "none",
     firstMetLiveChunks: null,
-    note: `no cliff across ${points.length} in-envelope points up to ${maxChunks} live chunks: no pass exceeded D=${d}ms and pass-duration growth stayed within K=${k}x of chunk-count growth. Adjudicated only over the declared 10^5-10^6 envelope (sub-envelope context points excluded). The single-statement anti-join delete is retained; SC-2 documents the O(live-chunks) cost.`,
+    note: `no cliff across ${inEnvelopePoints.length} in-envelope points up to ${maxChunks} live chunks: no in-envelope pass exceeded D=${d}ms and pass-duration growth stayed within K=${k}x of chunk-count growth (K adjudicated over every consecutive pair whose later point is in-envelope, INCLUDING the lower-boundary pair from the last sub-envelope point). The single-statement anti-join delete is retained; SC-2 documents the O(live-chunks) cost.`,
   };
 }
