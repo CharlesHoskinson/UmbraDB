@@ -16,12 +16,64 @@ validates the packed result of everything above.
 
 ## 0. Preconditions (blocking gate — verify before any freeze work)
 
-- [ ] 0.1 **Confirm G5 has merged and `save`'s signature is final.** Inspect
+- [x] 0.1 **Confirm G5 has merged and `save`'s signature is final.** Inspect
   `src/interfaces/checkpoint-store.ts` and `src/postgres/checkpoint-store.ts` and confirm the
   co-transactional `save` (accepts a caller `tx`, or the documented `saveAndAdvance` combinator
   exists). **Acceptance:** a written note in this file records the exact final `save` signature the
   barrel will freeze; if G5 has not merged, STOP — this change is blocked (design §0). Satisfies the
   ordering precondition for **G1**.
+
+> **Builder note (0.1) -- G5 precondition VERIFIED; frozen `save`/`saveAndAdvance` signatures + freeze decisions.**
+>
+> G5 has merged on `main` (`4e04926`). `CheckpointStore.save` accepts a caller transaction via
+> `SaveCheckpointOptions.tx`, and the `saveAndAdvance` combinator exists. The exact final
+> signatures the barrel freezes:
+>
+> - `CheckpointStore.save(walletId: string, networkId: string, data: Uint8Array, opts?: SaveCheckpointOptions): Promise<CheckpointSummary>`
+>   where `SaveCheckpointOptions = z.infer<typeof SaveCheckpointOptionsSchema> & { signal?: AbortSignal; tx?: TransactionHandle }`
+>   (`src/interfaces/checkpoint-store.ts`). With `opts.tx` supplied, `save` issues every statement
+>   on the caller's transaction (co-transactional composition); `PgCheckpointStore` implements it.
+> - `saveAndAdvance(deps: SaveAndAdvanceDeps, walletId: string, networkId: string, data: Uint8Array, cursor: SaveAndAdvanceCursor, opts?: { chunkSize?: number; label?: string; signal?: AbortSignal }): Promise<CheckpointSummary>`
+>   (`src/postgres/save-and-advance.ts`) -- opens ONE transaction, calls `checkpoints.save(..., { tx })`
+>   then `watermarks.set(..., { tx })`, and commits both together.
+>
+> **Consolidating-lead decisions recorded (design §1.1 is silent on each; the reconciliation brief
+> authorised them):**
+> 1. **`saveAndAdvance` IS frozen public API.** The barrel re-exports `saveAndAdvance` plus its
+>    `SaveAndAdvanceDeps`/`SaveAndAdvanceCursor` types. It is the G5 co-transactional composition
+>    primitive; its own doc comment says its signature is "finalised by the api-surface change (G1)",
+>    and the durability ordering guarantee (design §4.1) is unreachable through the public surface
+>    without it. The `save-and-advance.ts` "not re-exported from any barrel" NOTE was corrected to say
+>    it IS now exported and frozen.
+> 2. **The G6/G7 error classes join the frozen `StorageError` hierarchy.** `DurabilityContractError`
+>    (`DURABILITY_CONTRACT_VIOLATION`), `TransactionPoolerDetectedError` (`TRANSACTION_POOLER_DETECTED`),
+>    and `MigrationLockTimeoutError` (`MIGRATION_LOCK_TIMEOUT`) are all thrown from `runMigrations`, so
+>    a consumer catches them -- they are already-shipped public error surface. The barrel re-exports
+>    all three. This makes the **frozen non-chain-archive catalog 24 codes** (design §3.1's 21 + these
+>    3). Task 5.2's catalog doc and its C4 drift test MUST enumerate 24, not the pre-G6/G7 21 (the
+>    design §3.1 `grep -> 21` was taken before G6/G7 merged; the drift test, not the literal number,
+>    is the authority per design §3.1's own framing).
+> 3. **Kept internal (smallest-surface / additive-in-a-minor).** `probeDurability`,
+>    `DurabilityWarning`, `DurabilityViolation`, `DurabilityProbeOptions` (design §1.1 lists no probe
+>    types; the two error CLASSES suffice for `catch`/`instanceof`); `encode`/`decode`/`ENVELOPE_VERSION`
+>    (the `PgWalletStateEnvelopeStore` wraps them); and the bare bound constants (`MAX_JSON_DEPTH`,
+>    `MAX_CHECKPOINT_ID_LENGTH`, `MAX_ENTRY_CONTENT_DEPTH`, `THS_RESERVED_KEY_PREFIX`, the `DEFAULT_*_MS`
+>    timeouts). Any of these can be added in a 1.x minor without a break; over-exporting cannot be undone
+>    without a major.
+> 4. **Abstract intermediate error bases are NOT re-exported.** Design §1.1 freezes "`StorageError` and
+>    every concrete subclass"; the root `StorageError` IS exported (catch-all + spec scenario), but the
+>    intermediates `TemporalKVError`/`CheckpointStoreError`/`TransactionLeaseError`/`WalletStateEnvelopeError`
+>    are not, keeping the surface to base + concrete leaves.
+> 5. **`MIGRATION_LOCK_TIMEOUT` retryability = `non-retryable`** per design §3.1's explicit rule (retryable
+>    set is exactly `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT}`; "all others non-retryable").
+>    SPEC-AMBIGUITY FLAG for task 8.1/5.2: semantically it resembles `LEASE_TIMEOUT` (another advisory-lock
+>    wait, which IS retryable), but it is a startup/migration fault normally handled by an orchestrator
+>    restart rather than an in-process retry, and design froze the retryable set as exactly those three.
+> 6. **`retryable` field representation.** `abstract readonly retryable: Retryability` on the
+>    `StorageError` base, where `Retryability = "retryable" | "non-retryable" | "conditional"`. Every
+>    concrete subclass sets it; `ClockRegressionError` = `"conditional"` (its two documented causes are
+>    distinguished, not collapsed to a uniform non-retryable label). `Retryability` is re-exported from the
+>    barrel (it is the type of a public field).
 
 ## 1. Pre-freeze: retryability field (G3)
 

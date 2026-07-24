@@ -11,6 +11,7 @@ import { TransactionFaultError } from "../interfaces/transaction-lease.js";
  */
 export class ExclusionViolationError extends StorageError {
   readonly code = "EXCLUSION_VIOLATION" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, cause?: unknown) { super(message, cause); }
 }
 
@@ -31,6 +32,7 @@ export class ExclusionViolationError extends StorageError {
  */
 export class ClockRegressionError extends StorageError {
   readonly code = "CLOCK_REGRESSION" as const;
+  readonly retryable = "conditional" as const;
   constructor(message: string, cause?: unknown) { super(message, cause); }
 }
 
@@ -56,15 +58,30 @@ export class ClockRegressionError extends StorageError {
  *     recognized by the constraint name's table-name prefix (Postgres auto-names an unlabeled
  *     CHECK `<table>_<column>_check` or `<table>_check[N]`, confirmed empirically against a real
  *     Postgres 17 instance while implementing this fix).
+ *
+ * @experimental Full-chain archival is deferred to 1.1 (`council/A` ruling (e)). This class is
+ * NOT re-exported from the 1.0.0 public barrel (`src/index.ts`) and its
+ * `CHAIN_ARCHIVE_INVARIANT_VIOLATION` code is NOT part of the frozen 1.0.0 error catalog.
+ * `translatePostgresError`'s 23514 constraint-name routing to it stays internal and working;
+ * the class is provisional and may change in 1.1.
+ * @internal
  */
 export class ChainArchiveInvariantError extends StorageError {
   readonly code = "CHAIN_ARCHIVE_INVARIANT_VIOLATION" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, readonly constraintName: string, cause?: unknown) { super(message, cause); }
 }
 
-/** See `ChainArchiveInvariantError`'s own doc above -- the ordinary-table-CHECK counterpart. */
+/**
+ * See `ChainArchiveInvariantError`'s own doc above -- the ordinary-table-CHECK counterpart.
+ * @experimental Deferred to 1.1 (`council/A` ruling (e)); NOT re-exported from the 1.0.0 barrel
+ * and its `CHAIN_ARCHIVE_CHECK_VIOLATION` code is NOT in the frozen error catalog. The 23514
+ * routing to it stays internal and working; provisional and may change in 1.1.
+ * @internal
+ */
 export class ChainArchiveCheckViolationError extends StorageError {
   readonly code = "CHAIN_ARCHIVE_CHECK_VIOLATION" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, readonly constraintName: string, cause?: unknown) { super(message, cause); }
 }
 
@@ -81,6 +98,7 @@ export class ChainArchiveCheckViolationError extends StorageError {
  */
 export class UnrecognizedPostgresError extends StorageError {
   readonly code = "UNRECOGNIZED_POSTGRES_ERROR" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, cause?: unknown) { super(message, cause); }
 }
 

@@ -22,9 +22,11 @@ import type {
  * Composes only in-repo primitives and imports nothing from any consumer/indexer application,
  * honouring the indexer-agnostic boundary (guideline §0.3; acceptance A8).
  *
- * NOTE: this primitive is intentionally not yet re-exported from any barrel/`exports`; its exact
- * public signature is finalised by the api-surface change (G1). Kept usable and internally clean
- * here without freezing the exported shape.
+ * NOTE: as of the api-surface change (G1), this primitive IS part of the frozen 1.0.0 public
+ * surface -- `src/index.ts` re-exports `saveAndAdvance` (and its `SaveAndAdvanceDeps`/
+ * `SaveAndAdvanceCursor` types) as the co-transactional composition primitive a consumer uses
+ * to co-commit a checkpoint and its sync cursor. Its signature below is therefore frozen: no
+ * breaking change in a 1.x minor/patch.
  */
 
 /** The in-repo primitives `saveAndAdvance` composes. */

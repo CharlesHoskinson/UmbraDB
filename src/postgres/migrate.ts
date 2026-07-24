@@ -22,6 +22,7 @@ export const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
  *  or an indefinite hang (design.md §3.2). */
 export class MigrationLockTimeoutError extends StorageError {
   readonly code = "MIGRATION_LOCK_TIMEOUT" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly schema: string, readonly timeoutMs: number, cause?: unknown) {
     super(
       `did not acquire the migration lock for schema "${schema}" within its ${timeoutMs}ms bound` +

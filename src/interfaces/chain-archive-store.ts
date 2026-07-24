@@ -128,28 +128,45 @@ export interface VerifierKeyObservationRecord {
 
 export type ChainArchiveErrorCode = "BLOB_INTEGRITY" | "BLOB_MISSING" | "BLOCK_NOT_FOUND" | "VALIDATION_FAILED";
 
+/**
+ * @experimental Full-chain archival is deferred to 1.1 (`council/A` ruling (e)). This chain-
+ * archive error type is NOT re-exported from the 1.0.0 public barrel (`src/index.ts`) and its
+ * code is NOT part of the frozen 1.0.0 error catalog. Provisional; may change in 1.1.
+ * @internal
+ */
 export abstract class ChainArchiveError extends StorageError {
   abstract readonly code: ChainArchiveErrorCode;
 }
 
 /** AC-3: a blob's recomputed hash, on read, does not match its content-addressed storage key --
  *  mirrors `ChunkIntegrityError` (`checkpoint-store.ts`)'s proven rehash-on-read contract. Never
- *  returns the corrupted bytes to the caller. */
+ *  returns the corrupted bytes to the caller.
+ *  @experimental Deferred to 1.1; NOT in the frozen 1.0.0 barrel or error catalog. @internal */
 export class BlobIntegrityError extends ChainArchiveError {
   readonly code = "BLOB_INTEGRITY" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly expectedHash: Hex32, readonly actualHash: Hex32) {
     super(`chain_blobs content hash mismatch: expected ${expectedHash}, recomputed ${actualHash}`);
   }
 }
 
-/** A referenced blob hash has no row in `chain_blobs` at all. */
+/** A referenced blob hash has no row in `chain_blobs` at all.
+ *  @experimental Deferred to 1.1; NOT in the frozen 1.0.0 barrel or error catalog. @internal */
 export class BlobMissingError extends ChainArchiveError {
   readonly code = "BLOB_MISSING" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly hash: Hex32) { super(`chain_blobs has no row for hash ${hash}`); }
 }
 
+/**
+ * @experimental Full-chain archival is deferred to 1.1 (`council/A` ruling (e)). This chain-
+ * archive error type is NOT re-exported from the 1.0.0 public barrel (`src/index.ts`) and its
+ * code is NOT part of the frozen 1.0.0 error catalog. Provisional; may change in 1.1.
+ * @internal
+ */
 export class BlockNotFoundError extends ChainArchiveError {
   readonly code = "BLOCK_NOT_FOUND" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly net: string, readonly height: number, readonly blockHash?: Hex32) {
     super(`no block found for net=${net} height=${height}${blockHash ? ` blockHash=${blockHash}` : ""}`);
   }
