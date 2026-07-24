@@ -132,8 +132,15 @@ dedicated research pass before any tooling choice is locked in.
 
 - [ ] Research pass on profiling/benchmarking/logging tooling for a local
   Postgres-backed storage layer, reviewed before adoption.
-- [ ] Benchmark suite covering the workloads above, with baseline numbers
-  recorded and re-run as a regression gate.
+- [x] Benchmark suite covering the workloads above, with a baseline
+  recorded (G14): the in-repo `bench/` harness drives UmbraDB's own adapters
+  against a pinned Testcontainers PG17 and emits the committed
+  `bench/baseline.1.0.0-perf-baseline.1.json`. Per the G14 hard rule the GATE
+  is the artifact's existence + structural reproduction, not any number; a
+  coarse order-of-magnitude smoke guard is wired now (CI `bench-smoke`,
+  non-release-gating) and the calibrated CV-aware regression gate is deferred
+  post-1.0.0. See `openspec/changes/v1.0.0-perf-baseline` and
+  `Performance/CEILINGS.md`.
 - [ ] Activity logging wired into all four modules, with a documented way
   to correlate a slow application-level call down to the SQL and query
   plan that caused it.
@@ -172,8 +179,14 @@ A 1.0.0 tag requires all of:
 - [ ] Full sync test, retrieval-correctness tests, and cold-start-survival
   tests all green.
 - [ ] Differential state-equivalence gate green (Milestone 2/3).
-- [ ] Performance benchmark baseline recorded, with no regression against
-  it introduced by anything landed after the baseline was set.
+- [x] Performance benchmark baseline recorded (G14): committed as
+  `bench/baseline.1.0.0-perf-baseline.1.json` after the G13 perf-correctness
+  fixes landed (HP-1 batched save, HP-2 grouped history over the IS-2
+  `size_bytes` column, IS-1 `kv_current` fillfactor). No perf NUMBER gates the
+  tag; scalability ceilings SC-1..SC-6 are documented in
+  `Performance/CEILINGS.md`, and the GC anti-join curve + K/D cliff
+  adjudication live in the baseline artifact. The CV-aware regression gate is
+  the first post-1.0.0 obligation.
 - [ ] Live round-trip against a real network (Milestone 5) succeeds.
 
 ## Beyond 1.0.0 — additional tracks in progress

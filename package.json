@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:conformance": "vitest run",
     "test:live": "UMBRADB_LIVE_PREPROD=1 vitest run test/integration/preprod-db-sync.integration.test.ts test/integration/cold-boot-recovery.integration.test.ts",
-    "archive:sync": "tsx chain-archive-sync/sync-cli.ts"
+    "archive:sync": "tsx chain-archive-sync/sync-cli.ts",
+    "bench": "tsx bench/harness.ts",
+    "bench:smoke": "tsx bench/smoke.ts"
   },
   "dependencies": {
     "postgres": "^3.4.9",
@@ -25,6 +27,7 @@
     "@types/node": "^26.1.1",
     "effect": "3.22.0",
     "fast-check": "^4.9.0",
+    "tinybench": "^2.9.0",
     "tsx": "^4.23.1",
     "typedoc": "^0.28.0",
     "typescript": "^5.9.0",

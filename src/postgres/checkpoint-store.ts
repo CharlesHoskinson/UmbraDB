@@ -32,6 +32,36 @@ import { resolveTransaction } from "./transaction-lease.js";
  */
 const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
 
+/**
+ * Per-statement row caps for the two multi-row `VALUES` inserts in `saveImpl`.
+ *
+ * A1's "exactly one statement independent of chunk count" is physically INFEASIBLE in postgres.js
+ * for an unbounded chunk count: BOTH single-statement forms have a hard ceiling, each proven
+ * empirically against real Postgres 17.
+ *   - A multi-row `VALUES` binds one parameter per column per row, and postgres.js rejects a
+ *     statement at >= 65,534 bind parameters (its actual limit, one below PostgreSQL's 65,535
+ *     protocol cap).
+ *   - `unnest(sql.array(bytea[]))` binds a whole column as ONE array parameter, but postgres.js
+ *     TEXT-serializes that array (each buffer -> `\x<hex>`, joined into one string) BEFORE it
+ *     reaches Postgres, so a large array blows V8's ~537 MB max-string-length (`RangeError:
+ *     Invalid string length`, MAX_STRING_LENGTH = 536,870,888). For chunk DATA a single 256 MiB
+ *     payload (~537M hex chars) exceeds it; for the junction's 32-byte hashes (~70 chars each)
+ *     ~7.6M positions exceed it too -- the round-2 junction unnest crashed exactly this way.
+ *
+ * So BOTH inserts use a defensive param-safe multi-row `VALUES` sub-batch: EXACTLY ONE statement
+ * for every in-model checkpoint (any payload at the 4 MiB default chunkSize; unique chunks and
+ * positions <= the row cap below), and >1 statement -- NEVER a crash -- ONLY for a pathological
+ * sub-64-KiB chunkSize with tens of thousands of chunks. This is tasks.md §1.1's sanctioned
+ * record-the-limitation path.
+ *   - `CHUNK_INSERT_MAX_ROWS` -- chunk upsert is 2 bind-params/row, so the hard ceiling is
+ *     floor(65,533 / 2) = 32,766 rows (postgres.js rejects at >= 65,534 params); 30,000 stays
+ *     safely under.
+ *   - `JUNCTION_INSERT_MAX_ROWS` -- junction insert is 3 bind-params/row, so the hard ceiling is
+ *     floor(65,533 / 3) = 21,844 rows; 20,000 stays safely under.
+ */
+const CHUNK_INSERT_MAX_ROWS = 30_000;
+const JUNCTION_INSERT_MAX_ROWS = 20_000;
+
 function sha256(data: Uint8Array): Buffer {
   return createHash("sha256").update(data).digest();
 }
@@ -164,10 +194,42 @@ export class PgCheckpointStore implements CheckpointStore {
         // of created_at is load-bearing for prune's grace-window TOCTOU safety (design.md §3),
         // not just a convenience -- a plain DO NOTHING would defeat the grace window on every
         // re-referenced-but-already-existing chunk.
+        // HP-1 (v1.0.0-perf-baseline design.md §1; tasks.md §1.1): each insert is a multi-row
+        // statement, not the pre-HP-1 per-chunk loop of single-row awaits -- EXACTLY ONE statement
+        // per insert for every in-model checkpoint (see CHUNK_INSERT_MAX_ROWS / JUNCTION_INSERT_MAX_ROWS
+        // for why an unbounded single statement is physically infeasible in postgres.js, and how the
+        // defensive `VALUES` sub-batch handles a pathological input without ever crashing).
+        // Content-addressed: a repeated chunk yields a duplicate hash, and a single multi-row upsert
+        // cannot touch the same ON CONFLICT target twice (Postgres SQLSTATE 21000), so dedupe by
+        // hash for the chunk write. The junction insert below still records EVERY position, repeats
+        // included, so a chunk reused at two positions stays representable.
+        const seenChunkHashes = new Set<string>();
+        const chunkRows: { hash: Buffer; data: Buffer }[] = [];
         for (let i = 0; i < chunks.length; i++) {
+          const key = chunkHashes[i]!.toString("hex");
+          if (seenChunkHashes.has(key)) continue;
+          seenChunkHashes.add(key);
+          chunkRows.push({ hash: chunkHashes[i]!, data: chunks[i]! });
+        }
+        // Chunk upsert -- defensive param-safe multi-row `VALUES` sub-batch (see
+        // CHUNK_INSERT_MAX_ROWS), NOT `unnest(sql.array(bytea[]))`: the array form TEXT-serializes
+        // each chunk's `data` to hex, so a single 256 MiB payload blows V8's ~537 MB
+        // max-string-length (`RangeError: Invalid string length`) BEFORE Postgres -- proven
+        // empirically against real Postgres 17. `VALUES` binds each chunk's `data` as its OWN binary
+        // parameter, streaming untouched, so there is NO text-serialization path for ANY payload --
+        // only the 65,534 bind-param cap applies, which the sub-batch bounds. Result: EXACTLY ONE
+        // statement for every in-model checkpoint (unique chunks are far under the row cap -- 30,000
+        // distinct 4 MiB chunks is 120 GiB, past `load()`'s single-buffer heap ceiling, SC-3), and
+        // >1 statement -- never a crash -- ONLY for a pathological sub-64-KiB chunkSize with tens of
+        // thousands of DISTINCT chunks. Empty-safe: 0 chunks -> 0 iterations -> no statement (an
+        // empty `VALUES` is invalid SQL). seenChunkHashes keeps every batch's hashes unique, so no
+        // ON CONFLICT target is touched twice (no SQLSTATE 21000). The
+        // `ON CONFLICT (hash) DO UPDATE SET created_at = now()` grace-window refresh is carried
+        // verbatim (load-bearing for prune's grace-window TOCTOU safety, unchanged).
+        for (let i = 0; i < chunkRows.length; i += CHUNK_INSERT_MAX_ROWS) {
+          const batch = chunkRows.slice(i, i + CHUNK_INSERT_MAX_ROWS);
           await sql`
-            INSERT INTO ${sql(this.schema)}.ckpt_chunks (hash, data)
-            VALUES (${chunkHashes[i]!}, ${chunks[i]!})
+            INSERT INTO ${sql(this.schema)}.ckpt_chunks ${sql(batch, "hash", "data")}
             ON CONFLICT (hash) DO UPDATE SET created_at = now()
           `;
         }
@@ -196,12 +258,24 @@ export class PgCheckpointStore implements CheckpointStore {
         `;
         const manifest = manifestRows[0]!;
 
-        // Junction rows keyed by (manifest_id, position) -- design.md §2.1's fix -- so a
-        // repeated chunk hash at two different positions is representable.
-        for (let i = 0; i < chunkHashes.length; i++) {
+        // Junction rows keyed by (manifest_id, position) -- design.md §2.1's fix -- so a repeated
+        // chunk hash at two different positions is representable. EVERY position is recorded (repeats
+        // included), unlike the by-hash dedup of the chunk write above.
+        const junctionRows = chunkHashes.map((chunk_hash, i) => ({ manifest_id: manifest.id, position: i, chunk_hash }));
+        // Junction insert -- defensive param-safe multi-row `VALUES` sub-batch (see
+        // JUNCTION_INSERT_MAX_ROWS), NOT `unnest(sql.array(...))`: the array form TEXT-serializes each
+        // 32-byte hash to ~70 chars, so ~7.6M positions blow V8's ~537 MB max-string-length
+        // (`RangeError: Invalid string length`) BEFORE Postgres -- a real crash for a pathological
+        // small-chunkSize save (round-2's junction unnest hit exactly this). `VALUES` binds each
+        // field as its OWN binary parameter, so there is NO text-serialization path for ANY N --
+        // only the 65,534 bind-param cap applies, which the sub-batch bounds. EXACTLY ONE statement
+        // for every in-model checkpoint; >1 -- never a crash -- only for a pathological sub-64-KiB
+        // chunkSize with tens of thousands of positions. Every position is still recorded (repeats
+        // included). Empty-safe: 0 positions -> 0 iterations -> no statement.
+        for (let i = 0; i < junctionRows.length; i += JUNCTION_INSERT_MAX_ROWS) {
+          const batch = junctionRows.slice(i, i + JUNCTION_INSERT_MAX_ROWS);
           await sql`
-            INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks (manifest_id, position, chunk_hash)
-            VALUES (${manifest.id}, ${i}, ${chunkHashes[i]!})
+            INSERT INTO ${sql(this.schema)}.ckpt_manifest_chunks ${sql(batch, "manifest_id", "position", "chunk_hash")}
           `;
         }
 
@@ -351,21 +425,34 @@ export class PgCheckpointStore implements CheckpointStore {
             LIMIT ${opts.limit}
           `;
 
-          const summaries: CheckpointSummary[] = [];
-          for (const manifest of manifestRows) {
-            const aggRows = await sql<AggregateRow[]>`
-              SELECT count(*) AS chunk_count, coalesce(sum(octet_length(c.data)), 0) AS byte_length
-              FROM ${sql(this.schema)}.ckpt_manifest_chunks mc
-              JOIN ${sql(this.schema)}.ckpt_chunks c ON c.hash = mc.chunk_hash
-              WHERE mc.manifest_id = ${manifest.id}
-            `;
-            const agg = aggRows[0]!;
-            summaries.push(toSummary(
+          // HP-2 + IS-2 (v1.0.0-perf-baseline design.md §2): one grouped query over the stored
+          // size_bytes column instead of a per-manifest aggregate (1+N -> 2 round-trips); summing
+          // ckpt_chunks.size_bytes (a generated column) never detoasts the `data` bytea. Rows are
+          // re-associated to each manifest by manifest_id, preserving the ORDER BY seq DESC page order.
+          const manifestIds = manifestRows.map((m) => m.id);
+          const aggRows =
+            manifestIds.length === 0
+              ? []
+              : await sql<(AggregateRow & { manifest_id: bigint })[]>`
+                  SELECT mc.manifest_id,
+                         count(*) AS chunk_count,
+                         coalesce(sum(c.size_bytes), 0) AS byte_length
+                  FROM ${sql(this.schema)}.ckpt_manifest_chunks mc
+                  JOIN ${sql(this.schema)}.ckpt_chunks c ON c.hash = mc.chunk_hash
+                  WHERE mc.manifest_id = ANY(${sql.array(manifestIds)})
+                  GROUP BY mc.manifest_id
+                `;
+          const aggById = new Map(aggRows.map((a) => [a.manifest_id, a]));
+          // A manifest with zero chunks yields no group row; fall back to (0, 0) exactly as the
+          // former per-manifest scalar aggregate's coalesce did.
+          const summaries: CheckpointSummary[] = manifestRows.map((manifest) => {
+            const agg = aggById.get(manifest.id);
+            return toSummary(
               manifest,
-              coerceToSafeNumber(agg.byte_length, "CheckpointSummary.byteLength"),
-              coerceToSafeNumber(agg.chunk_count, "CheckpointSummary.chunkCount"),
-            ));
-          }
+              coerceToSafeNumber(agg?.byte_length ?? 0n, "CheckpointSummary.byteLength"),
+              coerceToSafeNumber(agg?.chunk_count ?? 0n, "CheckpointSummary.chunkCount"),
+            );
+          });
           return summaries;
         },
         { isolation: "repeatable read" },

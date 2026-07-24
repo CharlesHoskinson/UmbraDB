@@ -1,0 +1,47 @@
+name: Bench smoke guard (non-gating)
+
+# COARSE, ORDER-OF-MAGNITUDE benchmark regression smoke guard (G14, roadmap "coarse gate now";
+# openspec/changes/v1.0.0-perf-baseline design.md §5). This workflow is DELIBERATELY NOT a required
+# merge gate and is EXPLICITLY NON-RELEASE-GATING: `bench/smoke.ts` flags a >10x p99 move versus the
+# committed baseline as a WARNING and exits 0 — it never fails the build on a calibrated performance
+# number. The step is additionally marked `continue-on-error: true` as belt-and-suspenders. The
+# calibrated, CV-aware regression gate is deferred to the first post-1.0.0 obligation. See
+# Performance/CEILINGS.md ("Regression gating posture").
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: bench-smoke-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  bench-smoke:
+    # Non-gating advisory job. Uses testcontainers (@testcontainers/postgresql), which starts its
+    # own disposable Postgres 17 container via the Docker daemon present on ubuntu-latest runners —
+    # no `services: postgres` block is needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Coarse bench smoke guard (NON-RELEASE-GATING; warns on >10x, never fails on a number)
+        # continue-on-error keeps this advisory even if the script ever exits non-zero (it only does
+        # so on infrastructure failure, not on a perf number). This job is not a required check and
+        # does not block the 1.0.0 tag on any calibrated performance number.
+        continue-on-error: true
+        run: npm run bench:smoke

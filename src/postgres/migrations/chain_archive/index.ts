@@ -5,7 +5,7 @@ import type { Migration } from "../../migrate.js";
 /**
  * The Tier-1.5 chain-archive migration lineage (`design/full-chain-storage-design.md` §5,
  * revised per the 3-reviewer design-council audit). Deliberately separate from
- * `tier1WalletMigrations`' `000_schema.ts`–`004_transaction_history.ts` numbering — chain-scoped
+ * `tier1WalletMigrations`' `000_schema.ts`–`006_ckpt_chunks_size_bytes.ts` numbering — chain-scoped
  * archival data does not belong inside `tier1_wallet` (`design/design.md` §0), and it is
  * explicitly not the Tier-2 indexer-schema fork either, so it gets its own schema and its own
  * migration numbering starting again at `000`.

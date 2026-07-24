@@ -132,7 +132,7 @@ describe("ChainArchiveSyncService retry safety (sprint-fix round Fixes 1-3)", ()
 
   afterAll(async () => {
     await container?.stop();
-  });
+  }, 60_000); // teardown under heavy host load can exceed the 10s default (matches setup.ts)
 
   afterEach(async () => {
     await sql?.end({ timeout: 5 });
