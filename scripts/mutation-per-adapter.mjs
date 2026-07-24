@@ -32,6 +32,23 @@ const BREAK = conf.thresholds.break;
 // local/scoped validation only; CI runs the full set.
 const adapters = (process.env.MUTATION_ADAPTERS ?? conf.mutate.join(","))
   .split(",").map((x) => x.trim()).filter(Boolean);
+// NIT 10: in CI the required gate MUST evaluate the FULL committed adapter set. Reject a MUTATION_ADAPTERS
+// override that is not EXACTLY the committed set, so a scoped one-adapter invocation cannot produce a
+// green aggregate indistinguishable from full-scope evidence. Local/scoped runs (CI unset) stay allowed.
+const isCI = !!process.env.CI && process.env.CI !== "false" && process.env.CI !== "0";
+if (isCI && process.env.MUTATION_ADAPTERS !== undefined) {
+  const committed = new Set(conf.mutate.map((x) => x.trim()).filter(Boolean));
+  const selected = new Set(adapters);
+  const sameSet = committed.size === selected.size && [...committed].every((a) => selected.has(a));
+  if (!sameSet) {
+    console.error(
+      `MUTATION_ADAPTERS override in CI must EXACTLY equal the committed ${committed.size}-adapter set ` +
+      `[${[...committed].join(", ")}]; got [${[...selected].join(", ")}]. Refusing to run a scoped subset ` +
+      `as the required mutation gate (NIT 10).`,
+    );
+    process.exit(2);
+  }
+}
 const STRYKER = path.join(ROOT, "node_modules", "@stryker-mutator", "core", "bin", "stryker.js");
 const JSON_REPORT = path.join(ROOT, "reports", "mutation", "mutation.json");
 

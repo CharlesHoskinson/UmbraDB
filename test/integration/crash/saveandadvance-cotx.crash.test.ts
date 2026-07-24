@@ -139,6 +139,14 @@ describe("Co-transactional saveAndAdvance crash — G5 atomicity (change-level a
     const ready = await killed.waitForReady();
     expect(ready.mode).toBe("co-tx-crash");
     expect(ready.backendPid).toBeGreaterThan(0);
+    // BLOCK 2 (write-proof readiness): readiness PROVES saveAndAdvance's checkpoint writes actually
+    // executed on the worker's OWN tx -- the observer saw the checkpoint manifest INSERT flow through
+    // that tx AND an in-tx SELECT sees the COMPLETE manifest row present-but-uncommitted (count >= 1).
+    // Combined with the fresh-observer assertions below (nothing durable), this establishes the
+    // checkpoint is present-in-tx yet NOT durable, so the SIGKILL's rollback is what removes it -- not
+    // the observer's own probe query alone creating the reported idle transaction.
+    expect(ready.manifestObserved).toBe(true);
+    expect(Number(ready.checkpointRowsInTx)).toBeGreaterThanOrEqual(1);
 
     // HONESTY GUARD: the worker holds an OPEN transaction (save's writes issued on it; the cursor
     // write not yet issued — the observer paused before it). 'idle in transaction' + xact_start set.

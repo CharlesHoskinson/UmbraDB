@@ -115,14 +115,28 @@ function worker(...args: Parameters<typeof spawnCrashWorker>): CrashWorkerHandle
   return h;
 }
 
-afterEach(async () => {
+afterEach(async (ctx) => {
+  // BLOCK 9: SURFACE cleanup failures. If the test body SUCCEEDED, a worker that refuses to exit or a
+  // pool.end() failure FAILS the test (a leaked process/socket must not pass teardown); if the body
+  // already threw, log without masking the primary error (the same NIT-14 pattern used in the off-leg).
+  const bodyOk = ctx.task.result?.state === "pass";
+  const cleanupErrors: unknown[] = [];
   for (const w of liveWorkers) { try { w.sigkill(); } catch { /* already gone */ } }
-  await Promise.all(liveWorkers.map((w) =>
-    withSuiteWatchdog(w.waitForExit(), { label: "afterEach-worker-exit", timeoutMs: 15_000 }).catch(() => {}),
-  ));
+  for (const r of await Promise.allSettled(liveWorkers.map((w) =>
+    withSuiteWatchdog(w.waitForExit(), { label: "afterEach-worker-exit", timeoutMs: 15_000 })))) {
+    if (r.status === "rejected") cleanupErrors.push(r.reason);
+  }
   liveWorkers = [];
-  await Promise.all(openPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));
+  for (const r of await Promise.allSettled(openPools.map((p) => p.end({ timeout: 5 })))) {
+    if (r.status === "rejected") cleanupErrors.push(r.reason);
+  }
   openPools = [];
+  if (cleanupErrors.length > 0) {
+    const msg = `afterEach cleanup failed (${cleanupErrors.length}): ${cleanupErrors.map(String).join("; ")}`;
+    if (bodyOk) throw new Error(msg);
+    // eslint-disable-next-line no-console
+    else console.error(`[teardown] ${msg} (test body already failed; not masking the primary error)`);
+  }
 });
 
 // ---- Deterministic payloads / KV values -----------------------------------------------------
@@ -690,7 +704,10 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       // REACHABLE (a client kill or clean stop never loses acked async commits — `design.md` §2.3).
       // (a) The kill command MUST succeed — we ASSERT its exit code rather than swallowing it, so a
       // failed/mis-targeted kill cannot let this leg pass vacuously.
-      const killResult = await container.exec(["kill", "-s", "QUIT", "1"]);
+      const killResult = await withSuiteWatchdog(
+        container.exec(["kill", "-s", "QUIT", "1"]),
+        { label: "off-leg-postmaster-kill", timeoutMs: 20_000 },
+      ); // BLOCK 8: typed backstop, never a hang
       expect(killResult.exitCode).toBe(0); // SIGQUIT delivered to the postmaster
 
       // (c) Reap the paused worker with our SIGKILL and CONFIRM it died by THAT signal BEFORE the
@@ -706,13 +723,17 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       // the restart, replacing the old blind 1.5s timer.
       let adminDropped = false;
       for (let i = 0; i < 20 && !adminDropped; i++) {
-        try { await admin<{ ok: number }[]>`SELECT 1 AS ok`; await new Promise((r) => setTimeout(r, 250)); }
-        catch { adminDropped = true; }
+        try {
+          await withSuiteWatchdog(admin<{ ok: number }[]>`SELECT 1 AS ok`,
+            { label: "off-leg-admin-drop-probe", timeoutMs: 10_000 }); // BLOCK 8: a hung probe => gone
+          await new Promise((r) => setTimeout(r, 250));
+        } catch { adminDropped = true; }
       }
       expect(adminDropped).toBe(true); // the immediate crash force-dropped the live connection
 
       // Recover via crash recovery (container restart) and RE-READ the (remapped) connection URI.
-      await container.restart({ timeout: 30 });
+      await withSuiteWatchdog(container.restart({ timeout: 30 }),
+        { label: "off-leg-container-restart", timeoutMs: 60_000 }); // BLOCK 8
       uri = container.getConnectionUri();
 
       // Reconnect from a FRESH client, strictly AFTER the crash + recovery.
@@ -760,6 +781,32 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       const tailLost = !seqs.has(CRASH_BATCH);
       // eslint-disable-next-line no-console
       console.log(`[t5-off-leg] synchronous_commit=off unclean-crash: tail (batch ${CRASH_BATCH} data) ${tailLost ? "LOST (acceptable)" : "survived"}; watermark=${String(w)}, durableSeqs=${[...seqs].sort((a, b) => a - b).join(",")}`);
+      // ---- BLOCK 3: NO-KILL FULL-FLOW CONTROL in the SAME synchronous_commit=off configuration ----
+      // The ONLY other full-flow control runs in the default-config shared container. If watermarks.set
+      // were omitted/failed SPECIFICALLY under synchronous_commit=off, the crash leg above would still
+      // pass (the durable checkpointed prefix leaves watermark 2). This uninterrupted control runs the
+      // SAME data->cursor sequence to COMPLETION on THIS off-container and asserts BOTH the checkpoint
+      // DATA and the CURSOR are durable -- so the crash leg's batch-3 cursor absence is proven CRASH-
+      // caused in THIS configuration, not a watermarks.set no-op. No crash between write and read here.
+      const scStillOff = await withSuiteWatchdog(
+        fresh<{ synchronous_commit: string }[]>`SHOW synchronous_commit`,
+        { label: "show-sc-off-control", timeoutMs: 10_000 },
+      );
+      expect(scStillOff[0]!.synchronous_commit).toBe("off"); // the control runs in the SAME off config
+      const ctlW = `t5-off-ctl-${randomUUID()}`;
+      const ctlSalt = randomUUID();
+      const ctlBatch = 1;
+      await driveFullBatch(freshAdapters, ctlW, ctlW, ctlW, ctlSalt, ctlBatch); // data -> cursor, no kill
+      const ctlFresh = createClient({ connectionString: uri, schema: TEST_SCHEMA, maxConnections: 2, connectTimeout: 10 });
+      localPools.push(ctlFresh);
+      const ctlAdapters = adaptersOf(ctlFresh);
+      const ctlSeqs = await durableCompleteSeqs(ctlFresh, ctlW);
+      const ctlWm = await ctlAdapters.watermarks.get<number>(CURSOR_KIND, ctlW);
+      const ctlKv = await durableKvValues(ctlFresh, ctlW);
+      expect(ctlSeqs.has(ctlBatch)).toBe(true);                 // checkpoint DATA durable under sync_commit=off
+      expect(ctlWm).toBe(ctlBatch);                             // CURSOR durable under sync_commit=off (NOT a no-op)
+      expect(ctlKv.get(itemKey(ctlBatch))).toEqual(itemValue(ctlBatch)); // KV datum durable too
+
       bodyOk = true; // the test body completed; a teardown container.stop() failure below must now surface
     } finally {
       await Promise.all(localPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));

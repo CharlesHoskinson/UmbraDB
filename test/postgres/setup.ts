@@ -235,6 +235,10 @@ export interface SpawnCrashWorkerOptions {
   leaseKey?: string;
   /** Checkpoint payload size in bytes (default 256). */
   payloadBytes?: number;
+  /** BLOCK 1: the EXACT checkpoint payload bytes (hex) to save, overriding random generation. Set on
+   *  BOTH the killed leg and its no-kill control so they save byte-identical content (only the SIGKILL
+   *  differs), isolating the kill as the cause of the killed leg's absence. */
+  payloadHex?: string;
   /** T5 KEYSTONE deterministic-data mode (`design.md` §2.3). When `salt` is set, the T5 hooks
    *  (`after-data-commit-before-cursor` / `after-cursor-before-data`) write the batch's REAL,
    *  deterministic content — a KV `put(kvKey = kvValue)` in (`kvNamespace`, `kvScope`) AND a
@@ -340,6 +344,7 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
   if (opts.cursorValue !== undefined) env.UMBRADB_CRASH_CURSOR_VALUE = JSON.stringify(opts.cursorValue);
   if (opts.leaseKey !== undefined) env.UMBRADB_CRASH_LEASE_KEY = opts.leaseKey;
   if (opts.payloadBytes !== undefined) env.UMBRADB_CRASH_PAYLOAD_BYTES = String(opts.payloadBytes);
+  if (opts.payloadHex !== undefined) env.UMBRADB_CRASH_PAYLOAD_HEX = opts.payloadHex;
   if (opts.salt !== undefined) env.UMBRADB_CRASH_SALT = opts.salt;
   if (opts.index !== undefined) env.UMBRADB_CRASH_INDEX = String(opts.index);
   if (opts.kvNamespace !== undefined) env.UMBRADB_CRASH_KV_NS = opts.kvNamespace;

@@ -191,11 +191,21 @@ function t5DeterministicPayload(salt: string, batch: number): Buffer {
 // tx back; NEITHER the checkpoint NOR the cursor is durable (all-or-nothing = G5 atomicity).
 type CoTxCallable = (...args: unknown[]) => unknown;
 
+/** What the co-tx observer proves at the pause (BLOCK 2): the backend pid, that save's checkpoint
+ *  manifest INSERT was observed flowing through THIS tx, and the count of the checkpoint's COMPLETE
+ *  manifest rows visible WITHIN the worker's own uncommitted tx (present-but-uncommitted). */
+interface CoTxPauseInfo { backendPid: number; checkpointRowsInTx: number; manifestObserved: boolean; }
+
 function wrapTxPauseBeforeCursor(
   realTx: postgres.TransactionSql<{ bigint: bigint }>,
-  onPaused: (backendPid: number) => void,
+  ctx: { schema: string; walletId: string; networkId: string; onPaused: (info: CoTxPauseInfo) => void },
 ): postgres.TransactionSql<{ bigint: bigint }> {
   let paused = false;
+  // BLOCK 2 (write-proof readiness): observe save's OWN checkpoint manifest INSERT flowing through
+  // THIS tx (issued by save({tx}) BEFORE the cursor write in saveAndAdvance) so readiness PROVES the
+  // checkpoint writes actually executed -- not merely that the observer's own probe opened an idle tx.
+  // If the checkpoint path silently no-op'd this stays false and the observer refuses readiness.
+  let manifestObserved = false;
   const target = realTx as unknown as CoTxCallable;
   const proxy = new Proxy(target, {
     apply(fn, thisArg, args) {
@@ -203,6 +213,12 @@ function wrapTxPauseBeforeCursor(
       const isTaggedTemplate = Array.isArray(first) && Object.prototype.hasOwnProperty.call(first, "raw");
       if (!isTaggedTemplate) return Reflect.apply(fn, thisArg, args);
       const raw = (first as readonly string[]).join(" ").toLowerCase();
+      // save's OWN manifest INSERT (INSERT INTO ...ckpt_manifests...) -- distinct from the junction
+      // ckpt_manifest_chunks INSERT, which does NOT contain the substring "ckpt_manifests".
+      if (raw.includes("insert into") && raw.includes("ckpt_manifests")) {
+        manifestObserved = true;
+        return Reflect.apply(fn, thisArg, args);
+      }
       const isCursorWrite = raw.includes("watermarks") && raw.includes("insert into");
       if (!isCursorWrite || paused) return Reflect.apply(fn, thisArg, args);
       paused = true;
@@ -210,8 +226,19 @@ function wrapTxPauseBeforeCursor(
       return {
         then(onFulfilled: (v: unknown) => unknown, onRejected: (e: unknown) => unknown) {
           return (async () => {
+            // PROVE save's checkpoint writes are present-but-uncommitted in THIS tx before signalling
+            // ready: (1) the manifest INSERT was observed on this tx, AND (2) an in-tx SELECT sees the
+            // COMPLETE manifest row(s) for (w, net) -- visible within the uncommitted tx yet not durable
+            // to a fresh observer. Refuse readiness if the checkpoint path did not execute (no false pass).
+            if (!manifestObserved) {
+              throw new Error("co-tx observer: reached the cursor write WITHOUT observing save's checkpoint manifest INSERT on this tx -- the checkpoint writes did not execute; refusing to signal a false readiness (BLOCK 2)");
+            }
+            const cntRows = await realTx<{ n: number }[]>`
+              SELECT count(*)::int AS n FROM ${realTx(ctx.schema)}.ckpt_manifests
+              WHERE w = ${ctx.walletId} AND net = ${ctx.networkId} AND complete`;
+            const checkpointRowsInTx = Number(cntRows[0]!.n);
             const pidRows = await realTx<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
-            onPaused(Number(pidRows[0]!.pid));
+            ctx.onPaused({ backendPid: Number(pidRows[0]!.pid), checkpointRowsInTx, manifestObserved });
             await new Promise<never>(() => {}); // block until the parent SIGKILLs this process
             return Reflect.apply(fn, thisArg, args); // unreachable in a killed run
           })().then(onFulfilled, onRejected);
@@ -229,7 +256,10 @@ function wrapTxPauseBeforeCursor(
 /** Wraps a client so `begin`'s transaction handle is the pausing proxy above; every other call
  *  forwards verbatim, so `PgTransactionLeaseLayer`/`PgCheckpointStore`/`PgWatermarks` see an
  *  ordinary client and `src/` is byte-unchanged. */
-function observeClientPauseBeforeCursor(real: UmbraDBSql, onPaused: (backendPid: number) => void): UmbraDBSql {
+function observeClientPauseBeforeCursor(
+  real: UmbraDBSql,
+  ctx: { schema: string; walletId: string; networkId: string; onPaused: (info: CoTxPauseInfo) => void },
+): UmbraDBSql {
   const proxy = new Proxy(real as unknown as object, {
     get(fn, prop, receiver) {
       if (prop === "begin") {
@@ -239,11 +269,11 @@ function observeClientPauseBeforeCursor(real: UmbraDBSql, onPaused: (backendPid:
             const options = args[0];
             const cb = args[1] as (tx: postgres.TransactionSql<{ bigint: bigint }>) => unknown;
             return beginFn.call(fn, options, (realTx: postgres.TransactionSql<{ bigint: bigint }>) =>
-              cb(wrapTxPauseBeforeCursor(realTx, onPaused)));
+              cb(wrapTxPauseBeforeCursor(realTx, ctx)));
           }
           const cb = args[0] as (tx: postgres.TransactionSql<{ bigint: bigint }>) => unknown;
           return beginFn.call(fn, (realTx: postgres.TransactionSql<{ bigint: bigint }>) =>
-            cb(wrapTxPauseBeforeCursor(realTx, onPaused)));
+            cb(wrapTxPauseBeforeCursor(realTx, ctx)));
         };
       }
       const value = Reflect.get(fn, prop, receiver);
@@ -298,7 +328,12 @@ async function main(): Promise<void> {
   const checkpoints = new PgCheckpointStore(sql, txLayer, schema);
   const watermarks = new PgWatermarks(sql, schema);
   const kv = new PgTemporalKV(sql, schema);
-  const data = randomBytes(payloadBytes);
+  // BLOCK 1 (T1 killed leg + no-kill control same input): when UMBRADB_CRASH_PAYLOAD_HEX is set the
+  // save payload is EXACTLY those bytes (not fresh random), so the killed `before-commit` leg and the
+  // no-kill `save-tx-commit-control` save BYTE-IDENTICAL content -- the ONLY difference is the SIGKILL,
+  // which is what isolates the kill as the cause. Absent the var, legacy fresh-random behaviour holds.
+  const payloadHex = process.env.UMBRADB_CRASH_PAYLOAD_HEX;
+  const data = payloadHex !== undefined ? Buffer.from(payloadHex, "hex") : randomBytes(payloadBytes);
 
   /** The T5 crash batch's REAL data ops, in the same order as the reference batch (KV put, then the
    *  checkpoint save). Used by BOTH T5 hooks; only WHERE it sits relative to the cursor advance and
@@ -322,11 +357,15 @@ async function main(): Promise<void> {
         // tx, then block for the parent's SIGKILL. The kill rolls the whole tx back => neither the
         // checkpoint nor the cursor advance is durable (all-or-nothing). No `src/` change: the pause
         // is a Proxy over saveAndAdvance's own transaction handle.
-        const observed = observeClientPauseBeforeCursor(sql, (backendPid) => {
-          signalReady({
-            hook: null, mode, pid: process.pid, backendPid,
-            walletId, networkId, cursorKind, cursorKey,
-          });
+        const observed = observeClientPauseBeforeCursor(sql, {
+          schema, walletId, networkId,
+          onPaused: ({ backendPid, checkpointRowsInTx, manifestObserved }) => {
+            signalReady({
+              hook: null, mode, pid: process.pid, backendPid,
+              checkpointRowsInTx, manifestObserved,
+              walletId, networkId, cursorKind, cursorKey,
+            });
+          },
         });
         const obsTxLayer = new PgTransactionLeaseLayer(observed);
         const obsCheckpoints = new PgCheckpointStore(observed, obsTxLayer, schema);
@@ -420,7 +459,20 @@ async function main(): Promise<void> {
       let t2Committed = false;
       try {
         await txLayer.withTransaction(async (tx) => {
-          await checkpoints.save(walletId, networkId, data, { tx });
+          if (t5Salt !== undefined) {
+            // BLOCK 4 (differential T1/T2 same-input): write the batch's REAL, deterministic content on
+            // THIS uncommitted tx -- a KV put(item:index) AND a checkpoint save(payload(salt,index)),
+            // byte-identical to the fault-free reference batch -- so the crash leg's committed-or-rolled-
+            // back content matches the reference batch (a genuine SAME-INPUT differential), not random
+            // opaque bytes with no KV. The whole batch rolls back atomically on the T1/T2 crash.
+            if (t5Index === undefined || kvNamespace === undefined || kvKey === undefined || kvValue === undefined) {
+              throw new Error("crash-worker: before-commit deterministic mode requires UMBRADB_CRASH_{SALT,INDEX,KV_NS,KV_KEY,KV_VALUE}");
+            }
+            await kv.put(kvNamespace, kvScope, kvKey, kvValue, { tx });
+            await checkpoints.save(walletId, networkId, t5DeterministicPayload(t5Salt, t5Index), { tx });
+          } else {
+            await checkpoints.save(walletId, networkId, data, { tx });
+          }
           // Capture the backend pid of the very connection holding the uncommitted work (the target
           // for a Postgres-kill of the worker's own session in T2). Read-only; commits nothing.
           const txSql = resolveTransaction(tx);

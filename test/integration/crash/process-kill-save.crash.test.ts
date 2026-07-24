@@ -165,7 +165,11 @@ describe("process-kill mid-save leaves no partially-visible checkpoint (T1 / des
     // The worker drives the co-transactional save on its OWN open transaction and pauses at
     // `before-commit`: every statement of the seq-2 save — chunk upsert, seq allocation, the
     // manifest INSERT with complete=true, the junction inserts — has been ISSUED but NOT COMMITTED.
-    const killed = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, hook: "before-commit", walletId, networkId });
+    // BLOCK 1: the killed leg and the no-kill control (Step 4) must save the IDENTICAL payload so only
+    // the SIGKILL differs -- a payload-dependent `{tx}` defect then cannot no-op for one payload while
+    // committing the other. Generate the seq-2 payload ONCE and forward its EXACT bytes (hex) to BOTH.
+    const seq2Hex = randomBytes(384).toString("hex");
+    const killed = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, hook: "before-commit", walletId, networkId, payloadHex: seq2Hex });
     const killedReady = await killed.waitForReady();
     expect(killedReady.hook).toBe("before-commit");
     expect(killedReady.backendPid).toBeGreaterThan(0); // paused on a real, uncommitted backend txn
@@ -231,7 +235,7 @@ describe("process-kill mid-save leaves no partially-visible checkpoint (T1 / des
     //     the exact seq ABSENT in (a) is now PRESENT and complete VIA THE SAME PATH. This is the
     //     OPPOSITE outcome of (a) at the SAME seq on the SAME path, proving the kill CAUSED the
     //     absence in (a) rather than the `{tx}` save path being broken.
-    const control = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, mode: "save-tx-commit-control", walletId, networkId });
+    const control = worker({ connectionUri: connectionUri(), schema: TEST_SCHEMA, mode: "save-tx-commit-control", walletId, networkId, payloadHex: seq2Hex });
     const controlReady = await control.waitForReady();
     expect(controlReady.hook).toBeNull();                 // a mode control, not a pause hook
     expect(controlReady.savedSequence).toBe(2); // the {tx} save reused the interrupted seq ⇒ the seq counter rolled back too

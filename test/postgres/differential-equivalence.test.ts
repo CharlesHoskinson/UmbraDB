@@ -177,14 +177,28 @@ function worker(...args: Parameters<typeof spawnCrashWorker>): CrashWorkerHandle
   return h;
 }
 
-afterEach(async () => {
+afterEach(async (ctx) => {
+  // BLOCK 9: SURFACE cleanup failures. If the test body SUCCEEDED, a worker that refuses to exit or a
+  // pool.end() failure FAILS the test (a leaked process/socket must not pass teardown); if the body
+  // already threw, log without masking the primary error (the NIT-14 pattern).
+  const bodyOk = ctx.task.result?.state === "pass";
+  const cleanupErrors: unknown[] = [];
   for (const w of liveWorkers) { try { w.sigkill(); } catch { /* already gone */ } }
-  await Promise.all(liveWorkers.map((w) =>
-    withSuiteWatchdog(w.waitForExit(), { label: "afterEach-worker-exit", timeoutMs: 15_000 }).catch(() => {}),
-  ));
+  for (const r of await Promise.allSettled(liveWorkers.map((w) =>
+    withSuiteWatchdog(w.waitForExit(), { label: "afterEach-worker-exit", timeoutMs: 15_000 })))) {
+    if (r.status === "rejected") cleanupErrors.push(r.reason);
+  }
   liveWorkers = [];
-  await Promise.all(openPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));
+  for (const r of await Promise.allSettled(openPools.map((p) => p.end({ timeout: 5 })))) {
+    if (r.status === "rejected") cleanupErrors.push(r.reason);
+  }
   openPools = [];
+  if (cleanupErrors.length > 0) {
+    const msg = `afterEach cleanup failed (${cleanupErrors.length}): ${cleanupErrors.map(String).join("; ")}`;
+    if (bodyOk) throw new Error(msg);
+    // eslint-disable-next-line no-console
+    else console.error(`[teardown] ${msg} (test body already failed; not masking the primary error)`);
+  }
 });
 
 // ---- Fault-free batch driver (safe ordering: DATA then CURSOR) via UmbraDB's own adapters -----
@@ -213,8 +227,14 @@ async function driveFullBatch(a: Adapters, wallet: string, salt: string, batch: 
 /** T1 — process-kill mid-save. The worker drives a co-transactional `save` and pauses at
  *  `before-commit`; a literal SIGKILL drops its connection so Postgres aborts the in-flight
  *  transaction: NOTHING becomes durable for this batch (no checkpoint, no KV, cursor unchanged). */
-async function injectT1(uri: string, wallet: string, batch: number): Promise<void> {
-  const h = worker({ connectionUri: uri, schema: TEST_SCHEMA, hook: "before-commit", walletId: wallet, networkId: NET });
+async function injectT1(uri: string, wallet: string, salt: string, batch: number): Promise<void> {
+  const h = worker({
+    connectionUri: uri, schema: TEST_SCHEMA, hook: "before-commit", walletId: wallet, networkId: NET,
+    // BLOCK 4: forward the batch's deterministic content so the crash leg's committed-or-rolled-back
+    // input is byte-identical to the fault-free reference batch (item:batch + payload(salt,batch)) --
+    // a genuine SAME-INPUT differential, not random opaque bytes with no KV.
+    salt, index: batch, kvNamespace: KV_NS, kvScope: wallet, kvKey: itemKey(batch), kvValue: itemValue(batch),
+  });
   const ready = await h.waitForReady(30_000);
   expect(ready.hook).toBe("before-commit");
   h.sigkill();
@@ -226,10 +246,13 @@ async function injectT1(uri: string, wallet: string, batch: number): Promise<voi
  *  (uncommitted), reports its backend pid; the parent kills THAT backend (`pg_terminate_backend`)
  *  STRICTLY BEFORE the failing op, then releases the worker, whose in-flight commit rejects with a
  *  typed connection failure. All-or-nothing => NOTHING durable for this batch (cursor unchanged). */
-async function injectT2(uri: string, wallet: string, batch: number): Promise<void> {
+async function injectT2(uri: string, wallet: string, salt: string, batch: number): Promise<void> {
   const h = worker({
     connectionUri: uri, schema: TEST_SCHEMA, hook: "before-commit",
     walletId: wallet, networkId: NET, extraEnv: { UMBRADB_CRASH_T2_COMMIT_AFTER_KILL: "1" },
+    // BLOCK 4: same deterministic batch content as the reference (item:batch + payload(salt,batch)),
+    // issued on the uncommitted tx whose post-kill COMMIT then fails to persist -- a SAME-INPUT leg.
+    salt, index: batch, kvNamespace: KV_NS, kvScope: wallet, kvKey: itemKey(batch), kvValue: itemValue(batch),
   });
   const ready = await h.waitForReady(30_000);
   expect(ready.backendPid).toBeGreaterThan(0);
@@ -263,8 +286,8 @@ async function injectT5(uri: string, wallet: string, salt: string, batch: number
 async function applyBatchUnderFault(uri: string, a: Adapters, wallet: string, salt: string, i: number, fault: Fault): Promise<void> {
   switch (fault) {
     case "none": await driveFullBatch(a, wallet, salt, i); return;
-    case "t1": await injectT1(uri, wallet, i); return;
-    case "t2": await injectT2(uri, wallet, i); return;
+    case "t1": await injectT1(uri, wallet, salt, i); return;
+    case "t2": await injectT2(uri, wallet, salt, i); return;
     case "t5": await injectT5(uri, wallet, salt, i); return;
   }
 }
@@ -529,16 +552,27 @@ describe("G11 differential state-equivalence — a seeded fault schedule (T1/T2/
       }
     }
 
-    // CLOSURE (change-level round-3 BLOCK 4): a relative helper could itself import the foreign
-    // consumer/indexer. Walk the reference module's own relative imports ONE level and re-scan each —
-    // rejecting any @midnightntwrk/indexer/consumer/wallet specifier reachable through that closure.
-    let closureScanned = 0;
+    // CLOSURE (BLOCK 7): a relative helper could itself import a 2nd-level helper that pulls in a
+    // foreign consumer/indexer. Walk the reference module's relative-import graph to a FIXPOINT (a
+    // visited-set worklist), re-scanning EVERY transitively-reachable in-repo module -- so a 2nd-level
+    // (or deeper) helper importing a forbidden specifier now FAILS, not just a direct dependency.
+    const visited = new Set<string>();
+    const queue: string[] = [];
+    // Seed the worklist with THIS file's directly-resolved relative dependencies.
     for (const s of specs) {
       const dep = resolveRelativeTs(selfPath, s);
-      if (dep === undefined) continue;
+      if (dep !== undefined && !visited.has(dep)) { visited.add(dep); queue.push(dep); }
+    }
+    let closureScanned = 0;
+    while (queue.length > 0) {
+      const mod = queue.shift()!;
       closureScanned += 1;
-      for (const d of importedSpecifiers(readFileSync(dep, "utf8"))) {
-        expect(d, `reference dependency ${s} pulls in forbidden ${d}`).not.toMatch(FORBIDDEN);
+      for (const d of importedSpecifiers(readFileSync(mod, "utf8"))) {
+        // Every specifier reachable through the closure -- at ANY depth -- must be foreign-free.
+        expect(d, `reference closure module ${mod} pulls in forbidden ${d}`).not.toMatch(FORBIDDEN);
+        // Enqueue this module's own relative dependencies to continue the transitive walk to fixpoint.
+        const next = resolveRelativeTs(mod, d);
+        if (next !== undefined && !visited.has(next)) { visited.add(next); queue.push(next); }
       }
     }
     expect(closureScanned, "at least one relative reference dependency must be closure-scanned").toBeGreaterThan(0);

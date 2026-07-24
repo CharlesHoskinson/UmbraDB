@@ -360,9 +360,22 @@ function newPool(uri: string, maxConnections: number): UmbraDBSql {
   return p;
 }
 
-afterEach(async () => {
-  await Promise.all(openPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));
+afterEach(async (ctx) => {
+  // BLOCK 9: SURFACE a pool.end() failure. If the test body SUCCEEDED, a failed pool-close FAILS the
+  // test (a leaked socket/connection must not pass teardown); if the body already threw, log without
+  // masking the primary error (the NIT-14 pattern).
+  const bodyOk = ctx.task.result?.state === "pass";
+  const cleanupErrors: unknown[] = [];
+  for (const r of await Promise.allSettled(openPools.map((p) => p.end({ timeout: 5 })))) {
+    if (r.status === "rejected") cleanupErrors.push(r.reason);
+  }
   openPools = [];
+  if (cleanupErrors.length > 0) {
+    const msg = `afterEach cleanup failed (${cleanupErrors.length}): ${cleanupErrors.map(String).join("; ")}`;
+    if (bodyOk) throw new Error(msg);
+    // eslint-disable-next-line no-console
+    else console.error(`[teardown] ${msg} (test body already failed; not masking the primary error)`);
+  }
 });
 
 // ============================================================================================

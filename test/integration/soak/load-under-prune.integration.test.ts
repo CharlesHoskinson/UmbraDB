@@ -374,9 +374,12 @@ describe("G10 load under concurrent prune — REPEATABLE READ snapshot protects 
       // ------- PROOF 1: load's transaction is OPEN and HOLDS a snapshot at this instant -------
       // Observable (pg_stat_activity), not timing: state = 'idle in transaction' (paused mid-tx)
       // and backend_xmin is set (the RR snapshot pins an xmin horizon).
-      const before = await admin<{ state: string; backend_xmin: string | null; xact_start: Date | null }[]>`
+      const before = await withSuiteWatchdog(
+        admin<{ state: string; backend_xmin: string | null; xact_start: Date | null }[]>`
         SELECT state, backend_xmin::text AS backend_xmin, xact_start
-        FROM pg_stat_activity WHERE pid = ${loadPid}`;
+        FROM pg_stat_activity WHERE pid = ${loadPid}`,
+        { label: "load-under-prune-observe-before", timeoutMs: 10_000 },
+      ); // BLOCK 8: typed backstop, never a hang
       expect(before[0]!.state).toBe("idle in transaction");
       expect(before[0]!.xact_start).not.toBeNull();
       expect(before[0]!.backend_xmin).not.toBeNull();
@@ -391,17 +394,26 @@ describe("G10 load under concurrent prune — REPEATABLE READ snapshot protects 
 
       // ------- PROOF 2: prune's COMMIT is globally durable NOW (fresh-snapshot connection) -------
       // The target manifest and its chunk are GONE in the committed DB — yet load has not resumed.
-      const manifestGone = await admin<{ n: number }[]>`
+      const manifestGone = await withSuiteWatchdog(
+        admin<{ n: number }[]>`
         SELECT count(*)::int AS n FROM ${admin(TEST_SCHEMA)}.ckpt_manifests
-        WHERE w = ${WALLET_MAIN} AND net = ${NET} AND seq = ${target.sequence}`;
+        WHERE w = ${WALLET_MAIN} AND net = ${NET} AND seq = ${target.sequence}`,
+        { label: "load-under-prune-observe-manifest-gone", timeoutMs: 10_000 },
+      ); // BLOCK 8
       expect(manifestGone[0]!.n).toBe(0);
-      const chunkGone = await admin<{ n: number }[]>`
-        SELECT count(*)::int AS n FROM ${admin(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${target.chunkHash}`;
+      const chunkGone = await withSuiteWatchdog(
+        admin<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM ${admin(TEST_SCHEMA)}.ckpt_chunks WHERE hash = ${target.chunkHash}`,
+        { label: "load-under-prune-observe-chunk-gone", timeoutMs: 10_000 },
+      ); // BLOCK 8
       expect(chunkGone[0]!.n).toBe(0);
 
       // ------- PROOF 3: load's snapshot is STILL open after prune committed -------
-      const after = await admin<{ state: string }[]>`
-        SELECT state FROM pg_stat_activity WHERE pid = ${loadPid}`;
+      const after = await withSuiteWatchdog(
+        admin<{ state: string }[]>`
+        SELECT state FROM pg_stat_activity WHERE pid = ${loadPid}`,
+        { label: "load-under-prune-observe-after", timeoutMs: 10_000 },
+      ); // BLOCK 8
       expect(after[0]!.state).toBe("idle in transaction");
       // Ordering established observably: snapshot taken (manifest read) < prune COMMIT (globally
       // visible above, load still open) < load's chunk read (released next). The prune COMMIT

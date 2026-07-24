@@ -56,7 +56,7 @@ export interface JsonReport {
   testResults?: JsonReportFile[];
 }
 
-export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "wrong-file" | "unknown-status" | "deferred-absent" | "deferred-unexpected";
+export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "wrong-file" | "unknown-status" | "deferred-absent" | "deferred-unexpected" | "deferred-wrong-file";
 
 export interface ReconcileResult {
   ok: boolean;
@@ -99,6 +99,12 @@ export function statusesFromReport(report: JsonReport): Map<string, string[]> {
  *  a required test is genuinely added/removed. */
 export const EXPECTED_REQUIRED_COUNT = 25;
 
+/** The pinned count of `deferred` (WHERE-gated optional-feature) tests (BLOCK 6). Structurally PINS
+ *  the deferred exemption set so deleting the sole deferred entry (a green "0 deferred" gate) fails the
+ *  gate: {@link loadManifest} rejects a manifest whose `deferred` length drifts from this constant.
+ *  Bump it deliberately when a deferred scenario is genuinely added/removed. */
+export const EXPECTED_DEFERRED_COUNT = 1;
+
 /** Normalises a file path (backslashes -> forward slashes) for cross-platform comparison. */
 function normPath(p: string): string { return p.replace(/\\/g, "/"); }
 
@@ -111,14 +117,15 @@ export function fileMatches(reportFileName: string, manifestFile: string): boole
   return rf === mf || rf.endsWith("/" + mf);
 }
 
-/** Per stable-id, the set of report FILE names in which a test carrying that id was reported
- *  PASSED. Drives {@link reconcile}'s id -> file binding enforcement (BLOCK 9(c)). */
-export function passedFilesFromReport(report: JsonReport): Map<string, Set<string>> {
+/** Per stable-id, the set of report FILE names in which a test carrying that id was reported with a
+ *  status the `accept` predicate admits. Underlies both the passed-file binding (BLOCK 9(c)) and the
+ *  deferred skipped-file binding (BLOCK 6). */
+export function filesFromReport(report: JsonReport, accept: (status: string) => boolean): Map<string, Set<string>> {
   const byId = new Map<string, Set<string>>();
   for (const file of report.testResults ?? []) {
     const fname = file.name ?? "";
     for (const a of file.assertionResults ?? []) {
-      if ((a.status ?? "").toLowerCase() !== "passed") continue;
+      if (!accept((a.status ?? "").toLowerCase())) continue;
       const text = `${a.fullName ?? ""} ${a.title ?? ""}`;
       for (const id of new Set(extractIds(text))) {
         const set = byId.get(id) ?? new Set<string>();
@@ -130,10 +137,23 @@ export function passedFilesFromReport(report: JsonReport): Map<string, Set<strin
   return byId;
 }
 
+/** Per stable-id, the set of report FILE names in which a test carrying that id was reported
+ *  PASSED. Drives {@link reconcile}'s id -> file binding enforcement (BLOCK 9(c)). */
+export function passedFilesFromReport(report: JsonReport): Map<string, Set<string>> {
+  return filesFromReport(report, (status) => status === "passed");
+}
+
+/** Per stable-id, the set of report FILE names in which a test carrying that id was reported
+ *  SKIPPED/TODO/PENDING. Drives the deferred skipped-token file binding (BLOCK 6). */
+export function skippedFilesFromReport(report: JsonReport): Map<string, Set<string>> {
+  return filesFromReport(report, (status) => status === "skipped" || status === "todo" || status === "pending");
+}
+
 /** Reconciles a Vitest JSON report against a required/deferred manifest. */
 export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): ReconcileResult {
   const byId = statusesFromReport(report);
   const passedFilesById = passedFilesFromReport(report);
+  const skippedFilesById = skippedFilesFromReport(report);
   const violations: ReconcileResult["violations"] = [];
 
   for (const entry of manifest.required) {
@@ -184,9 +204,18 @@ export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): 
   // shipped early. A deferred id ENTIRELY ABSENT from the report means the scenario was deleted/retitled
   // (losing the feature-activation wiring), so it FAILS the gate, NAMED; an `other` state fails too.
   // Previously an absent deferred id was silently accepted — the exact fail-OPEN hole this closes.
-  for (const d of deferredReconciled) {
-    if (d.state === "missing") violations.push({ id: d.id, reason: "deferred-absent", statuses: [] });
-    else if (d.state === "other") violations.push({ id: d.id, reason: "deferred-unexpected", statuses: d.statuses });
+  for (const entry of manifest.deferred) {
+    const d = deferredReconciled.find((x) => x.id === entry.id)!;
+    if (d.state === "missing") { violations.push({ id: d.id, reason: "deferred-absent", statuses: [] }); continue; }
+    if (d.state === "other") { violations.push({ id: d.id, reason: "deferred-unexpected", statuses: d.statuses }); continue; }
+    // FILE-BINDING (BLOCK 6): the deferred scenario's skipped-pending-feature token (or its early-shipped
+    // passing token) MUST come from ITS BOUND file. If that token was moved to an unrelated dummy test
+    // while the real activation-wired scenario disappeared, that is a violation despite the state.
+    if (entry.file !== undefined) {
+      const files = (d.state === "passed" ? passedFilesById : skippedFilesById).get(entry.id) ?? new Set<string>();
+      const boundToExpected = files.size > 0 && [...files].every((rf) => fileMatches(rf, entry.file!));
+      if (!boundToExpected) violations.push({ id: entry.id, reason: "deferred-wrong-file", statuses: [...files] });
+    }
   }
 
   const ok = violations.length === 0;
@@ -239,6 +268,40 @@ export function loadManifest(path: string): RequiredTestsManifest {
   }
   const deferredRaw = (raw as { deferred?: unknown }).deferred;
   const deferred = Array.isArray(deferredRaw) ? (deferredRaw as ManifestEntry[]) : [];
+  // BLOCK 6: structurally PIN the deferred exemption set + require each deferred entry's bound `file`,
+  // so deleting the sole deferred entry (a green "0 deferred" gate) or moving its skipped token to an
+  // unrelated file cannot pass. `deferred` must have exactly EXPECTED_DEFERRED_COUNT entries, each with
+  // a string `id` and a string `file`.
+  if (deferred.length !== EXPECTED_DEFERRED_COUNT) {
+    throw new Error(
+      `check-required-tests: manifest "deferred" length ${deferred.length} != pinned ${EXPECTED_DEFERRED_COUNT} — a deferred entry was added or deleted without updating the pinned count (BLOCK 6 structural pin). If this change is intentional, update EXPECTED_DEFERRED_COUNT.`,
+    );
+  }
+  for (const entry of deferred) {
+    if (typeof entry?.id !== "string" || entry.id.length === 0) {
+      throw new Error(`check-required-tests: a "deferred" entry is missing a string "id" — FAIL-CLOSED.`);
+    }
+    if (typeof entry?.file !== "string" || entry.file.length === 0) {
+      throw new Error(
+        `check-required-tests: deferred entry "${String(entry?.id)}" is missing its bound "file" — every deferred id MUST name the test file that carries its skipped-pending-feature token (BLOCK 6 file-binding).`,
+      );
+    }
+  }
+  // BLOCK 5: manifest-ID UNIQUENESS — each id must appear EXACTLY ONCE across required ∪ deferred, so a
+  // canonical one-to-one id<->file binding holds. A duplicated id would let a deleted required test be
+  // masked by a duplicate of another passing entry while `required.length` stays pinned (a fail-open).
+  const seenIds = new Map<string, string>();
+  for (const [origin, list] of [["required", required as ManifestEntry[]], ["deferred", deferred]] as const) {
+    for (const entry of list) {
+      const prior = seenIds.get(entry.id);
+      if (prior !== undefined) {
+        throw new Error(
+          `check-required-tests: duplicate manifest id "${entry.id}" (appears in ${prior} and ${origin}) — ids must be unique (a one-to-one id<->file binding). FAIL-CLOSED (BLOCK 5).`,
+        );
+      }
+      seenIds.set(entry.id, origin);
+    }
+  }
   return { required: required as ManifestEntry[], deferred };
 }
 
