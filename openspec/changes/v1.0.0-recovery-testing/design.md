@@ -378,6 +378,25 @@ formally re-scope the gate") is two-part, both in-repo:
    fault-replay legitimately diverges in `kv_history` rows/version numbers). This is `02`-T11,
    which "*depends on* F1/F2 being fixed to ever pass" — hence the **hard dependency on G5**.
 
+> **Task 6 close-out (post-implementation reconciliation of §5).** Both halves are landed and in the
+> required gate. (1) **P3 anchor** — `test/postgres/temporal-kv.property.test.ts`'s P3 (`getAt({at})`
+> equals a from-scratch fold of the put sequence) IS the replay-equivalence / fold half; it carries the
+> manifest id `[[property.p3.replay-fold-equivalence]]` (title-only tag; P3 logic unchanged) and imports
+> NO replaced/foreign store — its fold reference is written inline in the test. (2) **Fault-schedule
+> half** — `test/postgres/differential-equivalence.test.ts` applies a SEEDED (reproducible, no
+> `Math.random`) schedule mixing T1/T2/T5, re-syncs from durable state after each fault, and asserts
+> current-state equivalence to a fault-free reference run of the same schedule. **Reconciling the §5
+> wording** "using UmbraDB's own adapters and the existing `test/postgres/reference-merge.ts`":
+> `reference-merge.ts` is the transaction-HISTORY merge stand-in and does NOT model
+> KV/checkpoint/watermark current state (Task 5.1 note), so the current-state reference follows the §2.3
+> keystone discipline instead — a fault-free replay via UmbraDB's own adapters into a separate wallet.
+> It is still strictly in-repo (an in-test import audit verifies the reference side imports nothing
+> outside the repo), importing no foreign consumer/indexer engine. Equality is the §2.3 current-state
+> predicate (full `kv_current` + full `watermarks` + latest complete checkpoint payload; `kv_history`
+> and `version` excluded, their divergence shown explicitly). A mandatory negative control that
+> genuinely drops a committed range confirms the equivalence check fires. See the change's
+> `gate-notes-task6.md`.
+
 ## 6. G12 — Milestone-5 live round-trip, rescoped as manual pre-tag Preprod evidence (`01` §Cutover)
 
 `01` §"Cutover" establishes that the M5 "live round-trip" AC's subject — the real consuming app

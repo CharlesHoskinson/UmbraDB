@@ -174,14 +174,14 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 6. Differential state-equivalence gate, rescoped in-repo (G11)  ⟵ fault-schedule half depends on G5
 
-- [ ] 6.1 Record P3 as the differential gate's replay-equivalence anchor (`design.md` §5;
+- [x] 6.1 Record P3 as the differential gate's replay-equivalence anchor (`design.md` §5;
   `01` checklist item 4). No new test code — P3 already runs in the required gate
   (`test/postgres/temporal-kv.property.test.ts`); this task documents (in the change's spec/gate
   notes) that P3 satisfies the fold-equivalence half **without importing the replaced store**.
   **Acceptance:** the gate documentation names P3 explicitly and states the no-import rationale;
   P3 is confirmed green in the required gate. **Satisfies:** "the differential gate is anchored on
   the P3 replay-equivalence property".
-- [ ] 6.2 `test/postgres/differential-equivalence.test.ts` (`design.md` §5; `02`-T11). **Fault-
+- [x] 6.2 `test/postgres/differential-equivalence.test.ts` (`design.md` §5; `02`-T11). **Fault-
   schedule half — blocked on G5.** Apply a randomized schedule mixing the G9 faults (T1/T2/T5);
   re-sync from durable state; assert the resulting current state is equivalent to a fault-free
   reference run of the same input, using an **in-repo** reference (`test/postgres/
@@ -192,6 +192,20 @@ separate change) — do not let perf work starve T1–T5.
   a range (inject a deliberately-broken variant and confirm the assertion fires). **Satisfies:**
   "a fault-schedule run is state-equivalent to a fault-free reference (T11)" and "the differential
   gate imports no foreign consumer application".
+
+> **Task 6 close-out.** 6.1 — P3 (`test/postgres/temporal-kv.property.test.ts`) is documented as the
+> differential gate's fold / replay-equivalence anchor (the change's `gate-notes-task6.md`; `design.md`
+> §5 note), tagged with `[[property.p3.replay-fold-equivalence]]` (title-only; P3 logic unchanged), and
+> green in the required gate (`npx vitest run test/postgres/temporal-kv.property.test.ts`). 6.2 —
+> `test/postgres/differential-equivalence.test.ts` applies a SEEDED (reproducible, no `Math.random`)
+> schedule mixing T1/T2/T5, re-syncs from durable state after each fault, and asserts current-state
+> equivalence (full `kv_current` + full `watermarks` + latest complete checkpoint payload; `kv_history`
+> / `version` divergence tolerated and shown) to an in-repo fault-free reference — a replay via
+> UmbraDB's own adapters (NOT `reference-merge.ts`, which is transaction-history-merge only; no foreign
+> import, verified by an in-test import audit). A mandatory negative control that genuinely drops a
+> committed range confirms the equivalence assertion fires. Its id
+> `[[differential.fault-schedule.state-equivalent]]` is added to `required-tests.manifest.json`
+> → `required`.
 
 ## 7. CI gate wiring
 
