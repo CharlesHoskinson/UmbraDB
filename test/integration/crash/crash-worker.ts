@@ -25,8 +25,10 @@
  * schema.
  */
 import { randomBytes } from "node:crypto";
+import type postgres from "postgres";
 import { PgCheckpointStore } from "../../../src/postgres/checkpoint-store.js";
-import { createClient } from "../../../src/postgres/client.js";
+import { saveAndAdvance } from "../../../src/postgres/save-and-advance.js";
+import { createClient, type UmbraDBSql } from "../../../src/postgres/client.js";
 import { PgTemporalKV } from "../../../src/postgres/temporal-kv.js";
 import { PgTransactionLeaseLayer, resolveTransaction } from "../../../src/postgres/transaction-lease.js";
 import { TransactionFaultError } from "../../../src/interfaces/transaction-lease.js";
@@ -177,6 +179,80 @@ function t5DeterministicPayload(salt: string, batch: number): Buffer {
   return Buffer.from(`t5-checkpoint|salt=${salt}|batch=${batch}|` + "x".repeat(64), "utf8");
 }
 
+// ---- Co-transactional G5 crash observer (change-level audit BLOCK 1) ---------------------------
+// A test-only query observer that pauses `saveAndAdvance`'s SINGLE transaction BETWEEN its internal
+// checkpoint-data write and its cursor (watermark) write — both inside the ONE uncommitted tx —
+// WITHOUT touching `src/`. It is a Proxy over saveAndAdvance's own transaction handle (à la
+// load-under-prune's LoadInterleaveObserver): it forwards every call verbatim so save's writes run
+// unchanged, recognizes the `watermarks` INSERT (issued only AFTER save's writes complete), and
+// BEFORE letting that query reach Postgres captures the backend pid, signals readiness, and blocks
+// forever — so the parent's SIGKILL freezes a state with all of save's writes issued-but-uncommitted
+// and the cursor write not yet issued. The SIGKILL drops the connection; Postgres rolls the single
+// tx back; NEITHER the checkpoint NOR the cursor is durable (all-or-nothing = G5 atomicity).
+type CoTxCallable = (...args: unknown[]) => unknown;
+
+function wrapTxPauseBeforeCursor(
+  realTx: postgres.TransactionSql<{ bigint: bigint }>,
+  onPaused: (backendPid: number) => void,
+): postgres.TransactionSql<{ bigint: bigint }> {
+  let paused = false;
+  const target = realTx as unknown as CoTxCallable;
+  const proxy = new Proxy(target, {
+    apply(fn, thisArg, args) {
+      const first = args[0];
+      const isTaggedTemplate = Array.isArray(first) && Object.prototype.hasOwnProperty.call(first, "raw");
+      if (!isTaggedTemplate) return Reflect.apply(fn, thisArg, args);
+      const raw = (first as readonly string[]).join(" ").toLowerCase();
+      const isCursorWrite = raw.includes("watermarks") && raw.includes("insert into");
+      if (!isCursorWrite || paused) return Reflect.apply(fn, thisArg, args);
+      paused = true;
+      // A thenable so `await sql`INSERT...`` runs the pause handshake BEFORE the query would issue.
+      return {
+        then(onFulfilled: (v: unknown) => unknown, onRejected: (e: unknown) => unknown) {
+          return (async () => {
+            const pidRows = await realTx<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
+            onPaused(Number(pidRows[0]!.pid));
+            await new Promise<never>(() => {}); // block until the parent SIGKILLs this process
+            return Reflect.apply(fn, thisArg, args); // unreachable in a killed run
+          })().then(onFulfilled, onRejected);
+        },
+      };
+    },
+    get(fn, prop, receiver) {
+      const value = Reflect.get(fn, prop, receiver);
+      return typeof value === "function" ? (value as CoTxCallable).bind(fn) : value;
+    },
+  });
+  return proxy as unknown as postgres.TransactionSql<{ bigint: bigint }>;
+}
+
+/** Wraps a client so `begin`'s transaction handle is the pausing proxy above; every other call
+ *  forwards verbatim, so `PgTransactionLeaseLayer`/`PgCheckpointStore`/`PgWatermarks` see an
+ *  ordinary client and `src/` is byte-unchanged. */
+function observeClientPauseBeforeCursor(real: UmbraDBSql, onPaused: (backendPid: number) => void): UmbraDBSql {
+  const proxy = new Proxy(real as unknown as object, {
+    get(fn, prop, receiver) {
+      if (prop === "begin") {
+        return (...args: unknown[]): unknown => {
+          const beginFn = Reflect.get(fn, "begin", receiver) as CoTxCallable;
+          if (args.length >= 2 && typeof args[1] === "function") {
+            const options = args[0];
+            const cb = args[1] as (tx: postgres.TransactionSql<{ bigint: bigint }>) => unknown;
+            return beginFn.call(fn, options, (realTx: postgres.TransactionSql<{ bigint: bigint }>) =>
+              cb(wrapTxPauseBeforeCursor(realTx, onPaused)));
+          }
+          const cb = args[0] as (tx: postgres.TransactionSql<{ bigint: bigint }>) => unknown;
+          return beginFn.call(fn, (realTx: postgres.TransactionSql<{ bigint: bigint }>) =>
+            cb(wrapTxPauseBeforeCursor(realTx, onPaused)));
+        };
+      }
+      const value = Reflect.get(fn, prop, receiver);
+      return typeof value === "function" ? (value as CoTxCallable).bind(fn) : value;
+    },
+  });
+  return proxy as unknown as UmbraDBSql;
+}
+
 async function main(): Promise<void> {
   const connectionString = requireEnv("UMBRADB_TEST_CONNECTION_URI");
   const schema = requireEnv("UMBRADB_TEST_SCHEMA");
@@ -239,6 +315,47 @@ async function main(): Promise<void> {
 
   switch (hook) {
     case undefined: {
+      if (mode === "co-tx-crash") {
+        // CO-TRANSACTIONAL G5 CRASH (change-level audit BLOCK 1). Drive `saveAndAdvance` — the
+        // SINGLE-transaction save+cursor combinator — through the pausing observer so it stops
+        // BETWEEN the checkpoint-data write and the cursor write, both inside the ONE uncommitted
+        // tx, then block for the parent's SIGKILL. The kill rolls the whole tx back => neither the
+        // checkpoint nor the cursor advance is durable (all-or-nothing). No `src/` change: the pause
+        // is a Proxy over saveAndAdvance's own transaction handle.
+        const observed = observeClientPauseBeforeCursor(sql, (backendPid) => {
+          signalReady({
+            hook: null, mode, pid: process.pid, backendPid,
+            walletId, networkId, cursorKind, cursorKey,
+          });
+        });
+        const obsTxLayer = new PgTransactionLeaseLayer(observed);
+        const obsCheckpoints = new PgCheckpointStore(observed, obsTxLayer, schema);
+        const obsWatermarks = new PgWatermarks(observed, schema);
+        await saveAndAdvance(
+          { checkpoints: obsCheckpoints, watermarks: obsWatermarks, txLayer: obsTxLayer },
+          walletId, networkId, data, { kind: cursorKind, key: cursorKey, value: cursorValue },
+        );
+        // Reached ONLY if the parent never killed at the pause (a parent bug): both committed.
+        // Report so the parent FAILS LOUDLY — this mode MUST be SIGKILLed at the pause.
+        signalResult({ mode, unexpectedlyCompleted: true, threw: false }, true);
+        return;
+      }
+      if (mode === "co-tx-full-flow") {
+        // NEGATIVE CONTROL for the co-tx crash (no observer, no pause, no kill): run the SAME
+        // `saveAndAdvance` to COMPLETION so the parent proves BOTH the checkpoint AND the cursor
+        // land when uninterrupted — making the killed run's all-or-nothing absence provably caused
+        // by the crash, not by a missing op.
+        const summary = await saveAndAdvance(
+          { checkpoints, watermarks, txLayer },
+          walletId, networkId, data, { kind: cursorKind, key: cursorKey, value: cursorValue },
+        );
+        signalReady({
+          hook: null, mode, pid: process.pid, savedSequence: summary.sequence,
+          walletId, networkId, cursorKind, cursorKey,
+        });
+        await sql.end({ timeout: 5 });
+        return;
+      }
       if (mode === "t5-full-flow") {
         // T5 NEGATIVE CONTROL (no hook, no pause, no kill): the SAME safe two-transaction
         // data->cursor flow as `after-data-commit-before-cursor`, but run to COMPLETION. Both real

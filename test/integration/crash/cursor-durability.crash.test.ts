@@ -649,6 +649,7 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       .withCommand(["postgres", "-c", "synchronous_commit=off"])
       .start();
     const localPools: UmbraDBSql[] = [];
+    let bodyOk = false; // NIT 14: track normal completion so teardown can SURFACE a container.stop() leak
     try {
       let uri = container.getConnectionUri();
       const admin = createClient({ connectionString: uri, schema: TEST_SCHEMA, maxConnections: 5, connectTimeout: 10 });
@@ -754,9 +755,21 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       const tailLost = !seqs.has(CRASH_BATCH);
       // eslint-disable-next-line no-console
       console.log(`[t5-off-leg] synchronous_commit=off unclean-crash: tail (batch ${CRASH_BATCH} data) ${tailLost ? "LOST (acceptable)" : "survived"}; watermark=${String(w)}, durableSeqs=${[...seqs].sort((a, b) => a - b).join(",")}`);
+      bodyOk = true; // the test body completed; a teardown container.stop() failure below must now surface
     } finally {
       await Promise.all(localPools.map((p) => p.end({ timeout: 5 }).catch(() => {})));
-      await container.stop().catch(() => {});
+      // NIT 14: do NOT silently swallow container.stop() — a suppressed stop failure leaks the
+      // dedicated T5-off container, accumulating across runs. Surface it: if the body succeeded, a
+      // failed stop FAILS the test; if the body already threw, log it (so the primary error, still
+      // mid-propagation through this finally, is not masked by a throw here).
+      if (bodyOk) {
+        await container.stop();
+      } else {
+        await container.stop().catch((stopErr) => {
+          // eslint-disable-next-line no-console
+          console.error(`[t5-off-leg] container.stop() also failed during teardown: ${String(stopErr)}`);
+        });
+      }
     }
   }, 240_000);
 });

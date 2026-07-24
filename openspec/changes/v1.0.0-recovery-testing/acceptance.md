@@ -31,12 +31,24 @@ check; `doc` = a checkable documentation artifact; `manual-evidence` = the recor
 
 | # | Criterion | Verified by | Requirement |
 |---|-----------|-------------|-------------|
-| C1 | The in-flight `save` rejects with a typed `ConnectionError`, never a raw `postgres.js` error | crash-test | "Postgres-kill mid-save surfaces a typed error and stays all-or-nothing (T2)" |
+| C1 | An in-flight connection loss surfaces a TYPED connection-failure error, never a raw `postgres.js` error, per the reconciled two-leg contract: an IN-TRANSACTION loss (a `save`/`saveAndAdvance` inside `withTransaction` — the T2 kill) surfaces `TransactionFaultError(faultKind "connection-lost")` (code `TRANSACTION_FAULT`); a PRE-/NON-transactional connection failure surfaces `ConnectionError` (code `CONNECTION_ERROR`); a raw driver error NEVER surfaces. See the reconciliation note below | crash-test | "Postgres-kill mid-save surfaces a typed error and stays all-or-nothing (T2)" |
 | C2 | After recovery the checkpoint is all-or-nothing (fully present & `load`able, or fully absent) | crash-test | same |
 | C3 | `load(latest)` returns correct bytes after recovery | crash-test | same |
 | C4 | The lost-ack state is built by the sanctioned simulation (a provably-committed `save` re-invoked with identical content — not a timed kill of the unhittable post-commit-pre-ack window); the retry yields a benign identical-content duplicate at the next seq (not corruption); `load(latest)` correct either way | crash-test | "the save retry-duplication contract is verified in its 1.0.0 (documented-unsafe) form" |
 | C5 | `save` is excluded from any auto-retry allowlist | static | same |
 | C6 | The no-duplicate-on-retry scenario exists but is skipped until a caller idempotency key ships (wired to activate on that feature flag, no spec rewrite needed) | crash-test (skipped) | same (`WHERE` optional-feature) |
+
+> **Reconciliation note (change-level audit BLOCK 2 — C1 code-vs-spec).** The original C1 named a
+> bare `ConnectionError` for the killed in-flight `save`. The CODE is correct and C1 was reconciled
+> to the actual, sharper contract, which the T2 test now ENFORCES exactly. A checkpoint `save`
+> always runs inside a `withTransaction`, whose deliberate Sprint-2 behavior
+> (`transaction-lease.ts:223,263-267`) wraps an in-transaction connection loss as
+> `TransactionFaultError(faultKind "connection-lost")`, PRE-EMPTING save's `{tx}` `ConnectionError`
+> translation. So the T2 in-transaction kill surfaces `TransactionFaultError`, NOT the bare
+> `ConnectionError` the stale spec named; a pre-/non-transactional connection failure surfaces
+> `ConnectionError`; and under either leg a raw `postgres.js` driver error must never surface. The
+> T2 test pins BOTH legs (the killed in-flight save requires `TransactionFaultError`; a genuine
+> non-transactional adapter call against an unreachable endpoint requires `ConnectionError`).
 
 ## Crash between data and cursor — keystone (G9 / T5, depends on G5)
 

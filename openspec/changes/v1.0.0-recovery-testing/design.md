@@ -150,6 +150,16 @@ set → `ConnectionError`, `02` §"Retry/idempotency"); (b) after Postgres is ba
 **all-or-nothing** (either the manifest is fully present and `load`s, or fully absent — never
 partial).
 
+> **Reconciliation note (change-level audit BLOCK 2).** Assertion (a) names a bare `ConnectionError`;
+> the code produces a sharper, correct surface and the spec is reconciled to it. A checkpoint `save`
+> always runs inside a `withTransaction`, whose deliberate Sprint-2 behavior
+> (`transaction-lease.ts:223,263-267`) wraps an in-transaction connection loss as
+> `TransactionFaultError(faultKind "connection-lost")` (code `TRANSACTION_FAULT`), PRE-EMPTING save's
+> `{tx}` `ConnectionError` translation. The reconciled C1 contract is therefore: an IN-TRANSACTION
+> connection loss (the T2 kill) surfaces `TransactionFaultError`; a PRE-/NON-transactional connection
+> failure surfaces `ConnectionError`; a raw `postgres.js` error NEVER surfaces under either leg. The
+> T2 test enforces BOTH legs (see `acceptance.md` C1's note).
+
 **Retry-duplication contract — honoring `council/B` §5 item 3 verbatim.** `save` is *not*
 idempotent under a lost COMMIT-ack: a blind retry allocates a *new* seq
 (`checkpoint-store.ts:166-172`; `(w,net,seq)` is not UNIQUE — `002_checkpoint_store.ts`) and

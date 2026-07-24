@@ -25,7 +25,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export interface ManifestEntry {
   /** Stable id, matched against the `[[id]]` token embedded in a test's title. */
   id: string;
-  /** Informational: the file the test lives in. */
+  /** REQUIRED for a `required` entry (change-level audit BLOCK 9(c)): the test FILE that MUST carry
+   *  this id. The reconciliation FAILS if the id executed-and-passed from a DIFFERENT file — so
+   *  moving an id's token to a trivial passing test elsewhere is caught, not silently counted.
+   *  {@link loadManifest} rejects any `required` entry lacking it. Optional only for the synthetic
+   *  inline manifests the unit tests use. */
   file?: string;
   /** Informational: what the test proves. */
   description?: string;
@@ -52,7 +56,7 @@ export interface JsonReport {
   testResults?: JsonReportFile[];
 }
 
-export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "unknown-status";
+export type ViolationReason = "missing" | "skipped" | "todo" | "pending" | "failed" | "ambiguous" | "wrong-file" | "unknown-status";
 
 export interface ReconcileResult {
   ok: boolean;
@@ -89,9 +93,47 @@ export function statusesFromReport(report: JsonReport): Map<string, string[]> {
   return byId;
 }
 
+/** The pinned count of `required` tests (change-level audit BLOCK 9(b)). Structurally PINS the
+ *  manifest so silently deleting (or adding) a required entry fails the gate: {@link loadManifest}
+ *  rejects a manifest whose `required` length drifts from this constant. Bump it deliberately when
+ *  a required test is genuinely added/removed. */
+export const EXPECTED_REQUIRED_COUNT = 23;
+
+/** Normalises a file path (backslashes -> forward slashes) for cross-platform comparison. */
+function normPath(p: string): string { return p.replace(/\\/g, "/"); }
+
+/** True when a Vitest report file name (typically an absolute path) refers to the manifest's
+ *  repo-relative `file`. Requires a path-segment boundary so a suffix collision (`xtest/...`
+ *  ending with `test/...`) cannot match. */
+export function fileMatches(reportFileName: string, manifestFile: string): boolean {
+  const rf = normPath(reportFileName);
+  const mf = normPath(manifestFile);
+  return rf === mf || rf.endsWith("/" + mf);
+}
+
+/** Per stable-id, the set of report FILE names in which a test carrying that id was reported
+ *  PASSED. Drives {@link reconcile}'s id -> file binding enforcement (BLOCK 9(c)). */
+export function passedFilesFromReport(report: JsonReport): Map<string, Set<string>> {
+  const byId = new Map<string, Set<string>>();
+  for (const file of report.testResults ?? []) {
+    const fname = file.name ?? "";
+    for (const a of file.assertionResults ?? []) {
+      if ((a.status ?? "").toLowerCase() !== "passed") continue;
+      const text = `${a.fullName ?? ""} ${a.title ?? ""}`;
+      for (const id of new Set(extractIds(text))) {
+        const set = byId.get(id) ?? new Set<string>();
+        set.add(fname);
+        byId.set(id, set);
+      }
+    }
+  }
+  return byId;
+}
+
 /** Reconciles a Vitest JSON report against a required/deferred manifest. */
 export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): ReconcileResult {
   const byId = statusesFromReport(report);
+  const passedFilesById = passedFilesFromReport(report);
   const violations: ReconcileResult["violations"] = [];
 
   for (const entry of manifest.required) {
@@ -106,7 +148,20 @@ export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): 
       continue;
     }
     const status = statuses[0]!;
-    if (status === "passed") continue;
+    if (status === "passed") {
+      // FILE-BINDING (BLOCK 9(c)): a "passed" id must have executed-and-passed from the file the
+      // manifest pins it to. If it passed from a DIFFERENT file (e.g. its token was moved to a
+      // trivial passing test), that is a violation despite the "passed" status.
+      if (entry.file !== undefined) {
+        const passedFiles = passedFilesById.get(entry.id) ?? new Set<string>();
+        const boundToExpected =
+          passedFiles.size > 0 && [...passedFiles].every((rf) => fileMatches(rf, entry.file!));
+        if (!boundToExpected) {
+          violations.push({ id: entry.id, reason: "wrong-file", statuses: [...passedFiles] });
+        }
+      }
+      continue;
+    }
     const reason: ViolationReason =
       status === "skipped" || status === "todo" || status === "pending" || status === "failed"
         ? status
@@ -134,9 +189,47 @@ export function reconcile(report: JsonReport, manifest: RequiredTestsManifest): 
   return { ok, violations, deferredReconciled, summary };
 }
 
+/**
+ * Loads and STRUCTURALLY VALIDATES the manifest, FAIL-CLOSED (change-level audit BLOCK 9(a)/(b)/(c)):
+ * a missing, unparseable, empty, or drifted manifest THROWS — it must NEVER be silently coerced to
+ * an empty required set that reconciles as "all 0 required passed" (the exact fail-OPEN hole this
+ * closes). Enforced, in order: the file parses; `required` is a NON-EMPTY array; every required
+ * entry has a string `id` and a bound `file`; and `required.length` equals the pinned
+ * {@link EXPECTED_REQUIRED_COUNT}. `deferred` may be empty/absent.
+ */
 export function loadManifest(path: string): RequiredTestsManifest {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<RequiredTestsManifest>;
-  return { required: raw.required ?? [], deferred: raw.deferred ?? [] };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(
+      `check-required-tests: manifest at ${path} is missing or unparseable — FAIL-CLOSED (a missing/broken manifest must never pass the gate): ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  const required = (raw as { required?: unknown }).required;
+  if (!Array.isArray(required) || required.length === 0) {
+    throw new Error(
+      `check-required-tests: manifest at ${path} has no non-empty "required" array — FAIL-CLOSED. An empty/absent required set must NOT reconcile as "all 0 required passed".`,
+    );
+  }
+  for (const entry of required as ManifestEntry[]) {
+    if (typeof entry?.id !== "string" || entry.id.length === 0) {
+      throw new Error(`check-required-tests: a "required" entry is missing a string "id" — FAIL-CLOSED.`);
+    }
+    if (typeof entry?.file !== "string" || entry.file.length === 0) {
+      throw new Error(
+        `check-required-tests: required entry "${String(entry?.id)}" is missing its bound "file" — every required id MUST name the test file that carries it (BLOCK 9(c) file-binding).`,
+      );
+    }
+  }
+  if (required.length !== EXPECTED_REQUIRED_COUNT) {
+    throw new Error(
+      `check-required-tests: manifest "required" length ${required.length} != pinned ${EXPECTED_REQUIRED_COUNT} — a required entry was added or deleted without updating the pinned count (BLOCK 9(b) structural pin). If this change is intentional, update EXPECTED_REQUIRED_COUNT.`,
+    );
+  }
+  const deferredRaw = (raw as { deferred?: unknown }).deferred;
+  const deferred = Array.isArray(deferredRaw) ? (deferredRaw as ManifestEntry[]) : [];
+  return { required: required as ManifestEntry[], deferred };
 }
 
 export function loadReport(path: string): JsonReport {
@@ -161,7 +254,23 @@ function cli(argv: string[]): number {
     );
     return 2;
   }
-  const result = reconcile(loadReport(reportPath), loadManifest(manifestPath));
+  let manifest: RequiredTestsManifest;
+  try {
+    manifest = loadManifest(manifestPath);
+  } catch (err) {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    return 2; // FAIL-CLOSED: a missing/emptied/drifted manifest fails the gate, never passes it.
+  }
+  let report: JsonReport;
+  try {
+    report = loadReport(reportPath);
+  } catch (err) {
+    process.stderr.write(
+      `check-required-tests: could not read the vitest report at ${reportPath} — FAIL-CLOSED: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return 2;
+  }
+  const result = reconcile(report, manifest);
   process.stdout.write(result.summary + "\n");
   for (const d of result.deferredReconciled) {
     process.stdout.write(`  deferred ${d.id}: ${d.state}${d.statuses.length ? ` (status: ${d.statuses.join(", ")})` : ""}\n`);

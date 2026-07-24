@@ -114,13 +114,57 @@ export async function backendPid(sql: UmbraDBSql): Promise<number> {
  * primitive that drops a specific in-flight connection without stopping the whole postmaster
  * (`design.md` §1, T2). Postgres sends the target backend a SIGTERM and closes its socket; a
  * dedicated pool observing the drop then reconnects on its next statement.
+ *
+ * DETERMINISTIC DEATH, NOT MERELY SIGNAL DELIVERY (change-level audit BLOCK 3). The ONE-arg /
+ * zero-timeout `pg_terminate_backend(pid)` returns true as soon as the SIGTERM has been DELIVERED,
+ * not once the backend has actually died — so a caller that released a worker's `COMMIT`
+ * immediately after this returned could race the still-live backend, and that COMMIT could
+ * occasionally succeed (a flaky required gate). This function makes termination DETERMINISTIC:
+ *   1. it calls the PG14+ TWO-arg `pg_terminate_backend(pid, timeout_ms)` with a POSITIVE timeout —
+ *      Postgres then WAITS for the backend to actually terminate and returns true ONLY once it is
+ *      gone (PG17 / `postgres:17-alpine` supports it); and
+ *   2. it additionally POLLS `pg_stat_activity` until the backend row has DISAPPEARED, a POSITIVE
+ *      proof of death, bounded by {@link waitForBackendGone} so it never hangs.
+ * So when this resolves the target backend is PROVABLY dead, and a caller may release work that
+ * must observe the dead backend (T2's post-kill COMMIT) without a wall-clock race.
  */
-export async function pgTerminateBackend(admin: UmbraDBSql, pid: number): Promise<boolean> {
+export async function pgTerminateBackend(
+  admin: UmbraDBSql,
+  pid: number,
+  opts: { terminateTimeoutMs?: number; confirmDeathTimeoutMs?: number } = {},
+): Promise<boolean> {
+  const terminateTimeoutMs = opts.terminateTimeoutMs ?? 5_000;
   const rows = await withSuiteWatchdog(
-    admin<{ terminated: boolean }[]>`SELECT pg_terminate_backend(${pid}) AS terminated`,
+    admin<{ terminated: boolean }[]>`SELECT pg_terminate_backend(${pid}, ${terminateTimeoutMs}) AS terminated`,
     { label: "pgTerminateBackend" },
   );
-  return rows[0]!.terminated;
+  const terminated = rows[0]!.terminated;
+  // Positive proof of death: the two-arg form already waited, but poll to death regardless so the
+  // guarantee holds even against a driver/version that treated the timeout arg leniently.
+  await waitForBackendGone(admin, pid, opts.confirmDeathTimeoutMs ?? 10_000);
+  return terminated;
+}
+
+/**
+ * Polls `pg_stat_activity` (from a second connection `admin`) until no backend with `pid` remains —
+ * the target is PROVABLY gone — or the `timeoutMs` bound elapses (then throws a typed
+ * {@link SuiteWatchdogTimeoutError}, never hangs). Used by {@link pgTerminateBackend} to close the
+ * "signal delivered but the backend is still finishing its in-flight COMMIT" race before a caller
+ * releases a post-kill operation (T2, change-level audit BLOCK 3).
+ */
+export async function waitForBackendGone(admin: UmbraDBSql, pid: number, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const rows = await withSuiteWatchdog(
+      admin<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE pid = ${pid}`,
+      { label: "waitForBackendGone-probe", timeoutMs: 10_000 },
+    );
+    if (rows[0]!.n === 0) return;
+    if (Date.now() >= deadline) {
+      throw new SuiteWatchdogTimeoutError(`pg backend ${pid} did not terminate`, timeoutMs);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 // ---- Primitive 1: crash-worker spawn + SIGKILL --------------------------------------------
@@ -165,10 +209,17 @@ export interface SpawnCrashWorkerOptions {
   schema: string;
   /** The named fault hook, or omit for an ordinary uninterrupted `save`. */
   hook?: CrashHook;
-  /** A no-pause, no-kill control mode independent of {@link hook}. `t5-full-flow` runs the safe
-   *  data->cursor sequence to completion (the T5 negative control) so a killed run's cursor/data
-   *  absence is provably caused by the crash, not by a missing op. */
-  mode?: "t5-full-flow";
+  /** A control/driver mode independent of {@link hook}:
+   *   - `t5-full-flow` — no-pause, no-kill: runs the safe two-transaction data->cursor sequence to
+   *     completion (the T5 negative control) so a killed run's cursor/data absence is provably
+   *     caused by the crash, not a missing op.
+   *   - `co-tx-crash` — drives `saveAndAdvance` (the co-transactional SINGLE-tx save+cursor
+   *     combinator) through a test-only pausing observer that stops BETWEEN the checkpoint-data
+   *     write and the cursor write inside the ONE uncommitted tx, signals readiness, then blocks
+   *     for the parent's SIGKILL (change-level audit BLOCK 1 — G5 atomicity crash test).
+   *   - `co-tx-full-flow` — no-pause, no-kill negative control for `co-tx-crash`: runs the SAME
+   *     `saveAndAdvance` to completion so BOTH the checkpoint and the cursor land. */
+  mode?: "t5-full-flow" | "co-tx-crash" | "co-tx-full-flow";
   walletId?: string;
   networkId?: string;
   /** Watermark cursor (kind, key, value) for the T5 hooks; `cursorValue` is JSON. */
