@@ -179,6 +179,19 @@ export interface SpawnCrashWorkerOptions {
   leaseKey?: string;
   /** Checkpoint payload size in bytes (default 256). */
   payloadBytes?: number;
+  /** T5 KEYSTONE deterministic-data mode (`design.md` §2.3). When `salt` is set, the T5 hooks
+   *  (`after-data-commit-before-cursor` / `after-cursor-before-data`) write the batch's REAL,
+   *  deterministic content — a KV `put(kvKey = kvValue)` in (`kvNamespace`, `kvScope`) AND a
+   *  checkpoint `save(payload(salt, index))` — byte-identical to the fault-free reference batch,
+   *  instead of a random opaque payload with no KV. This makes the crash batch a genuine
+   *  same-sequence step whose durable content can be compared against the reference. Omit for the
+   *  legacy random-payload behaviour the crash-harness smoke suite uses. */
+  salt?: string;
+  index?: number;
+  kvNamespace?: string;
+  kvScope?: string;
+  kvKey?: string;
+  kvValue?: unknown;
   /** Extra environment overrides (e.g. a per-session `synchronous_commit`). */
   extraEnv?: Record<string, string>;
 }
@@ -271,6 +284,12 @@ export function spawnCrashWorker(opts: SpawnCrashWorkerOptions): CrashWorkerHand
   if (opts.cursorValue !== undefined) env.UMBRADB_CRASH_CURSOR_VALUE = JSON.stringify(opts.cursorValue);
   if (opts.leaseKey !== undefined) env.UMBRADB_CRASH_LEASE_KEY = opts.leaseKey;
   if (opts.payloadBytes !== undefined) env.UMBRADB_CRASH_PAYLOAD_BYTES = String(opts.payloadBytes);
+  if (opts.salt !== undefined) env.UMBRADB_CRASH_SALT = opts.salt;
+  if (opts.index !== undefined) env.UMBRADB_CRASH_INDEX = String(opts.index);
+  if (opts.kvNamespace !== undefined) env.UMBRADB_CRASH_KV_NS = opts.kvNamespace;
+  if (opts.kvScope !== undefined) env.UMBRADB_CRASH_KV_SCOPE = opts.kvScope;
+  if (opts.kvKey !== undefined) env.UMBRADB_CRASH_KV_KEY = opts.kvKey;
+  if (opts.kvValue !== undefined) env.UMBRADB_CRASH_KV_VALUE = JSON.stringify(opts.kvValue);
   if (opts.extraEnv !== undefined) Object.assign(env, opts.extraEnv);
 
   const child = spawn(process.execPath, ["--import", "tsx", WORKER_ENTRYPOINT], {

@@ -27,8 +27,10 @@
 import { randomBytes } from "node:crypto";
 import { PgCheckpointStore } from "../../../src/postgres/checkpoint-store.js";
 import { createClient } from "../../../src/postgres/client.js";
+import { PgTemporalKV } from "../../../src/postgres/temporal-kv.js";
 import { PgTransactionLeaseLayer, resolveTransaction } from "../../../src/postgres/transaction-lease.js";
 import { TransactionFaultError } from "../../../src/interfaces/transaction-lease.js";
+import type { JsonValue } from "../../../src/interfaces/temporal-kv.js";
 import { PgWatermarks } from "../../../src/postgres/watermarks.js";
 import type { WatermarkValue } from "../../../src/interfaces/watermarks.js";
 import { ConnectionError, StorageError } from "../../../src/interfaces/storage-errors.js";
@@ -162,6 +164,19 @@ function describeCaughtError(err: unknown): Record<string, unknown> {
   };
 }
 
+/**
+ * T5 deterministic checkpoint payload for a batch — kept BYTE-IDENTICAL with the keystone test's
+ * `payload(salt, batch)` (`cursor-durability.crash.test.ts`). In the T5 KEYSTONE deterministic-data
+ * mode the crash batch writes THIS content (not random opaque bytes), so it is a genuine
+ * same-sequence step whose durable content is compared against the fault-free reference batch —
+ * rather than arbitrary content the replay silently overwrites. The keystone asserts, from a fresh
+ * client BEFORE replay, that the crash batch's durable payload equals `payload(salt, index)`, which
+ * also catches any drift between this formula and the test's.
+ */
+function t5DeterministicPayload(salt: string, batch: number): Buffer {
+  return Buffer.from(`t5-checkpoint|salt=${salt}|batch=${batch}|` + "x".repeat(64), "utf8");
+}
+
 async function main(): Promise<void> {
   const connectionString = requireEnv("UMBRADB_TEST_CONNECTION_URI");
   const schema = requireEnv("UMBRADB_TEST_SCHEMA");
@@ -188,11 +203,39 @@ async function main(): Promise<void> {
   const leaseKey = process.env.UMBRADB_CRASH_LEASE_KEY ?? "crash-lease";
   const payloadBytes = Number(process.env.UMBRADB_CRASH_PAYLOAD_BYTES ?? "256");
 
+  // T5 KEYSTONE deterministic-data mode (`design.md` §2.3). When UMBRADB_CRASH_SALT is set, the two
+  // T5 hooks write the batch's REAL, deterministic content — a KV `put(item:index)` AND a checkpoint
+  // `save(payload(salt,index))` — byte-identical to the fault-free reference batch, instead of a
+  // random opaque payload with no KV. This makes the crash batch a genuine same-sequence step whose
+  // durable content the keystone can compare against the reference (not arbitrary content masked by
+  // replay). Absent the salt, the hooks keep their legacy random-payload behaviour (the smoke suite).
+  const t5Salt = process.env.UMBRADB_CRASH_SALT;
+  const t5Index = process.env.UMBRADB_CRASH_INDEX !== undefined ? Number(process.env.UMBRADB_CRASH_INDEX) : undefined;
+  const kvNamespace = process.env.UMBRADB_CRASH_KV_NS;
+  const kvScope = process.env.UMBRADB_CRASH_KV_SCOPE ?? walletId;
+  const kvKey = process.env.UMBRADB_CRASH_KV_KEY;
+  const kvValue: JsonValue | undefined =
+    process.env.UMBRADB_CRASH_KV_VALUE !== undefined ? (JSON.parse(process.env.UMBRADB_CRASH_KV_VALUE) as JsonValue) : undefined;
+
   const sql = createClient({ connectionString, schema, maxConnections: 5 });
   const txLayer = new PgTransactionLeaseLayer(sql);
   const checkpoints = new PgCheckpointStore(sql, txLayer, schema);
   const watermarks = new PgWatermarks(sql, schema);
+  const kv = new PgTemporalKV(sql, schema);
   const data = randomBytes(payloadBytes);
+
+  /** The T5 crash batch's REAL data ops, in the same order as the reference batch (KV put, then the
+   *  checkpoint save). Used by BOTH T5 hooks; only WHERE it sits relative to the cursor advance and
+   *  the pause differs (safe = data before the pause, unsafe = data after it). Returns the committed
+   *  checkpoint sequence so the safe hook can report it in readiness. */
+  const writeT5DeterministicData = async (): Promise<number> => {
+    if (t5Salt === undefined || t5Index === undefined || kvNamespace === undefined || kvKey === undefined || kvValue === undefined) {
+      throw new Error("crash-worker: T5 deterministic-data mode requires UMBRADB_CRASH_{SALT,INDEX,KV_NS,KV_KEY,KV_VALUE}");
+    }
+    await kv.put(kvNamespace, kvScope, kvKey, kvValue); // KV datum (item:index) COMMITTED & durable
+    const summary = await checkpoints.save(walletId, networkId, t5DeterministicPayload(t5Salt, t5Index)); // checkpoint COMMITTED
+    return summary.sequence;
+  };
 
   switch (hook) {
     case undefined: {
@@ -307,17 +350,23 @@ async function main(): Promise<void> {
     case "after-data-commit-before-cursor": {
       // SAFE two-transaction ordering, driven as TWO REAL, separately-committed operations with the
       // pause BETWEEN them: data FIRST (its own committed transaction) -> pause -> THEN cursor.
-      const summary = await checkpoints.save(walletId, networkId, data); // Op1: data COMMITTED & durable
+      // In T5 KEYSTONE deterministic-data mode the "data" is the batch's REAL content — a KV
+      // put(item:index) AND a checkpoint save(payload(salt,index)), byte-identical to the reference
+      // batch; otherwise (smoke suite) it is a single random-payload save.
+      const savedSequence = t5Salt !== undefined
+        ? await writeT5DeterministicData()                                 // Op1: KV datum + checkpoint DATA COMMITTED
+        : (await checkpoints.save(walletId, networkId, data)).sequence;    // Op1: (legacy) random data COMMITTED
       // ---- REAL BOUNDARY (after-data-commit-before-cursor — T5, safe ordering) ----------------
-      // COMMITTED (durable) at this pause: the checkpoint DATA (seq = summary.sequence).
-      //       checkpoints.save opened its OWN transaction, COMMITTED it, and RETURNED.
+      // COMMITTED (durable) at this pause: the batch's DATA (checkpoint seq = savedSequence and, in
+      //       deterministic mode, its KV datum item:index). Each op opened its OWN transaction,
+      //       COMMITTED it, and RETURNED.
       // PENDING (not yet issued) at this pause: the watermark/cursor advance below (Op2, REAL code
       //       past the pause — no longer a comment).
       // A SIGKILL here leaves data durable and the cursor NOT advanced => the durable watermark is
       // BEHIND the durable data (the only acceptable direction). If NOT killed, `pauseThenResume`
       // resolves and Op2 runs, so the worker commits BOTH and exits 0.
       signalReady({
-        hook, pid: process.pid, savedSequence: summary.sequence,
+        hook, pid: process.pid, savedSequence,
         walletId, networkId, cursorKind, cursorKey,
       });
       await pauseThenResume();
@@ -334,15 +383,20 @@ async function main(): Promise<void> {
       await watermarks.set(cursorKind, cursorKey, cursorValue);          // Op1: cursor COMMITTED & durable
       // ---- REAL BOUNDARY (after-cursor-before-data — T5, unsafe reference case) ----------------
       // COMMITTED (durable) at this pause: the watermark/cursor advance for (cursorKind, cursorKey).
-      // PENDING (not yet issued) at this pause: the later checkpoint DATA commit below (Op2, REAL
-      //       code past the pause — no longer a comment).
+      // PENDING (not yet issued) at this pause: the later batch DATA commit below (Op2, REAL code
+      //       past the pause — no longer a comment).
       // A SIGKILL here leaves the cursor durable with its data ABSENT => the watermark is AHEAD of
       // durable data. Reachable ONLY under this unsafe ordering; it exists to construct the negative
       // case, not to assert the invariant. If NOT killed, `pauseThenResume` resolves and Op2 runs,
       // so the worker commits BOTH and exits 0.
       signalReady({ hook, pid: process.pid, cursorKind, cursorKey, walletId, networkId });
       await pauseThenResume();
-      await checkpoints.save(walletId, networkId, data);                // Op2: data COMMITTED & durable
+      // Op2: the SAME deterministic data as the reference batch (KV put(item:index) + checkpoint
+      // save(payload(salt,index))) in T5 mode, else a legacy random-payload save. When killed at the
+      // pause this never runs, so BOTH the KV datum AND the checkpoint are absent while the cursor is
+      // durable — the KV-inclusive negative case (either missing falsifies the invariant).
+      if (t5Salt !== undefined) await writeT5DeterministicData();
+      else await checkpoints.save(walletId, networkId, data);           // Op2: data COMMITTED & durable
       await sql.end({ timeout: 5 });
       return;
     }

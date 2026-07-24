@@ -167,11 +167,17 @@ async function driveFullBatch(a: Adapters, wallet: string, scope: string, cursor
  *  it has paused at the named hook. Returns the handle + readiness for boundary assertions. */
 async function spawnCrashBatch(
   uri: string, wallet: string, cursorKey: string,
-  hook: typeof SAFE_HOOK | typeof UNSAFE_HOOK, cursorValue: number,
+  hook: typeof SAFE_HOOK | typeof UNSAFE_HOOK, cursorValue: number, salt: string,
 ): Promise<{ h: CrashWorkerHandle; ready: Awaited<ReturnType<CrashWorkerHandle["waitForReady"]>> }> {
   const h = worker({
     connectionUri: uri, schema: TEST_SCHEMA, hook,
     walletId: wallet, networkId: NET, cursorKind: CURSOR_KIND, cursorKey, cursorValue,
+    // T5 deterministic-data mode: the crash batch writes the SAME content as the fault-free
+    // reference batch for its index — a KV put(item:cursorValue) AND a checkpoint
+    // save(payload(salt, cursorValue)) — mirroring `driveFullBatch`'s data ops exactly (data first),
+    // instead of random bytes with no KV. `index === cursorValue` (batch index === cursor value).
+    salt, index: cursorValue,
+    kvNamespace: KV_NS, kvScope: wallet, kvKey: itemKey(cursorValue), kvValue: itemValue(cursorValue),
   });
   const ready = await h.waitForReady(30_000);
   expect(ready.hook).toBe(hook);
@@ -211,84 +217,154 @@ async function completeManifestCount(sql: UmbraDBSql, wallet: string): Promise<n
   return rows[0]!.n;
 }
 
+/** The durable KV state for `scope` under {@link KV_NS}: `key -> value` for every present
+ *  `kv_current` row. Batch i's KV datum (`item:i`) is durable iff its key is present here with the
+ *  matching value. Read raw (a SELECT, not `kv.get` per expected key) so an ABSENT row is a real
+ *  absence and no expected-key list can mask an unexpected one. */
+async function durableKvValues(sql: UmbraDBSql, scope: string): Promise<Map<string, JsonValue>> {
+  const rows = await withSuiteWatchdog(
+    sql<{ key: string; value: JsonValue }[]>`
+      SELECT key, value FROM ${sql(TEST_SCHEMA)}.kv_current
+      WHERE ns = ${KV_NS} AND scope = ${scope}`,
+    { label: "durableKvValues", timeoutMs: 10_000 },
+  );
+  return new Map(rows.map((r): [string, JsonValue] => [r.key, r.value]));
+}
+
 // ---- The watermark-never-ahead invariant (a PURE, genuinely-falsifiable predicate) ----------
 
-interface BatchSpec { cursorValue: number; expectedSeq: number; }
+interface BatchSpec {
+  cursorValue: number;
+  /** The batch's expected COMPLETE checkpoint seq (part of its durable DATA). */
+  expectedSeq: number;
+  /** The batch's expected KV datum — `item:i` and its value — the OTHER half of its durable DATA
+   *  (`design.md` §2.3: "every write batch whose cursor value ≤ w is present in durable data
+   *  (checkpoint/KV)"). */
+  kvKey: string;
+  kvValue: JsonValue;
+}
 
 interface InvariantResult {
   holds: boolean;
   watermark: number | undefined;
   maxDurableSeq: number | undefined;
-  /** Seqs that are covered by the durable watermark but ABSENT from durable data (must be empty). */
+  /** Covered batches whose CHECKPOINT seq is ABSENT from durable data (must be empty). */
   missingCoveredSeqs: number[];
+  /** Covered batches whose KV datum (`item:i`) is ABSENT/mismatched in durable data (must be empty).
+   *  A lost KV write for a cursor-covered batch is a durability-inversion just like a lost
+   *  checkpoint — the invariant covers BOTH halves of a batch's data, not the checkpoint seq alone. */
+  missingCoveredKvKeys: string[];
   /** True iff the durable watermark exceeds the max durable checkpoint seq (an inversion). */
   watermarkAheadOfMaxData: boolean;
+}
+
+/** Deep-equality of a durable KV value against a batch's expected value. Values here are small,
+ *  single-key JSON objects (`{ batch: n }`), so a canonical `JSON.stringify` compare is exact. */
+function kvValueEqual(actual: JsonValue | undefined, expected: JsonValue): boolean {
+  return actual !== undefined && JSON.stringify(actual) === JSON.stringify(expected);
 }
 
 /**
  * THE T5 INVARIANT (`design.md` §2.3 / acceptance D1): the durable watermark is never AHEAD of
  * durable data. Concretely, for the durable watermark value `w`: (1) every write batch whose cursor
- * value <= `w` has its data durably present (its expected checkpoint seq is in `durableCompleteSeqs`),
- * and (2) `w` does not exceed the maximum durable checkpoint seq. Both must hold.
+ * value <= `w` has ITS FULL DATA durably present — BOTH its expected checkpoint seq (in
+ * `durableCompleteSeqs`) AND its KV datum (`item:i` present with the matching value in `durableKv`);
+ * and (2) `w` does not exceed the maximum durable checkpoint seq. All must hold.
+ *
+ * The KV half matters because each batch writes a `temporal-kv` `put(item:i)` in addition to its
+ * checkpoint (`design.md` §2.3): a checkpoint-seq-only invariant would let a LOST KV write for a
+ * cursor-covered batch pass undetected. Covering both halves closes that hole.
  *
  * This is a PURE function so it can be run against BOTH the safe crash state (returns holds=true)
  * AND the unsafe `after-cursor-before-data` crash state (returns holds=FALSE), proving the invariant
- * is real and the SAFE ordering is what preserves it.
+ * is real and the SAFE ordering is what preserves it. It falsifies if EITHER the checkpoint OR the
+ * KV row for a covered batch is missing.
  */
 function watermarkNeverAheadResult(
   watermark: number | undefined,
   batches: readonly BatchSpec[],
   durableCompleteSeqs: ReadonlySet<number>,
+  durableKv: ReadonlyMap<string, JsonValue>,
 ): InvariantResult {
   const maxDurableSeq = durableCompleteSeqs.size > 0 ? Math.max(...durableCompleteSeqs) : undefined;
   const covered = watermark === undefined ? [] : batches.filter((b) => b.cursorValue <= watermark);
   const missingCoveredSeqs = covered
-    .map((b) => b.expectedSeq)
-    .filter((seq) => !durableCompleteSeqs.has(seq));
+    .filter((b) => !durableCompleteSeqs.has(b.expectedSeq))
+    .map((b) => b.expectedSeq);
+  const missingCoveredKvKeys = covered
+    .filter((b) => !kvValueEqual(durableKv.get(b.kvKey), b.kvValue))
+    .map((b) => b.kvKey);
   const watermarkAheadOfMaxData =
     watermark !== undefined && (maxDurableSeq === undefined || watermark > maxDurableSeq);
   return {
-    holds: missingCoveredSeqs.length === 0 && !watermarkAheadOfMaxData,
+    holds: missingCoveredSeqs.length === 0 && missingCoveredKvKeys.length === 0 && !watermarkAheadOfMaxData,
     watermark,
     maxDurableSeq,
     missingCoveredSeqs,
+    missingCoveredKvKeys,
     watermarkAheadOfMaxData,
   };
 }
 
-const ALL_BATCH_SPECS: readonly BatchSpec[] = ALL_BATCHES.map((b) => ({ cursorValue: b, expectedSeq: b }));
+const ALL_BATCH_SPECS: readonly BatchSpec[] = ALL_BATCHES.map((b) => ({
+  cursorValue: b, expectedSeq: b, kvKey: itemKey(b), kvValue: itemValue(b),
+}));
 
 // ---- Current-state equality predicate (`design.md` §2.3 / acceptance D2/D3) ------------------
 
 interface CurrentState {
-  /** kv_current VALUES per key (NOT version, NOT history). */
-  kv: Record<string, JsonValue | null>;
+  /** EXHAUSTIVE: EVERY `kv_current` row for this scope, keyed by `${ns} ${key}` -> value —
+   *  the FULL current KV state, NOT just the expected keys. An extra/stale row present on only one
+   *  side breaks equality (a bug an expected-keys-only read would miss). Excludes version + history. */
+  kvAll: Record<string, JsonValue>;
+  /** EXHAUSTIVE: EVERY `watermarks` row for this cursor key, keyed by `kind` -> value — the FULL
+   *  watermark state for the identity, NOT just the one expected sync cursor. */
+  watermarksAll: Record<string, JsonValue>;
   /** Bytes of the latest COMPLETE checkpoint payload. */
   latestPayload: Buffer;
-  /** The durable watermark value. */
+  /** Convenience: the sync-cursor watermark value (derived from {@link watermarksAll}), for the
+   *  spelled-out per-leg assertions. */
   watermark: number | undefined;
 }
 
-/** Read the {kv_current values + latest complete checkpoint payload + watermark} CURRENT STATE for
- *  a wallet/scope/cursor, via UmbraDB's OWN adapters, from a FRESH client. Deliberately reads NO
- *  version columns and NO kv_history rows — those are excluded from the equality predicate. */
+/** Read the FULL CURRENT STATE for a wallet/scope/cursor from a FRESH client: EVERY `kv_current`
+ *  row for the scope + EVERY `watermarks` row for the cursor key + the latest complete checkpoint
+ *  payload. Reads ALL rows (raw SELECTs scoped to this run's unique wallet/scope/key), not an
+ *  expected-key subset, so the equality predicate is EXHAUSTIVE. Deliberately reads NO `version`
+ *  columns and NO `kv_history` rows — those legitimately diverge on replay and are excluded
+ *  (`design.md` §2.3 / acceptance D3). */
 async function readCurrentState(a: Adapters, wallet: string, scope: string, cursorKey: string): Promise<CurrentState> {
-  const kv: Record<string, JsonValue | null> = {};
-  for (const b of ALL_BATCHES) {
-    const entry = await withSuiteWatchdog(() => a.kv.get(KV_NS, scope, itemKey(b)), { label: `kv-get-${b}`, timeoutMs: 10_000 });
-    kv[itemKey(b)] = entry === null ? null : entry.value;
-  }
+  const kvRows = await withSuiteWatchdog(
+    a.sql<{ ns: string; key: string; value: JsonValue }[]>`
+      SELECT ns, key, value FROM ${a.sql(TEST_SCHEMA)}.kv_current WHERE scope = ${scope}`,
+    { label: "readCurrentState-kv-all", timeoutMs: 10_000 },
+  );
+  const kvAll: Record<string, JsonValue> = {};
+  for (const r of kvRows) kvAll[`${r.ns} ${r.key}`] = r.value;
+
+  const wmRows = await withSuiteWatchdog(
+    a.sql<{ kind: string; value: JsonValue }[]>`
+      SELECT kind, value FROM ${a.sql(TEST_SCHEMA)}.watermarks WHERE key = ${cursorKey}`,
+    { label: "readCurrentState-wm-all", timeoutMs: 10_000 },
+  );
+  const watermarksAll: Record<string, JsonValue> = {};
+  for (const r of wmRows) watermarksAll[r.kind] = r.value;
+
   const record = await withSuiteWatchdog(() => a.checkpoints.load(wallet, NET), { label: "load-latest", timeoutMs: 15_000 });
-  const watermark = await withSuiteWatchdog(() => a.watermarks.get<number>(CURSOR_KIND, cursorKey), { label: "watermark-get", timeoutMs: 10_000 });
-  return { kv, latestPayload: Buffer.from(record.data), watermark };
+  const watermark = watermarksAll[CURSOR_KIND] as number | undefined;
+  return { kvAll, watermarksAll, latestPayload: Buffer.from(record.data), watermark };
 }
 
-/** The CURRENT-STATE equality predicate (`design.md` §2.3): equal iff kv_current values agree for
- *  every key, latest complete checkpoint payload bytes are identical, and watermark values agree. */
+/** The CURRENT-STATE equality predicate (`design.md` §2.3): equal iff the FULL `kv_current` row
+ *  set agrees (every ns/key -> value), the latest complete checkpoint payload bytes are identical,
+ *  and the FULL `watermarks` row set agrees (every kind -> value). Set-equality on the exhaustive
+ *  maps means an extra/stale current row or watermark present on ONLY one side falsifies equality —
+ *  it is not an expected-keys-only check. `kv_history` rows and `version` columns stay excluded
+ *  (they legitimately diverge on replay — acceptance D3). */
 function assertCurrentStateEqual(fault: CurrentState, reference: CurrentState): void {
-  expect(fault.kv).toEqual(reference.kv);                                 // (1) kv_current values
+  expect(fault.kvAll).toEqual(reference.kvAll);                           // (1) FULL kv_current values
   expect(fault.latestPayload.equals(reference.latestPayload)).toBe(true); // (2) latest checkpoint payload bytes
-  expect(fault.watermark).toBe(reference.watermark);                      // (3) watermark values
+  expect(fault.watermarksAll).toEqual(reference.watermarksAll);          // (3) FULL watermark values
 }
 
 /** Current version of a kv key (a DELIBERATELY-EXCLUDED-from-the-predicate quantity, read only to
@@ -308,6 +384,33 @@ async function watermarkRaw(sql: UmbraDBSql, cursorKey: string): Promise<number 
   return rows.length === 0 ? undefined : rows[0]!.value;
 }
 
+/** Collects the container's docker logs (from the container's original start) and resolves TRUE as
+ *  soon as `re` matches the accumulated text, FALSE if `timeoutMs` elapses first. The log stream
+ *  FOLLOWS (never ends on its own), so it is destroyed on settle. Used by the off-leg to CONFIRM the
+ *  postmaster died uncleanly: after the restart, Postgres crash recovery logs a marker a clean stop
+ *  never produces. */
+async function waitForLogMatch(c: StartedPostgreSqlContainer, re: RegExp, timeoutMs: number): Promise<boolean> {
+  const stream = await c.logs({ since: 0 });
+  return await new Promise<boolean>((resolve) => {
+    let buf = "";
+    let done = false;
+    const finish = (v: boolean): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { (stream as { destroy?: () => void }).destroy?.(); } catch { /* best effort */ }
+      resolve(v);
+    };
+    const timer = setTimeout(() => finish(re.test(buf)), timeoutMs);
+    stream.on("data", (chunk: Buffer | string) => {
+      buf += chunk.toString();
+      if (re.test(buf)) finish(true);
+    });
+    stream.on("end", () => finish(re.test(buf)));
+    stream.on("error", () => finish(re.test(buf)));
+  });
+}
+
 // =============================================================================================
 describe("T5 keystone — a crash between data and cursor never leaves the watermark ahead of durable data (design.md §2.3)", () => {
   // ---- 3.1(a) watermark-never-ahead + the falsifiable unsafe-ordering contrast ---------------
@@ -322,13 +425,16 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     for (const b of PREFIX_BATCHES) await driveFullBatch(safeParent, safeW, safeW, safeW, salt, b);
 
     // Crash batch 3 in the worker: DATA committed (its own transaction), pause, then the SIGKILL —
-    // the cursor advance (op past the pause) never runs.
-    const { h: safeH, ready: safeReady } = await spawnCrashBatch(uri, safeW, safeW, SAFE_HOOK, CRASH_BATCH);
+    // the cursor advance (op past the pause) never runs. In deterministic mode the batch's DATA is
+    // its REAL content: item:3 (KV) + checkpoint payload(salt,3), mirroring the reference batch.
+    const { h: safeH, ready: safeReady } = await spawnCrashBatch(uri, safeW, safeW, SAFE_HOOK, CRASH_BATCH, salt);
     expect(safeReady.savedSequence).toBe(CRASH_BATCH); // batch-3 checkpoint committed & durable at the pause
 
-    // Boundary (WHILE paused, before the kill): batch-3 data is durable (seq 3 present) but the
-    // cursor is still at the prefix value 2 — the crash is about to freeze exactly this state.
+    // Boundary (WHILE paused, before the kill): batch-3's FULL data is durable — both its checkpoint
+    // (seq 3) AND its KV datum (item:3) — but the cursor is still at the prefix value 2; the crash is
+    // about to freeze exactly this state.
     expect((await durableCompleteSeqs(getSql(), safeW)).has(CRASH_BATCH)).toBe(true);
+    expect((await durableKvValues(getSql(), safeW)).has(itemKey(CRASH_BATCH))).toBe(true); // crash batch wrote its KV datum
     expect(await watermarkRaw(getSql(), safeW)).toBe(2);
 
     await killAndConfirm(safeH); // deterministic SIGKILL at the named hook
@@ -337,13 +443,15 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const safeFresh = adaptersFor(uri);
     const wSafe = await safeFresh.watermarks.get<number>(CURSOR_KIND, safeW);
     const seqsSafe = await durableCompleteSeqs(safeFresh.sql, safeW);
-    const resSafe = watermarkNeverAheadResult(wSafe, ALL_BATCH_SPECS, seqsSafe);
+    const kvSafe = await durableKvValues(safeFresh.sql, safeW);
+    const resSafe = watermarkNeverAheadResult(wSafe, ALL_BATCH_SPECS, seqsSafe, kvSafe);
 
-    // THE INVARIANT: every batch covered by the durable watermark is present in durable data, and
-    // the watermark does not exceed the max durable checkpoint seq.
+    // THE INVARIANT: every batch covered by the durable watermark has its FULL data present (both
+    // checkpoint seq AND KV datum), and the watermark does not exceed the max durable checkpoint seq.
     expect(resSafe.holds).toBe(true);
     expect(resSafe.watermark).toBe(2);          // cursor stuck at the last FULLY committed batch (2)
-    expect(resSafe.missingCoveredSeqs).toEqual([]); // batches 1,2 (cursor <= 2) both durable
+    expect(resSafe.missingCoveredSeqs).toEqual([]);   // batches 1,2 (cursor <= 2) both durable (checkpoint)
+    expect(resSafe.missingCoveredKvKeys).toEqual([]); // ...and both durable (KV datum) — the KV half holds too
     expect(resSafe.watermarkAheadOfMaxData).toBe(false);
     expect(resSafe.maxDurableSeq).toBe(3);      // batch-3 DATA is durable — watermark (2) is BEHIND it
     expect(wSafe!).toBeLessThanOrEqual(resSafe.maxDurableSeq!); // watermark <= data actually committed
@@ -355,26 +463,55 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const unsafeParent = adaptersFor(uri);
     for (const b of PREFIX_BATCHES) await driveFullBatch(unsafeParent, unsafeW, unsafeW, unsafeW, salt, b);
 
-    // Crash batch 3 unsafe: CURSOR advanced to 3 FIRST, pause, then the SIGKILL — the data save
-    // (op past the pause) never runs, so the cursor is durable with its data ABSENT.
-    const { h: unsafeH } = await spawnCrashBatch(uri, unsafeW, unsafeW, UNSAFE_HOOK, CRASH_BATCH);
-    // Boundary: cursor is AHEAD (3) while batch-3 data (seq 3) is absent.
+    // Crash batch 3 unsafe: CURSOR advanced to 3 FIRST, pause, then the SIGKILL — the data ops
+    // (KV put + checkpoint save, past the pause) never run, so the cursor is durable with BOTH halves
+    // of its data ABSENT.
+    const { h: unsafeH } = await spawnCrashBatch(uri, unsafeW, unsafeW, UNSAFE_HOOK, CRASH_BATCH, salt);
+    // Boundary: cursor is AHEAD (3) while batch-3's data (seq 3 AND item:3) is absent.
     expect(await watermarkRaw(getSql(), unsafeW)).toBe(3);
     expect((await durableCompleteSeqs(getSql(), unsafeW)).has(CRASH_BATCH)).toBe(false);
+    expect((await durableKvValues(getSql(), unsafeW)).has(itemKey(CRASH_BATCH))).toBe(false);
 
     await killAndConfirm(unsafeH);
 
     const unsafeFresh = adaptersFor(uri);
     const wUnsafe = await unsafeFresh.watermarks.get<number>(CURSOR_KIND, unsafeW);
     const seqsUnsafe = await durableCompleteSeqs(unsafeFresh.sql, unsafeW);
-    const resUnsafe = watermarkNeverAheadResult(wUnsafe, ALL_BATCH_SPECS, seqsUnsafe);
+    const kvUnsafe = await durableKvValues(unsafeFresh.sql, unsafeW);
+    const resUnsafe = watermarkNeverAheadResult(wUnsafe, ALL_BATCH_SPECS, seqsUnsafe, kvUnsafe);
 
-    // The invariant is FALSIFIABLE: on the unsafe crash state it returns holds === FALSE.
+    // The invariant is FALSIFIABLE: on the unsafe crash state it returns holds === FALSE, and both
+    // halves of batch 3's covered data are reported missing.
     expect(resUnsafe.holds).toBe(false);
     expect(resUnsafe.watermark).toBe(3);
-    expect(resUnsafe.missingCoveredSeqs).toContain(CRASH_BATCH); // batch-3 covered by cursor 3 but ABSENT
-    expect(resUnsafe.watermarkAheadOfMaxData).toBe(true);        // cursor 3 ahead of max durable data (seq 2)
+    expect(resUnsafe.missingCoveredSeqs).toContain(CRASH_BATCH);      // batch-3 checkpoint covered by cursor 3 but ABSENT
+    expect(resUnsafe.missingCoveredKvKeys).toContain(itemKey(CRASH_BATCH)); // ...and its KV datum ABSENT too
+    expect(resUnsafe.watermarkAheadOfMaxData).toBe(true);            // cursor 3 ahead of max durable data (seq 2)
     expect(resUnsafe.maxDurableSeq).toBe(2);
+
+    // KV-INCLUSIVE FALSIFIABILITY (BLOCK 1): the invariant now covers a batch's KV datum, not the
+    // checkpoint seq alone. Prove — over the SAME pure predicate — that it falsifies if EITHER half of
+    // a covered batch's data is missing (watermark 3 covers batch 3 here):
+    // (i) checkpoint PRESENT, KV ABSENT -> holds FALSE via the KV half ALONE. This is exactly the hole
+    //     the old checkpoint-seq-only invariant MISSED (it would have returned holds=true here).
+    const kvHalfMissing = watermarkNeverAheadResult(
+      CRASH_BATCH, ALL_BATCH_SPECS,
+      new Set([1, 2, 3]),                                              // all checkpoint seqs present
+      new Map([[itemKey(1), itemValue(1)], [itemKey(2), itemValue(2)]]), // item:3 ABSENT
+    );
+    expect(kvHalfMissing.holds).toBe(false);
+    expect(kvHalfMissing.missingCoveredKvKeys).toContain(itemKey(CRASH_BATCH));
+    expect(kvHalfMissing.missingCoveredSeqs).toEqual([]);       // checkpoint half fine — ONLY the KV falsifies
+    expect(kvHalfMissing.watermarkAheadOfMaxData).toBe(false);  // seq 3 present, so NOT a seq inversion either
+    // (ii) KV PRESENT, checkpoint ABSENT -> holds FALSE via the checkpoint half.
+    const ckptHalfMissing = watermarkNeverAheadResult(
+      CRASH_BATCH, ALL_BATCH_SPECS,
+      new Set([1, 2]),                                                 // seq 3 ABSENT
+      new Map(ALL_BATCHES.map((b): [string, JsonValue] => [itemKey(b), itemValue(b)])), // all KV incl. item:3
+    );
+    expect(ckptHalfMissing.holds).toBe(false);
+    expect(ckptHalfMissing.missingCoveredSeqs).toContain(CRASH_BATCH);
+    expect(ckptHalfMissing.missingCoveredKvKeys).toEqual([]);   // KV half fine — ONLY the checkpoint falsifies
   }, 180_000);
 
   // ---- 3.1(b) replay converges on a fault-free reference (current-state equality) ------------
@@ -387,7 +524,7 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     // ---- FAULT RUN: prefix 1,2 full; batch 3 crashes after data, before cursor ----------------
     const faultParent = adaptersFor(uri);
     for (const b of PREFIX_BATCHES) await driveFullBatch(faultParent, faultW, faultW, faultW, salt, b);
-    const { h } = await spawnCrashBatch(uri, faultW, faultW, SAFE_HOOK, CRASH_BATCH);
+    const { h } = await spawnCrashBatch(uri, faultW, faultW, SAFE_HOOK, CRASH_BATCH, salt);
     await killAndConfirm(h);
 
     // The durable cursor after the crash is the last FULLY committed batch (2) — batch 3's data is
@@ -395,6 +532,16 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const afterCrash = adaptersFor(uri);
     const durableCursor = await afterCrash.watermarks.get<number>(CURSOR_KIND, faultW);
     expect(durableCursor).toBe(2);
+
+    // SAME-DETERMINISTIC-SEQUENCE proof (BLOCK 2): the crash batch wrote the SAME content as the
+    // fault-free reference batch for its index — checkpoint payload(salt,3) AND item:3 — NOT random
+    // bytes with no KV. Read its durable data from the post-crash client BEFORE the replay re-applies
+    // batch 3 (so nothing masks it). This also guards the crash worker's payload formula against drift
+    // from the test's `payload()`.
+    const crashCkpt = await withSuiteWatchdog(() => afterCrash.checkpoints.load(faultW, NET), { label: "crash-batch-load", timeoutMs: 15_000 });
+    expect(Buffer.from(crashCkpt.data).equals(payload(salt, CRASH_BATCH))).toBe(true); // checkpoint = payload(salt,3)
+    const crashItem = await withSuiteWatchdog(() => afterCrash.kv.get(KV_NS, faultW, itemKey(CRASH_BATCH)), { label: "crash-batch-kv", timeoutMs: 10_000 });
+    expect(crashItem?.value).toEqual(itemValue(CRASH_BATCH)); // KV datum = item:3 -> { batch: 3 }
 
     // ---- REPLAY from the durable cursor: re-drive UmbraDB's OWN adapters for every batch AT/AFTER
     //      the durable watermark (cursor value >= durableCursor), ascending — the idempotent resume
@@ -416,10 +563,29 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const faultState = await readCurrentState(adaptersFor(uri), faultW, faultW, faultW);
     const refState = await readCurrentState(adaptersFor(uri), refW, refW, refW);
     assertCurrentStateEqual(faultState, refState);
-    // Spell the convergence out: watermark fully advanced to 3 on both; all kv_current values equal.
+
+    // EXHAUSTIVENESS (BLOCK 3): the predicate compares the FULL current state, so a stale/extra
+    // kv_current row OR an extra watermark present on ONLY one side breaks equality — the old
+    // expected-keys-only read missed exactly this. Demonstrate over the just-read states (no DB
+    // mutation): injecting an unexpected row on the fault side makes the predicate THROW.
+    expect(() => assertCurrentStateEqual(
+      { ...faultState, kvAll: { ...faultState.kvAll, [`${KV_NS} item:stale`]: { batch: 99 } } },
+      refState,
+    )).toThrow();
+    expect(() => assertCurrentStateEqual(
+      { ...faultState, watermarksAll: { ...faultState.watermarksAll, "stale-kind": 7 } },
+      refState,
+    )).toThrow();
+
+    // Spell the convergence out: watermark fully advanced to 3 on both; the FULL kv_current state is
+    // exactly the three expected keys (an exhaustive check — an extra key here would fail this too).
     expect(faultState.watermark).toBe(3);
     expect(refState.watermark).toBe(3);
-    expect(faultState.kv).toEqual({ "item:1": { batch: 1 }, "item:2": { batch: 2 }, "item:3": { batch: 3 } });
+    expect(faultState.kvAll).toEqual({
+      [`${KV_NS} ${itemKey(1)}`]: itemValue(1),
+      [`${KV_NS} ${itemKey(2)}`]: itemValue(2),
+      [`${KV_NS} ${itemKey(3)}`]: itemValue(3),
+    });
 
     // ---- TOLERATED DIVERGENCE (EXCLUDED from the predicate) — asserted explicitly so the exclusion
     //      is real, not hand-waved. WHY tolerated (`council/B` §1's replay-idempotence note): `put`
@@ -430,7 +596,7 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const faultItem2Version = await kvVersion(adaptersFor(uri), faultW, itemKey(2));
     const refItem2Version = await kvVersion(adaptersFor(uri), refW, itemKey(2));
     expect(Number(faultItem2Version)).toBeGreaterThan(Number(refItem2Version)); // version DIVERGES (replay re-applied batch 2)
-    expect(faultState.kv[itemKey(2)]).toEqual(refState.kv[itemKey(2)]);         // ...but the VALUE converges
+    expect(faultState.kvAll[`${KV_NS} ${itemKey(2)}`]).toEqual(refState.kvAll[`${KV_NS} ${itemKey(2)}`]); // ...but the VALUE converges
     // Checkpoint seq chain diverges too (crash's superseded seq + replay's duplicates) while the
     // LATEST payload converges — the predicate compares only the latest complete payload.
     const faultManifests = await completeManifestCount(adaptersFor(uri).sql, faultW);
@@ -454,14 +620,15 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
     const parent = adaptersFor(uri);
     for (const b of PREFIX_BATCHES) await driveFullBatch(parent, onW, onW, onW, salt, b);
 
-    const { h, ready } = await spawnCrashBatch(uri, onW, onW, SAFE_HOOK, CRASH_BATCH);
+    const { h, ready } = await spawnCrashBatch(uri, onW, onW, SAFE_HOOK, CRASH_BATCH, salt);
     expect(ready.savedSequence).toBe(CRASH_BATCH);
     await killAndConfirm(h);
 
     const fresh = adaptersFor(uri);
     const w = await fresh.watermarks.get<number>(CURSOR_KIND, onW);
     const seqs = await durableCompleteSeqs(fresh.sql, onW);
-    const res = watermarkNeverAheadResult(w, ALL_BATCH_SPECS, seqs);
+    const kvOn = await durableKvValues(fresh.sql, onW);
+    const res = watermarkNeverAheadResult(w, ALL_BATCH_SPECS, seqs, kvOn);
 
     // The invariant holds (the same falsifiable checker proven in the watermark-never-ahead test).
     expect(res.holds).toBe(true);
@@ -507,20 +674,38 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       await withSuiteWatchdog(admin`CHECKPOINT`, { label: "durable-floor-checkpoint", timeoutMs: 20_000 });
 
       // CRASH batch 3 on the dedicated container: data async-committed (NOT checkpointed — a losable
-      // tail), then the worker pauses before the cursor advance.
-      const { h, ready } = await spawnCrashBatch(uri, offW, offW, SAFE_HOOK, CRASH_BATCH);
+      // tail), then the worker pauses before the cursor advance. In deterministic mode the data is the
+      // batch's REAL content (item:3 + payload(salt,3)), mirroring the reference batch.
+      const { h, ready } = await spawnCrashBatch(uri, offW, offW, SAFE_HOOK, CRASH_BATCH, salt);
       expect(ready.savedSequence).toBe(CRASH_BATCH);
 
       // UNCLEAN POSTMASTER KILL: SIGQUIT to PID 1 (postgres) == immediate crash shutdown (no
       // checkpoint), NOT a clean, WAL-flushing container stop. This is what makes a tail loss
       // REACHABLE (a client kill or clean stop never loses acked async commits — `design.md` §2.3).
-      try {
-        await container.exec(["kill", "-s", "QUIT", "1"]);
-      } catch { /* the postmaster dying can drop the exec stream; the crash is what matters */ }
-      h.sigkill(); // reap the worker child too (its connection died with the postmaster)
+      // (a) The kill command MUST succeed — we ASSERT its exit code rather than swallowing it, so a
+      // failed/mis-targeted kill cannot let this leg pass vacuously.
+      const killResult = await container.exec(["kill", "-s", "QUIT", "1"]);
+      expect(killResult.exitCode).toBe(0); // SIGQUIT delivered to the postmaster
+
+      // (c) Reap the paused worker with our SIGKILL and CONFIRM it died by THAT signal BEFORE the
+      // restart. The worker sat idle between data and cursor; only this kill reaps the process.
+      h.sigkill();
+      const workerExit = await withSuiteWatchdog(h.waitForExit(), { label: "off-leg-worker-exit", timeoutMs: 15_000 });
+      expect(workerExit.signal).toBe("SIGKILL");
+
+      // (b) POSITIVELY CONFIRM the crash took the postmaster DOWN: the pre-crash `admin` connection is
+      // force-dropped — a query on it now fails and keeps failing (the postmaster is actually down, not
+      // merely idle). A mis-targeted kill that left Postgres UP would let this query SUCCEED and fail
+      // the assertion here — no vacuous pass. This loop also settles the container into 'exited' before
+      // the restart, replacing the old blind 1.5s timer.
+      let adminDropped = false;
+      for (let i = 0; i < 20 && !adminDropped; i++) {
+        try { await admin<{ ok: number }[]>`SELECT 1 AS ok`; await new Promise((r) => setTimeout(r, 250)); }
+        catch { adminDropped = true; }
+      }
+      expect(adminDropped).toBe(true); // the immediate crash force-dropped the live connection
 
       // Recover via crash recovery (container restart) and RE-READ the (remapped) connection URI.
-      await new Promise((r) => setTimeout(r, 1_500)); // let the container settle into 'exited'
       await container.restart({ timeout: 30 });
       uri = container.getConnectionUri();
 
@@ -533,10 +718,24 @@ describe("T5 keystone — a crash between data and cursor never leaves the water
       }
       expect(ok).toBe(true); // Postgres came back after crash recovery
 
+      // (b cont.) The restarted postmaster ran CRASH RECOVERY — the definitive proof the shutdown was
+      // UNCLEAN. A clean stop restarts with "database system was shut down at ..." and NO recovery; an
+      // immediate crash instead logs "received immediate shutdown request" and restarts with "was
+      // interrupted" / "was not properly shut down; automatic recovery in progress". Assert that marker
+      // is present (had the kill been mis-targeted, the restart would be a clean stop+start with no
+      // recovery marker — this would fail, so the leg cannot pass vacuously).
+      const recoveryLogged = await waitForLogMatch(
+        container,
+        /automatic recovery in progress|database system was interrupted|was not properly shut down|received immediate shutdown request/i,
+        20_000,
+      );
+      expect(recoveryLogged).toBe(true); // crash recovery ran => the postmaster died uncleanly
+
       const freshAdapters = adaptersOf(fresh);
       const w = await freshAdapters.watermarks.get<number>(CURSOR_KIND, offW);
       const seqs = await durableCompleteSeqs(fresh, offW);
-      const res = watermarkNeverAheadResult(w, ALL_BATCH_SPECS, seqs);
+      const kvOff = await durableKvValues(fresh, offW);
+      const res = watermarkNeverAheadResult(w, ALL_BATCH_SPECS, seqs, kvOff);
 
       // NON-VACUOUS: the checkpointed prefix (batches 1,2 + cursor 2) survived the crash.
       expect(seqs.has(1)).toBe(true);
