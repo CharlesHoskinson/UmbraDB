@@ -375,10 +375,12 @@ A 1.0.0 tag requires all of:
   `Performance/CEILINGS.md`, and the GC anti-join curve + K/D cliff
   adjudication live in the baseline artifact. The CV-aware regression gate is
   the first post-1.0.0 obligation.
-- [ ] Live round-trip against a real network (Milestone 5) succeeds — G12/R5. This is the one
-  gate CI structurally cannot run: it is executed manually **against the release candidate** and
-  its transcript is pasted into the Release Record. It stays unticked until that RC run exists,
-  and it MUST NOT be ticked from an earlier run against a different commit.
+- [x] Live round-trip against a real network (Milestone 5) succeeds — G12/R5, run **against the
+  release candidate** `8a684fc` on a clean tree at version 1.0.0: a funded wallet synced against
+  public Preprod with UmbraDB injected as the tx-history store, the envelope was persisted, the
+  process was killed, and a fresh object graph rebuilt from Postgres resumed from the durable
+  cursor (`appliedId = 508261n`) with no full resync and no drift. All five M5 sub-criteria PASS.
+  Evidence: [`docs/recovery/EVIDENCE.md`](docs/recovery/EVIDENCE.md).
 
 ## Beyond 1.0.0 — additional tracks in progress
 

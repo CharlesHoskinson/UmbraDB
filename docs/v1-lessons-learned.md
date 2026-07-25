@@ -94,7 +94,7 @@ count of `defect-escape` + `gate-miss` + `rework-cause` entries — the trend-an
 | G9 | Crash-injection / cold-start suite in REQUIRED CI | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
 | G10 | Full-sync soak + load-under-concurrent-prune | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
 | G11 | Differential-equivalence gate (in-repo, fault-schedule) | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
-| G12 | M5 live Preprod round-trip (manual pre-tag evidence) | recovery-testing | ☐ OPEN — manual run against the RC (R5) | — |
+| G12 | M5 live Preprod round-trip (manual pre-tag evidence) | recovery-testing | ☑ CLOSED (run against RC `8a684fc`, `docs/recovery/EVIDENCE.md`) | — |
 | G13 | Perf-correctness fixes (UNNEST HP-1, GROUP BY HP-2, fillfactor IS-1) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
 | G14 | Benchmark baseline recorded (GC anti-join envelope) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
 | G15 | SECURITY.md / threat-model doc | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |

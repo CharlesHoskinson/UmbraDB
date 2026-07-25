@@ -234,7 +234,7 @@ separate change) — do not let perf work starve T1–T5.
   replaced engine" is the consumer project's clause. **Acceptance:** the template enumerates every
   field the G12 evidence-artifact requirement lists. **Satisfies:** "the run's evidence is recorded
   as a release artifact".
-- [ ] 8.2 Run the manual pre-tag Preprod round-trip against the RC (`design.md` §6;
+- [x] 8.2 Run the manual pre-tag Preprod round-trip against the RC (`design.md` §6;
   `package.json` `test:live`, `UMBRADB_LIVE_PREPROD=1`): sync a funded wallet to live Preprod tip →
   persist envelope → kill → cold-start in a fresh object graph → resume, reusing the existing
   `cold-boot-recovery.integration.test.ts` flow against the RC. Fill in `docs/recovery/EVIDENCE.md`
