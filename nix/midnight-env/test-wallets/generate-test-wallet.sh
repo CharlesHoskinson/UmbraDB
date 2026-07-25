@@ -34,8 +34,12 @@ command -v node >/dev/null 2>&1 || {
   exit 1
 }
 
-# Fresh 32-byte seed -> 64 lowercase hex chars. Never reuse a seed; never commit the output file.
-SEED_HEX="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+# The seed is generated INSIDE the derivation process below and never leaves it.
+#
+# It used to be minted here and handed to node as an argv value. Process arguments are world-
+# readable on Linux (`ps`, /proc/<pid>/cmdline), so the ROOT secret of the wallet was observable by
+# any local user for as long as derivation ran. Environment variables are no better (/proc/<pid>/
+# environ, plus child inheritance). Minting it in-process removes the exposure window entirely.
 
 # Derive nightSecretKeyHex + address from the fresh seed using the REAL SDK, via the same API the
 # repo's live integration path proves:
@@ -44,12 +48,14 @@ SEED_HEX="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toSt
 #   * address: preprod-db-sync.integration.test.ts
 #              (createKeystore(unshieldedSeed, networkId) -> PublicKey.fromKeyStore(keystore).address)
 # On missing tooling: named-tool failure, NO file written. On success: writes the four-key file 0600.
-node - "$SEED_HEX" "$OUT" <<'NODE'
+node - "$OUT" <<'NODE'
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
-const [seedHex, out] = [process.argv[2], process.argv[3]];
+// Mint the seed in the SAME process that derives from it: never in argv, never in env.
+const seedHex = require("crypto").randomBytes(32).toString("hex");
+const out = process.argv[2];
 
 // Resolve a package the way test/integration/live-fixtures/midnight-wallet-sdk-loader.ts does:
 // prefer a BUILT sibling `midnight-wallet` checkout's dist, else normal package-name resolution.
@@ -145,10 +151,24 @@ function namedToolFailure(missing) {
 
   const wallet = { network: "preview", seedHex, nightSecretKeyHex, address };
   const data = JSON.stringify(wallet, null, 2) + "\n";
-  // 0600 at create (mode option) AND an explicit chmod to defeat a permissive umask, honoring the
-  // SECURITY.md commit policy ("secret-bearing files are created with chmod 600").
-  fs.writeFileSync(out, data, { mode: 0o600 });
-  fs.chmodSync(out, 0o600);
+  // Write 0600-exclusive to a fresh temp file in the SAME directory, then rename over the target.
+  //
+  // `writeFileSync(out, data, {mode})` applies the mode only when it CREATES the file. Re-running
+  // over an existing 0644 file therefore wrote the secret at 0644 and narrowed permissions only
+  // afterwards -- leaving a window, and leaving it wide open if the process died in between. It
+  // also followed a symlink at `out`. Opening with "wx" fails if the temp path exists and never
+  // follows a symlink; rename(2) within a single directory is atomic, so `out` ends up as either
+  // the old file or the complete new one -- never partial, never briefly world-readable.
+  const tmp = path.join(path.dirname(out), "." + path.basename(out) + "." + process.pid + ".tmp");
+  const fd = fs.openSync(tmp, "wx", 0o600);
+  try {
+    fs.writeSync(fd, data);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.chmodSync(tmp, 0o600); // defeat a permissive umask on the temp file itself
+  fs.renameSync(tmp, out);
   console.log("Wrote " + out + " (mode 0600) with a fresh seed.");
   console.log("Now fund the address at https://faucet.preview.midnight.network/ (Preview tDUST, no value).");
 })();

@@ -119,10 +119,18 @@ requirement, not a suggestion):
 
 - **Encrypt the storage substrate** — encrypt the disk/volume backing Postgres, use Postgres
   transparent data encryption (TDE), and encrypt every backup and replica. This applies to **all**
-  users, and it is the **only** at-rest mitigation available to callers of the **envelope store**
-  (`PgWalletStateEnvelopeStore`): that path is **NOT** byte-opaque — its `save(envelope)` **always**
-  plaintext-`encode()`s the state to `bytea` (`src/postgres/wallet-state-envelope.ts:38` →
-  `src/interfaces/wallet-state-envelope.ts:144`), so a deployer cannot hand it ciphertext; **OR**
+  users. It is the only mitigation available *without writing code* to callers of the **envelope
+  store** (`PgWalletStateEnvelopeStore`), because that path is **NOT** byte-opaque: its
+  `save(envelope)` **always** plaintext-`encode()`s the state to `bytea`
+  (`src/postgres/wallet-state-envelope.ts:38` → `src/interfaces/wallet-state-envelope.ts:144`), so
+  a deployer cannot simply hand it ciphertext.
+
+  *Precision (audit correction): there is **no built-in encryption hook** on that path, which is not
+  the same as there being no alternative. `PgWalletStateEnvelopeStore` composes over an **injected**
+  `CheckpointStore`, so a caller MAY supply a decorator that encrypts in `save` and decrypts in
+  `load` before delegating to `PgCheckpointStore`. That is caller-written code UmbraDB neither ships
+  nor validates — and it forfeits cross-wallet dedup, since ciphertext does not collide — but it is
+  a real option and this document previously said it did not exist.* **OR**
 - **Pass ciphertext to the raw byte-level `CheckpointStore.save` — NOT the envelope store.** Only the
   raw `CheckpointStore.save(id, data)` is byte-opaque: it accepts a `Uint8Array` and stores exactly
   those bytes, returning them verbatim; it neither inspects nor transforms them. A deployer using

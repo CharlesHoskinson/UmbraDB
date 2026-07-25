@@ -102,7 +102,18 @@ over a TLS 1.3 channel.
 
 For VerifyFull: generate a small local CA, sign the server cert with it (SAN must include the
 exact `host=` the node uses — here `postgres`), mount the CA cert into the node container, and set
-`ssl_root_cert` to it. The prototype script has a `--ca` mode stub for this.
+`ssl_root_cert` to it.
+
+> **Status update (G17, v1.0.0-infosec-signoff).** `--ca` is **no longer a stub** — this paragraph
+> described the pre-G17 prototype and is retained for context. `enable-db-sync-tls.sh --ca` now
+> provisions a local CA, signs the server cert with a SAN set covering the dialed host, and then
+> **blocks on proving it**: it runs a real `sslmode=verify-full` connection against the generated CA
+> and copies the CA to a host path for the node (a HOST binary, so it needs a host path). Both the
+> verification and the copy are failure-fatal — an earlier revision converted a failed verify into a
+> success message and still exited 0, which is exactly the false assurance a "de-stub" must not
+> ship. **The default remains `Require`** (encryption without server-identity checking); `--ca` is
+> opt-in. Remaining limitation: the CA is local and self-managed, so this hardens the node↔DB hop —
+> it is not a general PKI.
 
 ## 5. Folding into `nix/midnight-env`
 

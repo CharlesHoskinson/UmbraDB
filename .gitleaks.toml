@@ -2,10 +2,8 @@
 #
 # Drives the blocking full-history `gitleaks detect` step in .github/workflows/supply-chain.yml.
 # Full-history mode is deliberate: the go-forward guard for the (valueless) committed Preview wallet
-# secret is this scan, NOT a git-history rewrite (G19). Because there is no rewrite, the scan will
-# re-encounter the old secret in history, so its path must be allowlisted -- alongside the .example
-# placeholder, and NOTHING else. Any real secret introduced on any other path (history or working
-# tree) fails the gate.
+# secret is this scan, NOT a git-history rewrite (G19). Because there is no rewrite, the scan
+# re-encounters that one historical secret on every run.
 
 title = "UmbraDB gitleaks config"
 
@@ -13,14 +11,40 @@ title = "UmbraDB gitleaks config"
 # Start from gitleaks' built-in rule set (AWS keys, private keys, generic high-entropy, etc.).
 useDefault = true
 
-[allowlist]
-description = "Exactly two allowlisted wallet-artifact paths, each justified. No other path is exempt."
-paths = [
-  # (1) The historical Preview testnet wallet. Its seedHex/nightSecretKeyHex are VALUELESS Preview
-  #     tDUST material (no monetary value) and remain permanently in git history because G19 performs
-  #     NO history rewrite. The full-history scan re-encounters them here; allowlisted by exact path.
-  '''^nix/midnight-env/test-wallets/preview-test-wallet\.json$''',
-  # (2) The non-secret placeholder template (all-zero seed/key, REPLACE_ME address). Committed on
-  #     purpose as the field-shape reference for generate-test-wallet.sh; carries no real secret.
-  '''^nix/midnight-env/test-wallets/preview-test-wallet\.example\.json$''',
-]
+# --- Wallet seed material -------------------------------------------------------------------
+#
+# WHY THIS RULE EXISTS (found by negative-control testing, not by reading the config).
+#
+# The default `generic-api-key` rule fires on `nightSecretKeyHex` only because the FIELD NAME
+# contains "SecretKey". It does NOT fire on `seedHex` -- there is no trigger keyword in that name.
+# Verified empirically: planting a fresh 64-hex value in `nightSecretKeyHex` is caught, and the
+# identical value in `seedHex` is not.
+#
+# That gap is the wrong way round. The seed is the ROOT secret: `generate-test-wallet.sh` derives
+# both the night secret key and the address from it, so a committed seed compromises the whole
+# wallet, while the derived key compromises less. The gate that exists to stop a committed wallet
+# secret was blind to the most dangerous field in the file.
+#
+# This rule closes that: any 64-char hex value bound to a seed/secret/key-shaped field is a finding.
+# The all-zero placeholder is excluded so the committed .example template stays clean.
+[[rules]]
+id = "umbradb-wallet-seed-hex"
+description = "Wallet seed / secret-key material (64-char hex) in a seed- or key-named field"
+regex = '''(?i)"(seed|seedhex|secret|secrethex|privatekey|privatekeyhex|[a-z]*secretkey[a-z]*|[a-z]*seed[a-z]*)"\s*:\s*"([0-9a-f]{64})"'''
+secretGroup = 2
+keywords = ["seed", "secret", "privatekey"]
+
+[[rules.allowlists]]
+description = "The all-zero placeholder in the committed .example template is not a secret."
+regexes = ['''^0{64}$''']
+
+# NO GLOBAL PATH ALLOWLIST. (Audit finding, fixed.)
+#
+# This file previously allowlisted two whole paths. A `paths` allowlist is a GLOBAL, permanent
+# exemption for everything on that path -- so a real key later force-added to
+# preview-test-wallet.json, or pasted into the TRACKED .example template that people actually edit,
+# would have been invisible to the one gate meant to catch exactly that.
+#
+# The single historical secret is instead suppressed by its EXACT fingerprint in `.gitleaksignore`
+# (commit:path:rule:line) -- a one-finding exemption. Any new or different secret, on any path
+# including those two, fails the gate.

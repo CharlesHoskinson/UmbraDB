@@ -54,9 +54,22 @@ jobs:
 
       - name: Verify the tag is annotated, clean, and self-consistent
         shell: bash
+        # RELEASE_TAG is passed through `env`, never interpolated into the script body: `${{ }}`
+        # substitution happens BEFORE bash parses the line, so a tag containing a quote or `;`
+        # would otherwise execute attacker-chosen commands in a job that holds `id-token: write`
+        # and NPM_TOKEN. Git permits such tag names.
+        # https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="$RELEASE_TAG"
+
+          # Defence in depth: even via env, only an exact release-tag shape is allowed through.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::refusing to publish tag '$TAG' — not of the form vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
           echo "Publishing tag: ${TAG}"
 
           # R7: annotated tag, not lightweight. `cat-file -t` reads the OBJECT type: an annotated
@@ -82,14 +95,19 @@ jobs:
           fi
 
           # Provenance is rejected if the declared repository does not match the building repo.
+          # This MUST be an exact comparison, not a substring one: `*owner/UmbraDB*` would also
+          # accept `owner/UmbraDB-evil`. Normalise the accepted git URL spellings to `owner/repo`
+          # and compare exactly.
           REPO_URL="$(node -p "require('./package.json').repository?.url ?? ''")"
-          case "${REPO_URL}" in
-            *"${GITHUB_REPOSITORY}"*) : ;;
-            *)
-              echo "::error::package.json repository.url (${REPO_URL}) does not match ${GITHUB_REPOSITORY}; provenance would fail."
-              exit 1
-              ;;
-          esac
+          NORMALISED="${REPO_URL#git+}"
+          NORMALISED="${NORMALISED#https://github.com/}"
+          NORMALISED="${NORMALISED#git@github.com:}"
+          NORMALISED="${NORMALISED#ssh://git@github.com/}"
+          NORMALISED="${NORMALISED%.git}"
+          if [ "$NORMALISED" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::package.json repository.url (${REPO_URL}) resolves to '${NORMALISED}', not '${GITHUB_REPOSITORY}'; provenance would fail."
+            exit 1
+          fi
 
           echo "Tag verified: annotated, v${PKG_VERSION}, repository matches ${GITHUB_REPOSITORY}."
 

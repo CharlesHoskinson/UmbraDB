@@ -82,8 +82,17 @@ jobs:
         # Version-pinned official release binary rather than a third-party action, to avoid an
         # unpinned/unverifiable action SHA in the supply chain this workflow protects.
         run: |
+          set -euo pipefail
           VER=8.28.0
+          # Pin the artifact by CONTENT, not just by version tag. A release asset can be replaced;
+          # an unverified scanner that always exits 0 would silently disarm the gate it powers —
+          # the exact supply-chain attack this workflow exists to prevent.
+          SHA256=a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
           curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o /tmp/gitleaks.tgz
+          echo "${SHA256}  /tmp/gitleaks.tgz" | sha256sum -c - || {
+            echo "::error::gitleaks tarball checksum mismatch — refusing to run an unverified scanner."
+            exit 1
+          }
           tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
           gitleaks version
 
@@ -94,6 +103,62 @@ jobs:
         # the preview-test-wallet.example.json placeholder. Any real secret on ANY other path -- in
         # history or the working tree -- fails this step.
         run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
+
+      - name: Image pins agree across flake.nix and start-stack.sh (G18 — audit gap)
+        # The Trivy job derives its scan targets from flake.nix ONLY, and it runs on schedule /
+        # workflow_dispatch. start-stack.sh independently hard-codes the references that actually
+        # launch the containers. So a digest changed in start-stack.sh alone left flake.nix — and
+        # therefore the scanned images — untouched: PR CI stayed green and the scheduled scan kept
+        # examining an image nobody runs. This step makes the two files a single enforced pin set,
+        # and it runs on every PR and push rather than only on the schedule.
+        run: |
+          set -euo pipefail
+          fail=0
+          for image in indexer-standalone proof-server; do
+            # Anchored to the real reference form and required to be UNIQUE in each file: an
+            # unanchored `grep | head -1` could be satisfied by a commented-out line placed above.
+            mapfile -t flake_refs < <(grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" nix/midnight-env/flake.nix | sort -u)
+            mapfile -t stack_refs < <(grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" nix/midnight-env/scripts/start-stack.sh | sort -u)
+
+            if [ "${#flake_refs[@]}" -ne 1 ]; then
+              echo "::error::expected exactly 1 distinct ${image} pin in flake.nix, found ${#flake_refs[@]}"; fail=1; continue
+            fi
+            if [ "${#stack_refs[@]}" -ne 1 ]; then
+              echo "::error::expected exactly 1 distinct ${image} pin in start-stack.sh, found ${#stack_refs[@]}"; fail=1; continue
+            fi
+            if [ "${flake_refs[0]}" != "${stack_refs[0]}" ]; then
+              echo "::error::${image} pin diverges between files — the scanned image is not the launched image."
+              echo "::error::  flake.nix:       ${flake_refs[0]}"
+              echo "::error::  start-stack.sh:  ${stack_refs[0]}"
+              fail=1; continue
+            fi
+            echo "${image}: pins agree — ${flake_refs[0]}"
+          done
+          exit "$fail"
+
+      - name: flake.lock change-control on direct push (G18 D6 — audit gap)
+        # The PR-only check below is bypassed entirely by a direct push to main: the dependency job
+        # runs on push, but the lock check did not, so a pushed `nix flake update` produced a green
+        # supply-chain workflow with no label and no review evidence. A push has no PR label to
+        # consult, so any lock change on a push is rejected outright — roll it forward through a PR.
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # A branch-creation push has an all-zero "before" SHA and nothing to diff against.
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "no previous SHA for this push (branch creation) — skipping lock diff"
+            exit 0
+          fi
+          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- nix/midnight-env/flake.lock; then
+            echo "flake.lock unchanged in this push — ok"
+            exit 0
+          fi
+          echo "::error::flake.lock changed in a direct push to ${GITHUB_REF_NAME}. Dependency-lock"
+          echo "::error::roll-forwards must go through a pull request carrying the"
+          echo "::error::'flake-lock-update' label, so the change is reviewable."
+          exit 1
 
       - name: flake.lock change-control (PR only, G18 D6)
         # Fails a PR that modifies nix/midnight-env/flake.lock relative to its base branch UNLESS the
@@ -135,8 +200,12 @@ jobs:
         # scans (and start-stack.sh uses the same two digests).
         id: pins
         run: |
-          INDEXER="$(grep -oE 'midnightntwrk/indexer-standalone:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | head -1)"
-          PROOF="$(grep -oE 'midnightntwrk/proof-server:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | head -1)"
+          # `sort -u` + a uniqueness assert rather than `head -1`: with head, a commented-out or
+          # stale reference sitting ABOVE the real one silently becomes the scanned target.
+          INDEXER="$(grep -oE 'midnightntwrk/indexer-standalone:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | sort -u)"
+          PROOF="$(grep -oE 'midnightntwrk/proof-server:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | sort -u)"
+          [ "$(echo "$INDEXER" | grep -c .)" = "1" ] || { echo "::error::indexer-standalone pin in flake.nix is not unique"; exit 1; }
+          [ "$(echo "$PROOF"   | grep -c .)" = "1" ] || { echo "::error::proof-server pin in flake.nix is not unique"; exit 1; }
           EXP_INDEXER="midnightntwrk/indexer-standalone:4.3.3@sha256:03afd079b00bcd229df29a24771439c5e7695c339cd89216d0763ce40731cc4b"
           EXP_PROOF="midnightntwrk/proof-server:8.1.0@sha256:801bbc0340e9e96f16735f77b523f23c7459e3359842f7c79c2c53f4e994d531"
           test -n "$INDEXER" || { echo "::error::could not read indexer-standalone pin from flake.nix"; exit 1; }
@@ -149,7 +218,13 @@ jobs:
 
       - name: Install Trivy (version-pinned official release)
         run: |
-          curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
+          set -euo pipefail
+          # Fetch the installer by IMMUTABLE COMMIT SHA, not by tag: a tag can be moved, and this
+          # script is piped straight into a root shell. Pinning the commit makes the fetched code
+          # fixed even if the tag is repointed.
+          TRIVY_INSTALL_COMMIT=7bcb181268893fdd69ef4582588c040bb1036c33
+          curl -fsSL "https://raw.githubusercontent.com/aquasecurity/trivy/${TRIVY_INSTALL_COMMIT}/contrib/install.sh" -o /tmp/trivy-install.sh
+          sh /tmp/trivy-install.sh -b /usr/local/bin v0.66.0
           trivy --version
 
       - name: Trivy scan both pinned digests (HIGH,CRITICAL) -> job summary

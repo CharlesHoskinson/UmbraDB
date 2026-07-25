@@ -101,13 +101,34 @@ INNER_CA
   # sslmode=verify-full + sslrootcert=<the generated CA> genuinely proves BOTH that the served cert
   # chains to our CA and that the dialed host (127.0.0.1, in the IP:127.0.0.1 SAN) matches -- i.e.
   # the whole point of the --ca de-stub, not merely that bytes are encrypted.
-  docker exec "$CONTAINER" sh -c \
-    'psql "host=127.0.0.1 user=${POSTGRES_USER:-postgres} dbname=${POSTGRES_DB:-cexplorer} sslmode=verify-full sslrootcert=/var/lib/postgresql/data/ca.crt" \
-       -tAc "SELECT '\''verify_full_ok=1 ssl_in_use=1 cipher='\''||version FROM pg_stat_ssl WHERE pid = pg_backend_pid();"' \
-    2>/dev/null && echo "  verify-full succeeded against the generated CA" \
-    || echo "  (verify manually: set PGPASSWORD and re-run the sslmode=verify-full psql check with sslrootcert=<the CA>)"
+  # This check is BLOCKING. It previously ended in `|| echo "(verify manually: ...)"`, which turned
+  # a failed verification into a success path and then fell through to an unconditional `exit 0` --
+  # so the script could print "Done (VerifyFull)" having verified nothing. That is precisely the
+  # stub this gate exists to remove.
+  #
+  # Resolve the REAL data directory rather than assuming /var/lib/postgresql/data: the provisioning
+  # heredoc above honours the container's own ${PGDATA}, so a hard-coded path can point at a file
+  # that was never written. Auth: trust/peer setup is not guaranteed, so a caller-supplied
+  # PGPASSWORD is forwarded when present.
+  RESOLVED_PGDATA="$(docker exec "$CONTAINER" sh -c 'printf %s "${PGDATA:-/var/lib/postgresql/data}"')"
+  if [ -z "$RESOLVED_PGDATA" ]; then
+    echo "ERROR: could not resolve PGDATA inside container '$CONTAINER'." >&2
+    exit 1
+  fi
+  echo "    (resolved container PGDATA: $RESOLVED_PGDATA)"
 
-  CA_CONTAINER_PATH="/var/lib/postgresql/data/ca.crt"
+  if ! docker exec -e PGPASSWORD="${PGPASSWORD:-}" -e RESOLVED_PGDATA="$RESOLVED_PGDATA" "$CONTAINER" sh -c \
+    'psql "host=127.0.0.1 user=${POSTGRES_USER:-postgres} dbname=${POSTGRES_DB:-cexplorer} sslmode=verify-full sslrootcert=${RESOLVED_PGDATA}/ca.crt" \
+       -tAc "SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid();"'; then
+    echo "ERROR: sslmode=verify-full FAILED against the generated CA." >&2
+    echo "       TLS was provisioned, but end-to-end CA + hostname validation could NOT be proven," >&2
+    echo "       so this script will not report success. If the failure is authentication rather" >&2
+    echo "       than TLS, re-run with PGPASSWORD set:  PGPASSWORD=... $0 --ca" >&2
+    exit 1
+  fi
+  echo "  verify-full succeeded against the generated CA"
+
+  CA_CONTAINER_PATH="${RESOLVED_PGDATA}/ca.crt"
   CA_HOST_PATH="./${CONTAINER}-db-sync-ca.crt"
   if docker cp "${CONTAINER}:${CA_CONTAINER_PATH}" "$CA_HOST_PATH" >/dev/null 2>&1; then
     # The Midnight node is a HOST binary (not a container -- nix/midnight-env/flake.nix:149), so
@@ -119,9 +140,11 @@ INNER_CA
     echo "        --ssl_root_cert=${CA_HOST_ABS}"
     echo "    CA cert path (on host): ${CA_HOST_ABS}"
   else
-    echo "==> (could not copy CA cert to host; read it from the container at ${CONTAINER}:${CA_CONTAINER_PATH})"
-    echo "==> Done (VerifyFull). The Midnight node is a HOST binary; set --ssl_root_cert to the HOST"
-    echo "    path where you place that CA cert -- NOT the in-container path ${CA_CONTAINER_PATH}."
+    # BLOCKING: --ca exists to give the HOST-binary node a usable CA path. If the copy failed there
+    # is no such path, so reporting success would be a lie.
+    echo "ERROR: could not copy the CA cert from ${CONTAINER}:${CA_CONTAINER_PATH} to the host." >&2
+    echo "       VerifyFull is unusable by the host node without it; refusing to report success." >&2
+    exit 1
   fi
   echo "    The server cert's SAN set is '${SANS}' -- the node's host= MUST match one of those names."
   exit 0
@@ -129,7 +152,9 @@ fi
 
 echo "==> Enabling TLS on Postgres container '$CONTAINER' (CN=$CN)"
 
-docker exec -e CN="$CN" -e SANS="$SANS" "$CONTAINER" sh -s <<'INNER'
+# `-i` is REQUIRED: without it Docker does not attach stdin, so `sh -s` reads EOF and this whole
+# provisioning heredoc is silently discarded. (The --ca branch above already passes -i.)
+docker exec -i -e CN="$CN" -e SANS="$SANS" "$CONTAINER" sh -s <<'INNER'
 set -e
 : "${PGDATA:=/var/lib/postgresql/data}"
 # openssl: alpine -> apk, debian -> apt
