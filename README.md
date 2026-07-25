@@ -13,16 +13,18 @@ npm install umbradb
 ```
 
 ```ts
-import { createClient, runMigrations, PgTemporalKV } from "umbradb";
+import { createClient, runMigrations, PgTemporalKV, DEFAULT_SCHEMA } from "umbradb";
 
 const sql = createClient({ connectionString: process.env.DATABASE_URL });
-await runMigrations(sql);                       // forward-only; also runs the durability probe
+await runMigrations(sql, { schema: DEFAULT_SCHEMA });   // forward-only; also runs the durability probe
 
 const kv = new PgTemporalKV(sql);
-await kv.put("wallet:balance", { night: "2000" });
-const now  = await kv.get("wallet:balance");    // latest
-const then = await kv.getAt("wallet:balance", { version: 3n });  // point-in-time
+await kv.put("wallet", "preprod", "balance", { night: "2000" });
+const now  = await kv.get("wallet", "preprod", "balance");
+const then = await kv.getAt("wallet", "preprod", "balance", { kind: "version", version: 3n });
 ```
+
+Keys are addressed by namespace, scope and key.
 
 Everything is imported from the package root. There is no supported deep import: the `exports` map
 exposes a single `"."`, and reaching into internals fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
@@ -208,11 +210,15 @@ CONNECTION_ERROR · TRANSACTION_FAULT · LEASE_TIMEOUT · MIGRATION_LOCK_TIMEOUT
 ```
 
 ```ts
-try { await kv.put(k, v); }
-catch (e) {
-  if (e instanceof StorageError && e.retryable) { /* safe to retry */ }
+try {
+  await kv.put(namespace, scope, key, value);
+} catch (e) {
+  if (e instanceof StorageError && e.retryable === "retryable") { /* safe to retry */ }
 }
 ```
+
+`retryable` is a string (`"retryable"`, `"non-retryable"`, `"conditional"`), so compare it. A bare
+`if (e.retryable)` is true for every `StorageError`.
 
 The catalog in [`docs/ERROR-CATALOG.md`](docs/ERROR-CATALOG.md) is not maintained by hand — a drift
 test derives it from the exported classes with no hard-coded count, and fails CI if the table, the
