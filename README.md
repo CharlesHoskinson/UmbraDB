@@ -299,11 +299,15 @@ Read [`SECURITY.md`](SECURITY.md) before deploying. The load-bearing points:
 
 ## Status
 
-**Current release: `0.9.5`.**
+**Current release: `0.9.5` — "Penumbra".**
 
 All twenty gate items of the 1.0.0 program (G1–G20) are merged, across five OpenSpec changes covering
 the public-surface freeze, durable checkpoint cursor, recovery testing, performance baseline and
 security sign-off. `0.9.5` ships that code.
+
+*An umbra is the total shadow; a penumbra is the partial shadow you pass through immediately before
+totality. 0.9.5 is that phase — the surface is real, the SemVer promise is not yet binding. 1.0.0 is
+"Totality".*
 
 **What 1.0.0 additionally requires:** a full local sync of UmbraDB against Midnight — archive node →
 local indexer → UmbraDB, end to end — demonstrated on infrastructure we run rather than a hosted

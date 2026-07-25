@@ -126,6 +126,22 @@ jobs:
           test -f dist/index.js  || { echo "::error::dist/index.js missing after build."; exit 1; }
           test -f dist/index.d.ts || { echo "::error::dist/index.d.ts missing after build."; exit 1; }
 
+      - name: Assert an npm token is configured
+        # Without this the step below fails with an opaque `npm ERR! code ENEEDAUTH` several minutes
+        # into a release run. Publishing is deliberately NOT skipped when the token is missing: a
+        # tag that was meant to publish and silently did not is worse than a loud failure.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NPM_TOKEN is not configured for this repository, so this tag cannot be"
+            echo "::error::published. Add it as a repository secret (and, if the workflow's"
+            echo "::error::'npm-publish' environment has protection rules, grant this workflow access)"
+            echo "::error::then re-run this job via workflow_dispatch on the same tag."
+            exit 1
+          fi
+          echo "npm token present."
+
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
         env:

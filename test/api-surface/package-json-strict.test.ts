@@ -36,7 +36,10 @@ describe("package.json is publishable with a strict exports map (A3)", () => {
     // Newest RELEASED heading. A version heading may exist for a version that is planned but not
     // yet cut (e.g. `## [1.0.0] - unreleased` while shipping 0.9.5), so a heading only counts as
     // released when it carries an ISO date.
-    const headings = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/gm)]
+    // A released heading is `## [x.y.z] - YYYY-MM-DD`, optionally followed by a release name
+    // (e.g. `— "Penumbra"`). The ISO date is what marks it released; an undated heading is a
+    // planned-but-uncut version and must not be treated as the current release.
+    const headings = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}.*$/gm)]
       .map((m) => m[1]);
     expect(headings.length, "CHANGELOG must carry at least one DATED (released) version heading")
       .toBeGreaterThan(0);

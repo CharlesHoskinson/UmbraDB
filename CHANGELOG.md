@@ -10,14 +10,14 @@ entries below are stated in [`docs/STABILITY.md`](docs/STABILITY.md).
 
 _No unreleased changes._
 
-## [1.0.0] - unreleased
+## [1.0.0] - unreleased — "Totality"
 
 **Blocked.** The 1.0.0 tag additionally requires a **full local sync of UmbraDB against Midnight**
 (archive node → local indexer → UmbraDB), which is not yet complete. Until it is, the release below
 ships as `0.9.5`: the same code, without the SemVer freeze commitment that 1.0.0 makes. See
 `ROADMAP.md` § "What blocks 1.0.0".
 
-## [0.9.5] - 2026-07-25
+## [0.9.5] - 2026-07-25 — "Penumbra"
 
 The first importable, published public surface. Everything below is imported from the package root
 (`import { ... } from "umbradb"`); there is no supported deep import of an internal module (the
