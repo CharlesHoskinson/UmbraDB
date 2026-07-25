@@ -1,0 +1,7 @@
+{
+  "network": "preview",
+  "seedHex": "0000000000000000000000000000000000000000000000000000000000000000",
+  "nightSecretKeyHex": "0000000000000000000000000000000000000000000000000000000000000000",
+  "address": "REPLACE_ME_run_generate-test-wallet.sh",
+  "_comment": "PLACEHOLDER ONLY — not a real wallet, contains no secret. The all-zero seedHex/nightSecretKeyHex and the REPLACE_ME address are non-secret markers. Run ./generate-test-wallet.sh to create the git-ignored, untracked preview-test-wallet.json with a fresh seed, then fund its address at https://faucet.preview.midnight.network/ . Never commit a real wallet key — see ../../SECURITY.md and ./README.md."
+}

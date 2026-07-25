@@ -73,6 +73,23 @@ jobs:
       - name: npm audit -- full graph, NON-blocking (developer visibility)
         run: npm audit || true
 
+      - name: Install gitleaks (version-pinned official release)
+        # Version-pinned official release binary rather than a third-party action, to avoid an
+        # unpinned/unverifiable action SHA in the supply chain this workflow protects.
+        run: |
+          VER=8.28.0
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o /tmp/gitleaks.tgz
+          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: gitleaks full-history secret scan (blocking, G18 D4 / G19)
+        # Full git history (default `detect` git mode; needs the fetch-depth: 0 checkout above).
+        # Driven by the committed .gitleaks.toml, whose allowlist covers EXACTLY the historical
+        # preview-test-wallet.json path (valueless Preview secret kept in history -- no rewrite) and
+        # the preview-test-wallet.example.json placeholder. Any real secret on ANY other path -- in
+        # history or the working tree -- fails this step.
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
+
       - name: flake.lock change-control (PR only, G18 D6)
         # Fails a PR that modifies nix/midnight-env/flake.lock relative to its base branch UNLESS the
         # PR carries the `flake-lock-update` label. Pure git-diff + label read -- no Nix toolchain.

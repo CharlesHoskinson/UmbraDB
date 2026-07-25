@@ -1,0 +1,26 @@
+# gitleaks configuration for UmbraDB (v1.0.0-infosec-signoff, G18/G19).
+#
+# Drives the blocking full-history `gitleaks detect` step in .github/workflows/supply-chain.yml.
+# Full-history mode is deliberate: the go-forward guard for the (valueless) committed Preview wallet
+# secret is this scan, NOT a git-history rewrite (G19). Because there is no rewrite, the scan will
+# re-encounter the old secret in history, so its path must be allowlisted -- alongside the .example
+# placeholder, and NOTHING else. Any real secret introduced on any other path (history or working
+# tree) fails the gate.
+
+title = "UmbraDB gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in rule set (AWS keys, private keys, generic high-entropy, etc.).
+useDefault = true
+
+[allowlist]
+description = "Exactly two allowlisted wallet-artifact paths, each justified. No other path is exempt."
+paths = [
+  # (1) The historical Preview testnet wallet. Its seedHex/nightSecretKeyHex are VALUELESS Preview
+  #     tDUST material (no monetary value) and remain permanently in git history because G19 performs
+  #     NO history rewrite. The full-history scan re-encounters them here; allowlisted by exact path.
+  '''nix/midnight-env/test-wallets/preview-test-wallet\.json$''',
+  # (2) The non-secret placeholder template (all-zero seed/key, REPLACE_ME address). Committed on
+  #     purpose as the field-shape reference for generate-test-wallet.sh; carries no real secret.
+  '''nix/midnight-env/test-wallets/preview-test-wallet\.example\.json$''',
+]
