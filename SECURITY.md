@@ -16,11 +16,12 @@ against the tree.
 
 ### T-A1 — Single trusted writer, one trust domain
 
-UmbraDB assumes exactly **one trusted process** holds the Postgres connection and drives all reads
-and writes. There is **no adversarial API caller**: every consumer of the public API
-(`createClient`, the five adapters, `PgWalletStateEnvelopeStore`) is inside one trust domain. The
-library performs no authentication, authorization, rate-limiting, or per-caller isolation of its
-own — it is a storage engine, and the process embedding it is responsible for who may call it.
+The deployer **MUST** ensure exactly **one trusted process** holds the Postgres connection and
+drives all reads and writes. There is **no adversarial API caller**: every consumer of the public
+API (`createClient`, the five adapters, `PgWalletStateEnvelopeStore`) MUST be inside one trust
+domain. The library performs no authentication, authorization, rate-limiting, or per-caller
+isolation of its own — it is a storage engine, and the process embedding it is responsible for who
+may call it.
 
 This is the library's explicit design posture, not an accident: the connection-pool and lease code
 states it in-line — "this project's single-writer deployment model does not expect callers to probe
@@ -30,11 +31,11 @@ it is **not** a security mechanism that fences off a hostile writer.
 
 ### T-A2 — Trusted Postgres, disk, backups, and operator
 
-UmbraDB assumes the Postgres instance it connects to, the disk that instance writes to, its
-backups, its replicas, and the operator who administers it are all **trusted**. The DB role
-UmbraDB connects as owns every schema it touches and may read and write every byte UmbraDB stores.
-UmbraDB provides no defense against a compromised database server, a stolen backup, or a malicious
-DBA — protecting those is the deployer's responsibility (see *Data at rest*, below).
+The deployer **MUST** ensure the Postgres instance UmbraDB connects to, the disk that instance
+writes to, its backups, its replicas, and the operator who administers it are all **trusted**. The
+DB role UmbraDB connects as owns every schema it touches and may read and write every byte UmbraDB
+stores. UmbraDB provides no defense against a compromised database server, a stolen backup, or a
+malicious DBA — protecting those is the deployer's responsibility (see *Data at rest*, below).
 
 ## `schema` is namespacing, NOT a security or tenant boundary
 
@@ -85,14 +86,23 @@ application managing several of that user's own wallets — **one trust domain**
 multi-tenancy across users who must not learn about each other's data. If you need the latter, give
 each principal its **own** database/store (see also T-A1 and the multi-tenancy redirect above).
 
-**Bound on the leak.** Chunking is **fixed-size**, not content-defined: `save` splits the payload
-into fixed `chunkSize` slices (`splitChunks`, `src/postgres/checkpoint-store.ts:103-107`; default
-`DEFAULT_CHUNK_SIZE = 4 MiB`, `src/postgres/checkpoint-store.ts:33`). Because the chunk boundaries
-are fixed and not derived from content, the side channel degenerates to **confirming that a
-fully-known, 4 MiB-aligned chunk of bytes already exists** — a genuine but **narrow
-confirmation-of-file leak**. It is **not** a sub-field / partial-content extraction primitive: an
-attacker cannot use it to carve out an unknown secret a byte or a field at a time; they can only
-confirm a chunk whose entire contents they already hold.
+**Bound on the leak — a known-content confirmation oracle at the configured chunk granularity.**
+Chunking is **fixed-size**, not content-defined: `save` splits the payload into fixed `chunkSize`
+slices (`splitChunks`, `src/postgres/checkpoint-store.ts:103-107`). `chunkSize` is
+**caller-configurable** — any positive value (up to 16 MiB) via `SaveCheckpointOptionsSchema`
+(`src/interfaces/checkpoint-store.ts:43`), defaulting to `DEFAULT_CHUNK_SIZE = 4 MiB`
+(`src/postgres/checkpoint-store.ts:33`) — and a payload's final slice may be **shorter** than
+`chunkSize`. The oracle therefore **confirms the existence of a chunk whose exact bytes the attacker
+already possesses**, at the **granularity of the deployment's configured chunk size**: at the 4 MiB
+default it confirms a whole 4 MiB-aligned block, but a **smaller** configured `chunkSize` yields
+**finer-grained** confirmation — down to sub-field granularity if a deployment configures small
+chunks. It is a **known-content confirmation** oracle, **not** an arbitrary-extraction primitive:
+the attacker learns only whether bytes they **already hold** are present, never the contents of an
+unknown secret revealed to them wholesale. (As with any confirmation oracle, an attacker who can
+already enumerate a *small* candidate space could confirm-by-guessing within it; that too is bounded
+by the trust model, not by the chunk size.) **What removes the risk is the single-trust-domain
+requirement above — not the chunk size:** every principal on one store is mutually trusting, so no
+adversary is positioned to run the oracle at any granularity.
 
 ## Data at rest — NO encryption is provided (a binding deployer precondition)
 
@@ -108,11 +118,18 @@ clear.
 requirement, not a suggestion):
 
 - **Encrypt the storage substrate** — encrypt the disk/volume backing Postgres, use Postgres
-  transparent data encryption (TDE), and encrypt every backup and replica; **OR**
-- **Pass ciphertext to `save`.** The `CheckpointStore.save` / envelope-store API is byte-opaque: it
-  accepts a `Uint8Array` and stores exactly those bytes. A deployer MAY encrypt the payload **before**
-  handing it to UmbraDB, so only ciphertext ever reaches the database. UmbraDB stores and returns the
-  bytes verbatim; it neither inspects nor transforms them.
+  transparent data encryption (TDE), and encrypt every backup and replica. This applies to **all**
+  users, and it is the **only** at-rest mitigation available to callers of the **envelope store**
+  (`PgWalletStateEnvelopeStore`): that path is **NOT** byte-opaque — its `save(envelope)` **always**
+  plaintext-`encode()`s the state to `bytea` (`src/postgres/wallet-state-envelope.ts:38` →
+  `src/interfaces/wallet-state-envelope.ts:144`), so a deployer cannot hand it ciphertext; **OR**
+- **Pass ciphertext to the raw byte-level `CheckpointStore.save` — NOT the envelope store.** Only the
+  raw `CheckpointStore.save(id, data)` is byte-opaque: it accepts a `Uint8Array` and stores exactly
+  those bytes, returning them verbatim; it neither inspects nor transforms them. A deployer using
+  **that** API MAY encrypt the payload **before** handing it to UmbraDB, so only ciphertext ever
+  reaches the database. (The envelope store offers no such control today; the `EnvelopeCipher`
+  at-rest-encryption seam — a documented 1.1 fast-follow, see *Scope* below — is what will let
+  envelope-store users inject encryption.)
 
 If neither mitigation is in place, secret-bearing wallet state is stored in the clear. This is
 CWE-312 (cleartext storage of sensitive information) and is an **accepted, documented** property of
@@ -135,8 +152,8 @@ the 1.0.0 library — the obligation to close it sits with the deployer.
   **full-history `gitleaks` gate** in CI (`.github/workflows/supply-chain.yml`), which allowlists
   exactly that one historical path and the `.example` placeholder — and fails on a real secret
   anywhere else.
-- **CI enforces this.** Every push and pull request is scanned by `gitleaks` over full git history;
-  a new secret on any non-allowlisted path fails the build.
+- **CI enforces this.** Every pull request and every push to `main` is scanned by `gitleaks` over
+  full git history; a new secret on any non-allowlisted path fails the build.
 
 ## Reporting a vulnerability
 

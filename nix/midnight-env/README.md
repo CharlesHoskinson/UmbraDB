@@ -148,10 +148,12 @@ nix develop -c bash scripts/enable-db-sync-tls.sh <postgres-container>
 nix develop -c bash scripts/enable-db-sync-tls.sh --ca <postgres-container>
 ```
 
-`--ca` generates a local CA (private key `chmod 600`), signs the server certificate with a SAN equal
-to `$DB_TLS_CN` / `$DB_TLS_SANS` (the host the node dials), emits the CA certificate path, and prints
-the exact `--ssl_root_cert=<path>` to pass to the node. Mount that CA cert into the node container and
-set `ssl_root_cert` to it; the node then uses `PgSslMode::VerifyFull` (certificate **and** hostname
+`--ca` generates a local CA (private key `chmod 600`), signs the server certificate with a SAN
+including `$DB_TLS_CN` / `$DB_TLS_SANS` (the host the node dials), copies the CA certificate out to
+the **host** filesystem, and prints the exact `--ssl_root_cert=<host-path>` to pass to the node.
+Because the Midnight node is a **host binary** (not a container — `nix/midnight-env/flake.nix:149`),
+give `--ssl_root_cert` that **host** path to the CA cert (the printed absolute path), **not** the
+in-container path; the node then uses `PgSslMode::VerifyFull` (certificate **and** hostname
 validation).
 
 | Posture | Node config | Server config | Guarantee | Use when |

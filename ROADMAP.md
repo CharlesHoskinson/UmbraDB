@@ -213,15 +213,19 @@ committed under `openspec/changes/v1.0.0-*` (`api-surface`, `durable-checkpoint-
 `recovery-testing`, `perf-baseline`, `infosec-signoff`) and governed by
 [`docs/v1-implementation-guideline.md`](docs/v1-implementation-guideline.md) (per-gate
 verify → red/green/self-verify in an isolated worktree → independent audit including a mandatory
-cold cross-vendor lane → merge). Of the 20 gate items, **G5 — co-transactional `save()`
-(the durable-checkpoint-cursor keystone) — is merged** (`e5fcdaa`); the remaining 19 are tracked in
-the roadmap page [`docs/roadmapv1.html`](docs/roadmapv1.html), with the critical path running
-G6 → G7 → G8 next. The blameless lessons log is `docs/v1-lessons-learned.md`; the current
+cold cross-vendor lane → merge). Of the 20 gate items, **15 are merged** across the four landed OpenSpec changes: **G1–G4 + G20**
+(`api-surface`, the public-surface freeze), **G5–G8** (`durable-checkpoint-cursor` — G5, the
+co-transactional `save()` keystone, is `e5fcdaa`), **G9–G12** (`recovery-testing`), and **G13–G14**
+(`perf-baseline`). The remaining **G15–G19** are the InfoSec sign-off, implemented on
+`feat/infosec-signoff` and **pending merge** (see below). The full gate list is tracked in the
+roadmap page [`docs/roadmapv1.html`](docs/roadmapv1.html), with the InfoSec items its remaining work.
+The blameless lessons log is `docs/v1-lessons-learned.md`; the current
 resume-from-cold checkpoint is `docs/notes/2026-07-23-resume-checkpoint.md`.
 
-**InfoSec sign-off — G15–G19 complete (`v1.0.0-infosec-signoff`).** The security sign-off obligations
-for the tag are implemented as **documentation + CI + dev-environment tooling, with no `src/` runtime
-behavior change** (G16 is doc-comment-only):
+**InfoSec sign-off — G15–G19 implemented on `feat/infosec-signoff`, pending merge
+(`v1.0.0-infosec-signoff`).** The security sign-off obligations for the tag are implemented as
+**documentation + CI + dev-environment tooling, with no `src/` runtime behavior change**. This work
+is complete on the change branch and under audit; it is **not yet merged to `main`** (G16 is doc-comment-only):
 
 - **G15** — root [`SECURITY.md`](SECURITY.md) threat model (single trusted writer; `schema` is
   namespacing, not a tenant boundary; the global chunk pool's cross-wallet dedup side channel; no

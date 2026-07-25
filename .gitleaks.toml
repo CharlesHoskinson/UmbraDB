@@ -19,8 +19,8 @@ paths = [
   # (1) The historical Preview testnet wallet. Its seedHex/nightSecretKeyHex are VALUELESS Preview
   #     tDUST material (no monetary value) and remain permanently in git history because G19 performs
   #     NO history rewrite. The full-history scan re-encounters them here; allowlisted by exact path.
-  '''nix/midnight-env/test-wallets/preview-test-wallet\.json$''',
+  '''^nix/midnight-env/test-wallets/preview-test-wallet\.json$''',
   # (2) The non-secret placeholder template (all-zero seed/key, REPLACE_ME address). Committed on
   #     purpose as the field-shape reference for generate-test-wallet.sh; carries no real secret.
-  '''nix/midnight-env/test-wallets/preview-test-wallet\.example\.json$''',
+  '''^nix/midnight-env/test-wallets/preview-test-wallet\.example\.json$''',
 ]

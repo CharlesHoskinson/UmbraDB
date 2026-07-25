@@ -35,7 +35,7 @@ throwaway testnet. On a fresh machine, re-generate and re-fund — **do not** co
 
 A live `preview-test-wallet.json` (with a real `seedHex`/`nightSecretKeyHex`) was previously committed
 here as a convenience. Even though Preview `tDUST` is valueless, committing **any** key is a habit
-this repository refuses to keep (see the repo-root [`SECURITY.md`](../../SECURITY.md) commit policy).
+this repository refuses to keep (see the repo-root [`SECURITY.md`](../../../SECURITY.md) commit policy).
 As of 1.0.0:
 
 - the live file is **untracked** and `.gitignore`d (so a locally generated one is never re-committed);

@@ -12,6 +12,7 @@ permissions:
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - main
@@ -48,10 +49,14 @@ jobs:
         # pack-smoke.yml) -- never via a lifecycle hook. This step is the drift guard.
         run: |
           test -f .npmrc || { echo "::error file=.npmrc::repo-root .npmrc is missing"; exit 1; }
-          if ! grep -Eq '^[[:space:]]*ignore-scripts[[:space:]]*=[[:space:]]*true[[:space:]]*$' .npmrc; then
-            echo "::error file=.npmrc::.npmrc must set ignore-scripts=true"; exit 1
+          # Assert npm's EFFECTIVE ignore-scripts, not just a line in .npmrc: `npm config get`
+          # resolves the full precedence chain (this .npmrc, ~/.npmrc, /etc/npmrc, npm_config_* env),
+          # so a later layer flipping it back to false is caught here too.
+          EFF="$(npm config get ignore-scripts)"
+          if [ "$EFF" != "true" ]; then
+            echo "::error file=.npmrc::effective npm ignore-scripts is '$EFF', must be 'true'"; exit 1
           fi
-          echo ".npmrc present and sets ignore-scripts=true"
+          echo ".npmrc present and effective ignore-scripts=true"
 
       - name: Install dependencies (npm ci -- lockfile + integrity pinned, scripts ignored)
         # G18 (D1): npm ci, never npm install -- a tarball inconsistent with package-lock.json or its
@@ -148,15 +153,24 @@ jobs:
           trivy --version
 
       - name: Trivy scan both pinned digests (HIGH,CRITICAL) -> job summary
-        # Non-blocking report: surfaces HIGH/CRITICAL CVEs against the pinned bytes without a code
-        # change. A pinned-but-vulnerable base is otherwise invisible.
+        # Vulnerability FINDINGS are report-only (--exit-code 0) and written to the job summary. A
+        # genuine scan-EXECUTION failure (registry/pull/DB/scanner error -> nonzero) is NOT swallowed:
+        # it propagates and FAILS the job, so a green run means BOTH pinned digests were actually
+        # scanned. Each digest is scanned in its own loop iteration and its scanner exit code checked.
         run: |
-          {
-            echo "## Trivy image scan (HIGH,CRITICAL) — pinned digests"
-            for ref in "${{ steps.pins.outputs.indexer }}" "${{ steps.pins.outputs.proof }}"; do
-              echo "### $ref"
-              echo '```'
-              trivy image --severity HIGH,CRITICAL --no-progress --scanners vuln "$ref" || echo "(trivy exited non-zero for $ref)"
-              echo '```'
-            done
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "## Trivy image scan (HIGH,CRITICAL) - pinned digests" >> "$GITHUB_STEP_SUMMARY"
+          rc=0
+          for ref in "${{ steps.pins.outputs.indexer }}" "${{ steps.pins.outputs.proof }}"; do
+            echo "### $ref" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            # --exit-code 0: a HIGH/CRITICAL FINDING does not fail the step; a nonzero exit here is a
+            # real scanner/execution error (bad ref, registry/pull/DB failure) and MUST fail the job.
+            if trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress --scanners vuln "$ref" >> "$GITHUB_STEP_SUMMARY" 2>&1; then
+              echo "scanned OK: $ref"
+            else
+              echo "::error::trivy FAILED TO SCAN $ref (execution error, not a finding) -- failing the job"
+              rc=1
+            fi
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit "$rc"

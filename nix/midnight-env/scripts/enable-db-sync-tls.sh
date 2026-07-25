@@ -32,7 +32,14 @@ fi
 
 CONTAINER="${1:?usage: enable-db-sync-tls.sh [--ca] <postgres-container-name>}"
 CN="${DB_TLS_CN:-postgres}"          # cert CN + primary SAN; must match the host= the node dials
-SANS="${DB_TLS_SANS:-DNS:postgres,DNS:localhost,IP:127.0.0.1}"
+SANS="${DB_TLS_SANS:-DNS:localhost,IP:127.0.0.1}"
+# VerifyFull matches the DIALED HOST against the certificate's SAN set (a bare CN is ignored when a
+# SAN is present), so the dialed host ($CN) MUST appear in the SAN set even when the operator
+# overrides DB_TLS_CN or DB_TLS_SANS. Always ensure DNS:$CN is in the set, de-duplicated.
+case ",${SANS}," in
+  *",DNS:${CN},"*) : ;;               # already present
+  *) SANS="DNS:${CN},${SANS}" ;;
+esac
 
 if [ "$MODE" = "ca" ]; then
   echo "==> Enabling TLS (VerifyFull / local CA) on Postgres container '$CONTAINER' (CN=$CN)"
@@ -90,22 +97,33 @@ INNER_CA
   docker restart "$CONTAINER" >/dev/null
   sleep 8
 
-  echo "==> Verifying the connection is actually encrypted"
+  echo "==> Verifying VerifyFull works end-to-end (CA + hostname validation, not just encryption)"
+  # sslmode=verify-full + sslrootcert=<the generated CA> genuinely proves BOTH that the served cert
+  # chains to our CA and that the dialed host (127.0.0.1, in the IP:127.0.0.1 SAN) matches -- i.e.
+  # the whole point of the --ca de-stub, not merely that bytes are encrypted.
   docker exec "$CONTAINER" sh -c \
-    'psql "host=127.0.0.1 user=${POSTGRES_USER:-postgres} dbname=${POSTGRES_DB:-cexplorer} sslmode=require" \
-       -tAc "SELECT '\''ssl_in_use=1 cipher='\''||version FROM pg_stat_ssl WHERE pid = pg_backend_pid();"' \
-    2>/dev/null || echo "  (verify manually: set PGPASSWORD and re-run the psql check)"
+    'psql "host=127.0.0.1 user=${POSTGRES_USER:-postgres} dbname=${POSTGRES_DB:-cexplorer} sslmode=verify-full sslrootcert=/var/lib/postgresql/data/ca.crt" \
+       -tAc "SELECT '\''verify_full_ok=1 ssl_in_use=1 cipher='\''||version FROM pg_stat_ssl WHERE pid = pg_backend_pid();"' \
+    2>/dev/null && echo "  verify-full succeeded against the generated CA" \
+    || echo "  (verify manually: set PGPASSWORD and re-run the sslmode=verify-full psql check with sslrootcert=<the CA>)"
 
   CA_CONTAINER_PATH="/var/lib/postgresql/data/ca.crt"
   CA_HOST_PATH="./${CONTAINER}-db-sync-ca.crt"
-  docker cp "${CONTAINER}:${CA_CONTAINER_PATH}" "$CA_HOST_PATH" >/dev/null 2>&1 \
-    && echo "==> Copied CA cert to host: $CA_HOST_PATH" \
-    || echo "==> (could not copy CA cert to host; read it from the container at $CA_CONTAINER_PATH)"
-
-  echo "==> Done (VerifyFull). Mount the CA cert into the Midnight node and give it exactly:"
-  echo "        --ssl_root_cert=${CA_CONTAINER_PATH}"
-  echo "    CA cert path (in container): ${CA_CONTAINER_PATH}"
-  echo "    The server cert's SAN is '${SANS}' -- the node's host= MUST match one of those names."
+  if docker cp "${CONTAINER}:${CA_CONTAINER_PATH}" "$CA_HOST_PATH" >/dev/null 2>&1; then
+    # The Midnight node is a HOST binary (not a container -- nix/midnight-env/flake.nix:149), so
+    # --ssl_root_cert MUST name the CA on the HOST filesystem. Resolve to an absolute host path and
+    # print THAT as the exact value; the in-container path is meaningless to a host binary.
+    CA_HOST_ABS="$(cd "$(dirname "$CA_HOST_PATH")" && pwd)/$(basename "$CA_HOST_PATH")"
+    echo "==> Copied CA cert to host: $CA_HOST_ABS"
+    echo "==> Done (VerifyFull). The Midnight node is a HOST binary; give it exactly the HOST path:"
+    echo "        --ssl_root_cert=${CA_HOST_ABS}"
+    echo "    CA cert path (on host): ${CA_HOST_ABS}"
+  else
+    echo "==> (could not copy CA cert to host; read it from the container at ${CONTAINER}:${CA_CONTAINER_PATH})"
+    echo "==> Done (VerifyFull). The Midnight node is a HOST binary; set --ssl_root_cert to the HOST"
+    echo "    path where you place that CA cert -- NOT the in-container path ${CA_CONTAINER_PATH}."
+  fi
+  echo "    The server cert's SAN set is '${SANS}' -- the node's host= MUST match one of those names."
   exit 0
 fi
 
