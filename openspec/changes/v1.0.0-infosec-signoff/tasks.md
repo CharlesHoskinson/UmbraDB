@@ -177,6 +177,25 @@ Everything else is independent.
   go-forward guard is the full-history gitleaks gate (with the historical path allowlisted), and the
   old key's history permanence is explicitly noted as accepted.
 
+## 4b. Release-publication artifact (R7) — found missing during the release run
+
+*Not in the original task list. The guideline (§4.2 R7) assigns `.github/workflows/publish.yml` to
+this change ("owned by `v1.0.0-infosec-signoff`, supply-chain-adjacent, co-located with G18"), but no
+task ever encoded it and the file existed on no branch. Provenance cannot be produced locally, so
+without this the tag could only satisfy R7 by a recorded drop-ruling.*
+
+- [x] 4b.1 Add `.github/workflows/publish.yml`: tag-triggered (`v[0-9]+.[0-9]+.[0-9]+`) plus manual
+      dispatch, `permissions: {id-token: write, contents: read}`, `npm ci --ignore-scripts` -> build ->
+      `npm publish --provenance --access public`. Pre-flight asserts the tag is **annotated** (object
+      type is `tag`, not `commit`), carries no AI attribution (R12), matches `package.json.version`,
+      and that `repository.url` matches the building repo (a mismatch fails provenance at the
+      registry).
+- [x] 4b.2 Add the publish metadata `package.json` was missing: `repository` (**required** for
+      provenance), `license: "Apache-2.0"` (was undefined despite the Apache-2.0 `LICENSE` file and
+      R12), `description`, `homepage`, `bugs`, and `publishConfig {access: public, provenance: true}`.
+      Add `NOTICE` to `files` — it is referenced by the README and Apache-2.0 §4(d) requires shipping
+      it with the distribution.
+
 ## 5. Change close-out
 
 - [x] 5.1 Whole-change differential review: an auditor re-reads this `proposal.md`/`design.md`/
