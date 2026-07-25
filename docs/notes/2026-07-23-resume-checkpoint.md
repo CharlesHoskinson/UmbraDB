@@ -1,5 +1,21 @@
 # UmbraDB v1.0.0 — Resume-From-Home Checkpoint (2026-07-23)
 
+> **SUPERSEDED — 2026-07-25. Do not read this as current status.**
+>
+> This document was accurate when written and is kept as a historical record of that moment. Two of
+> its headline facts are now stale:
+>
+> - It reports **G5 done, 19 to go (1/20)**. In fact **all 20 gate items G1–G20 are merged**; only
+>   the manual G12/R5 live round-trip against the release candidate remains, and that is a release
+>   step, not gate work.
+> - It reports the Preprod sync **paused at 55%** with resume instructions. Cardano Preprod has
+>   since **reached tip**. Separately — and more importantly — the resume instructions were never on
+>   the tag's critical path at all: the R5 live tier is hard-wired to the **public cloud indexer**
+>   (`indexer.preprod.midnight.network`), so the local sync never gated the tag.
+>
+> For current status see `ROADMAP.md` §"v1.0.0 program status", the per-gate ledger in
+> `docs/v1-lessons-learned.md`, and the Release Record `docs/releases/v1.0.0.md`.
+
 *The single document to read to pick the v1.0.0 release program back up cold. It captures the exact
 `main` state, the safely-paused Preprod sync and how to resume it, the reproducible-environment
 pointer, the roadmap status, the established per-gate implementation workflow, and the worktree
