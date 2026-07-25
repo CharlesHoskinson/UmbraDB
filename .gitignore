@@ -21,3 +21,6 @@ coverage/
 .stryker-tmp/
 reports/
 stryker.log
+
+# Build output (declaration + JS emitted by `npm run build`; never committed)
+dist/

@@ -22,6 +22,11 @@ export const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
  *  or an indefinite hang (design.md §3.2). */
 export class MigrationLockTimeoutError extends StorageError {
   readonly code = "MIGRATION_LOCK_TIMEOUT" as const;
+  /** RETRYABLE (design.md 3.1 reconciliation; cross-vendor audit BLOCK 4): the migration advisory
+   *  lock is released the moment the concurrent migration commits, so a bounded backoff-then-retry
+   *  can succeed -- the same transient advisory-lock-wait character as the retryable `LEASE_TIMEOUT`.
+   *  An "orchestrator restart preference" is an operational choice, not a retryability fact. */
+  readonly retryable = "retryable" as const;
   constructor(readonly schema: string, readonly timeoutMs: number, cause?: unknown) {
     super(
       `did not acquire the migration lock for schema "${schema}" within its ${timeoutMs}ms bound` +

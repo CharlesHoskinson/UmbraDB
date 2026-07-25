@@ -323,3 +323,75 @@ where remaining findings would be enforcement-recursion rather than concrete def
   vitest-config level (`hookTimeout: 60_000`), no test file touched. `transaction-lease.ts` is the one
   durability module below the §2.3 90/85 per-file target (89.2/81.25) — floor set green-now (86/78) with
   the small lease branch-coverage top-up tracked as follow-up test work.
+
+---
+
+## Change: `v1.0.0-api-surface` — G1/G2/G3/G4/G20 the public-surface freeze (2026-07-24)
+
+Implemented tasks 0–7 in worktree `/root/UmbraDB-api` (branch `feat/api-surface`, off main `4e04926`).
+Phase-2 "the freeze": the first change to deliberately modify `src/` for surface reasons — the barrel
+`src/index.ts` (36 value + 52 type exports), a `retryable` field on all 29 `StorageError` subclasses,
+the declaration-emitting build, and a publishable strict-`exports` `package.json`. Everything else is
+docs/config. `npm test` green (521 pass / 12 always-skip / 0 fail); the packed-tarball smoke test proves
+a fresh consumer resolves the surface, a deep import is blocked, and `dist/index.d.ts` ships.
+
+### Reconciliations recorded as consolidating-lead decisions (spec written pre-G6/G7)
+
+- **The frozen error catalog is 24 codes, not the spec's literal "21".** G6 (`DURABILITY_CONTRACT_VIOLATION`,
+  `TRANSACTION_POOLER_DETECTED`) and G7 (`MIGRATION_LOCK_TIMEOUT`) shipped public error classes a consumer
+  catches from `runMigrations` AFTER the api-surface spec was authored. They belong on the frozen surface.
+  The authority is a DRIFT TEST (`error-catalog-drift.test.ts`) that enumerates the exported `StorageError`
+  subclasses, reads each instance's `.code`/`.retryable`, and asserts the published table ≡ the surface with
+  NO hard-coded count — so the catalog self-corrects and can never silently drift from the exported classes.
+  The drift test was later strengthened to also assert the CHANGELOG "(N codes)" and ERROR-CATALOG
+  "**N codes**" prose equal the derived count, so a release-facing count contradiction is caught too.
+- **`MIGRATION_LOCK_TIMEOUT` is RETRYABLE** — the frozen retryable set is exactly
+  {CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT} (4 codes). It has the same
+  transient advisory-lock-wait character as `LEASE_TIMEOUT`: it is raised at the single `pg_advisory_lock`
+  acquire site in `runMigrations` for BOTH `55P03` (`lock_timeout`) and `57014` (`statement_timeout`), and
+  BOTH clear once the concurrent migration commits — not a conflation of unrelated faults (the two SQLSTATEs
+  are the same lock-acquire timeout, documented explicitly in `docs/ERROR-CATALOG.md`). `CLOCK_REGRESSION`
+  is `"conditional"` (its two causes — same-ms collision vs backward step — are represented, not collapsed).
+- **Barrel reconciliations:** the durability-probe error CLASSES are now on the frozen surface (were not
+  re-exported before); the 5 error-code union TYPES are exported; `src/index.ts`'s `@packageDocumentation`
+  was re-authored; and `saveAndAdvance`'s stale "not re-exported from any barrel" doc-comment was corrected
+  (it IS frozen). `emitDeclarationMap` (the spec's name) is not a real tsc option — used `declarationMap: true`.
+- **README hygiene:** the "Full-chain storage — validated live against Preprod (AC-8)" headline was reframed
+  as a 1.1 preview explicitly outside the frozen 1.0 surface, matching the G3 chain-archive-error strip.
+
+### The cross-vendor audit (two codex cold rounds, then bounded at convergence)
+
+The frozen surface — the highest-stakes 1.0 artifact (a wrong freeze needs a major bump) — took two
+cross-vendor codex cold-audit rounds, then was bounded per §0.2/§2.2:
+- **Round 1 (9 BLOCKs):** frozen-authority count drift (24 vs 25), the 5 error-code union types unexported,
+  auth-failure retryability, several contract-doc corrections, the packed-`.d.ts` consumer compile, and the
+  smoke-CI non-skip. All fixed (`51db67c`). Round 1 pushed for a distinct auth-failure error class.
+- **Round 2 (5 BLOCKs + 2 NITs):** the fixes had updated design/spec/acceptance to 25/4 but MISSED `tasks.md`
+  and `CHANGELOG`, leaving the frozen authorities mutually inconsistent; and codex REVERSED its round-1
+  position, now objecting that adding `AuthenticationError` (a new class + new 28xxx routing) is feature work
+  beyond a freeze's scope. As consolidating lead I resolved it BOTH ways at once (`ebaea80`): **reverted
+  `AuthenticationError`** (a freeze freezes the existing surface, it does not add behavior — a pure
+  `git checkout 7aa76a3` of `errors.ts`, so the surface returned to the round-1-audited state; `28xxx` auth
+  failures surface as retryable `ConnectionError`, documented as a binding known-limitation with a
+  bound-your-retries note, and a distinct `AuthenticationError` recorded as an ADDITIVE 1.1-minor candidate),
+  and **reconciled every frozen authority** (tasks/design/spec/acceptance/CHANGELOG/catalog) to a single
+  consistent **24 codes / 4-retryable**. The Lean cut-line wording was made honest (below); README package-root
+  import + CONTRACT `ENVELOPE_VERSION` path fixed.
+- **Bounded here.** The audit had converged on objective consistency, the round-2 delta was a revert to
+  already-audited state plus doc reconciliation now mechanically guarded by the strengthened drift test, and
+  codex had reversed its own prior demand — a round-3 pass would enumerate doc-location nits / re-litigate the
+  auth class rather than surface a real freeze defect. Merged on the verified-green state (typecheck, build,
+  521 tests, 36 api-surface tests, packed smoke), not on a codex "PASS" this adversarial process does not
+  terminate at (the same bounding doctrine as recovery-testing).
+
+### Boundary held
+The six chain-archive error classes are `@experimental` and excluded from the barrel + catalog, while
+`translatePostgresError`'s 23514 constraint-name routing stays internal and intact (routing preserved, surface
+not frozen). `withTransaction`/`withLease` are frozen only as `PgTransactionLeaseLayer` methods; `Rollback` is
+exported with no catalog code. No deferred code (idempotency key, keyed/encrypted chunking, observability)
+leaked into the freeze. The Lean 1.0.0 cut-line is recorded honestly: the trust gate mechanically checks the
+ENTIRE `Formal/Lean` tree (rejects `sorry`/`admit`/`axiom`/`unsafe`, then `lake build --wfail` + `leanchecker`);
+`{T3, T5, W1, C1}` are the FROZEN 1.0 store-property COMMITMENTS, while additional in-tree lemmas
+(`attempt_applied_version`, `attempt_conflict_iff_snapshot_mismatch`, `dual_address_agrees` in
+`TemporalKV/Laws.lean`) are also gated but not part of the frozen commitment surface — no longer claimed as the
+entire gated set.

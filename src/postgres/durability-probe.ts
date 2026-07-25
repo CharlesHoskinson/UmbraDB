@@ -39,6 +39,7 @@ export interface DurabilityViolation {
  */
 export class DurabilityContractError extends StorageError {
   readonly code = "DURABILITY_CONTRACT_VIOLATION" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, readonly violations: readonly DurabilityViolation[], cause?: unknown) {
     super(message, cause);
   }
@@ -51,6 +52,7 @@ export class DurabilityContractError extends StorageError {
  */
 export class TransactionPoolerDetectedError extends StorageError {
   readonly code = "TRANSACTION_POOLER_DETECTED" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, cause?: unknown) {
     super(message, cause);
   }

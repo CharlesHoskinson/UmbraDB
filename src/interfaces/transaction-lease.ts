@@ -60,6 +60,7 @@ export abstract class TransactionLeaseError extends StorageError {
  *  rollback via {@link Rollback}. Distinct from a driver-level fault. */
 export class TransactionRolledBackError extends TransactionLeaseError {
   readonly code = "TRANSACTION_ROLLED_BACK" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly rollbackCause: TransactionRollbackCause) {
     super(`transaction rolled back: ${rollbackCause.kind}`);
   }
@@ -69,6 +70,7 @@ export class TransactionRolledBackError extends TransactionLeaseError {
  *  serialization failure under `serializable` isolation, deadlock, or a statement timeout. */
 export class TransactionFaultError extends TransactionLeaseError {
   readonly code = "TRANSACTION_FAULT" as const;
+  readonly retryable = "retryable" as const;
   constructor(
     message: string,
     readonly faultKind: "connection-lost" | "serialization-failure" | "deadlock" | "timeout" | "unknown",
@@ -84,6 +86,7 @@ export class TransactionFaultError extends TransactionLeaseError {
  *  wait as long as it takes. */
 export class LeaseTimeoutError extends TransactionLeaseError {
   readonly code = "LEASE_TIMEOUT" as const;
+  readonly retryable = "retryable" as const;
   constructor(readonly key: string, readonly waitedMs: number) {
     super(`timed out after ${waitedMs}ms waiting for lease "${key}"`);
   }
@@ -99,6 +102,7 @@ export class LeaseTimeoutError extends TransactionLeaseError {
  *  error is specifically for a lease this layer no longer has any record of holding at all. */
 export class LeaseNotHeldError extends TransactionLeaseError {
   readonly code = "LEASE_NOT_HELD" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly key: string) {
     super(`lease "${key}" was not held (already released)`);
   }
@@ -107,6 +111,7 @@ export class LeaseNotHeldError extends TransactionLeaseError {
 /** Thrown on connection loss / reservation failure while acquiring or releasing a lease. */
 export class LeaseFaultError extends TransactionLeaseError {
   readonly code = "LEASE_FAULT" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(
     message: string,
     readonly faultKind: "connection-lost" | "reserve-failed" | "unknown",
@@ -120,6 +125,7 @@ export class LeaseFaultError extends TransactionLeaseError {
  *  since resolving the handle happens before that method's query ever runs. */
 export class TransactionHandleInvalidError extends TransactionLeaseError {
   readonly code = "TRANSACTION_HANDLE_INVALID" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly handleId: string) {
     super(`transaction handle "${handleId}" does not refer to a live transaction`);
   }

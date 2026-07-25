@@ -104,6 +104,7 @@ export abstract class WalletStateEnvelopeError extends StorageError {
  *  shape. */
 export class EnvelopeVersionUnsupportedError extends WalletStateEnvelopeError {
   readonly code = "VERSION_UNSUPPORTED" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly foundVersion: number, readonly supportedVersion: number = ENVELOPE_VERSION) {
     super(`unsupported envelopeVersion ${foundVersion} (this build only understands version ${supportedVersion})`);
   }
@@ -115,6 +116,7 @@ export class EnvelopeVersionUnsupportedError extends WalletStateEnvelopeError {
  *  `SyntaxError`/parse error, and never returns a malformed envelope. */
 export class EnvelopeCorruptError extends WalletStateEnvelopeError {
   readonly code = "CORRUPT" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(message: string, cause?: unknown) { super(message, cause); }
 }
 

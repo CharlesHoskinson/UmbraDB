@@ -35,12 +35,20 @@ single writer lease, and a boring, well-understood storage engine everyone alrea
 gives you all of that directly, with real ACID transactions instead of a replica-set-gated
 approximation of them.
 
-## Full-chain storage — validated live against public Preprod (AC-8)
+## Full-chain storage (1.1 preview, outside the frozen 1.0 surface)
+
+> **This is a 1.1 preview, not part of the frozen 1.0.0 public API.** Full-chain archival storage is
+> deferred to a 1.1 fast-follow (`council/A` ruling (e)). Its `chain_archive` schema is **not** in
+> the frozen 1.0 surface, its error classes are **not** re-exported from the `umbradb` barrel, and
+> its codes are **not** in the frozen [error catalog](docs/ERROR-CATALOG.md) — consistent with the
+> chain-archive error-class strip. The capability is implemented on its own unmerged branch (see
+> [`ROADMAP.md`](ROADMAP.md) → *Beyond 1.0.0*); the live-Preprod validation below is preview evidence
+> of its maturity, not a 1.0 promise.
 
 UmbraDB's **full-chain-storage** capability (Tier-1.5: a chain-scoped `chain_archive` schema that
 archives every block and `pallet_midnight` transaction as a recovery source of last resort) has
-been cross-validated **end-to-end against Midnight's live public Preprod network** — the final
-acceptance gate (AC-8) for the feature.
+been cross-validated **end-to-end against Midnight's live public Preprod network** (its own AC-8
+acceptance gate) as part of this 1.1 preview track.
 
 `ChainArchiveSyncService` ingests a contiguous height range from the hosted Preprod node
 (`rpc.preprod.midnight.network`) and indexer (`indexer.preprod.midnight.network/api/v4/graphql`),
@@ -106,10 +114,7 @@ is more thoroughly exercised.
 
 
 ```typescript
-import { createClient } from "./src/postgres/client.js";
-import { runMigrations } from "./src/postgres/migrate.js";
-import { PgTemporalKV } from "./src/postgres/temporal-kv.js";
-import { PgTransactionLeaseLayer } from "./src/postgres/transaction-lease.js";
+import { createClient, runMigrations, PgTemporalKV, PgTransactionLeaseLayer } from "umbradb";
 
 const sql = createClient({ connectionString: process.env.DATABASE_URL, schema: "my_app" });
 await runMigrations(sql, { schema: "my_app" });

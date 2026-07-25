@@ -124,6 +124,7 @@ export abstract class CheckpointStoreError extends StorageError {
  *  absence is an error rather than a `null` return; see §1.1's "lookup vs. load" rule. */
 export class CheckpointNotFoundError extends CheckpointStoreError {
   readonly code = "NOT_FOUND" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(
     readonly walletId: string,
     readonly networkId: string,
@@ -137,6 +138,7 @@ export class CheckpointNotFoundError extends CheckpointStoreError {
  *  corrupted out-of-band; it is never a normal, expected outcome. */
 export class ChunkMissingError extends CheckpointStoreError {
   readonly code = "CHUNK_MISSING" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly chunkHash: ContentHash) {
     super("chunk referenced by manifest is missing from chunk storage");
   }
@@ -145,6 +147,7 @@ export class ChunkMissingError extends CheckpointStoreError {
 /** A chunk's rehashed content didn't match its manifest entry. */
 export class ChunkIntegrityError extends CheckpointStoreError {
   readonly code = "CHUNK_INTEGRITY" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly chunkHash: ContentHash, readonly expectedHash: ContentHash) {
     super("chunk hash mismatch");
   }
@@ -153,6 +156,7 @@ export class ChunkIntegrityError extends CheckpointStoreError {
 /** The manifest itself failed its own shape/hash validation. */
 export class ManifestCorruptError extends CheckpointStoreError {
   readonly code = "MANIFEST_CORRUPT" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly manifestHash: ContentHash, readonly reason: string) {
     super(`manifest corrupt: ${reason}`);
   }

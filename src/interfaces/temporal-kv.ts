@@ -197,6 +197,7 @@ export abstract class TemporalKVError extends StorageError {
  *  occurs (versions start at 1); the two cases are not conflated. */
 export class VersionConflictError extends TemporalKVError {
   readonly code = "VERSION_CONFLICT" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly expected: Version, readonly actual: Version | undefined) {
     super(`expected version ${expected}, found ${actual ?? "none (key never written)"}`);
   }
@@ -217,6 +218,7 @@ export class VersionConflictError extends TemporalKVError {
  */
 export class HistoryUnavailableError extends TemporalKVError {
   readonly code = "HISTORY_UNAVAILABLE" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(
     readonly requested: AsOf,
     readonly oldestAvailableAt: Date,
@@ -247,6 +249,7 @@ export class HistoryUnavailableError extends TemporalKVError {
  */
 export class TransactionKeyReuseError extends TemporalKVError {
   readonly code = "TRANSACTION_KEY_REUSE" as const;
+  readonly retryable = "non-retryable" as const;
   constructor(readonly namespace: Namespace, readonly scope: Scope, readonly key: Key) {
     super(`key already written earlier in this transaction: ${namespace}/${scope}/${key} (at most one put per key per transaction is allowed)`);
   }
