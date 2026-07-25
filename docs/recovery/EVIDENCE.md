@@ -20,13 +20,13 @@ captured output is recorded below.*
 |---|---|
 | Run date (UTC) | 2026-07-25 05:03:06 → 05:03:18 |
 | RC commit (full SHA) | `8a684fca261ef0581a1b7b5e4c4ac6517c779561` |
-| Tag the RC became | `v1.0.0` |
+| Tag the RC became | `v0.9.5` — the run was executed while the tree read `1.0.0`; the release was subsequently re-cut as `0.9.5` with **identical code**. The delta from the tested commit is documented below. |
 | Branch | `main` (== `release/1.0.0` == `origin/main`), working tree clean |
 | Operator | Charles Hoskinson |
 | Command | `npm run test:live` (`UMBRADB_LIVE_PREPROD=1`) |
 | Network | Midnight **Preprod**, public indexer `indexer.preprod.midnight.network` |
 | Postgres | Testcontainers `postgres:17-alpine` (digest-pinned in the test setup) |
-| Package version at run time | `1.0.0` |
+| Package version at run time | `1.0.0` (the tree was later re-versioned to `0.9.5`; no `src/` or `test/` change accompanied it) |
 | Result | **2 passed / 0 failed**, exit 0 |
 
 ## Chain / wallet state at run time
@@ -67,9 +67,9 @@ Postgres**, which is the recorded scope decision for this gate (see the header o
 `test/integration/cold-boot-recovery.integration.test.ts`). It is not a host reboot.
 
 **Scope note — the replaced engine.** Milestone 5's "remove the storage engine UmbraDB replaces"
-clause is **the consumer project's**, not UmbraDB's. UmbraDB 1.0.0 ships a frozen, importable
-library; decommissioning an incumbent store in a downstream environment is a migration that follows
-the tag and is explicitly **not** a 1.0.0 gate.
+clause is **the consumer project's**, not UmbraDB's. UmbraDB ships an importable library;
+decommissioning an incumbent store in a downstream environment is a migration that follows the tag
+and is explicitly **not** a release gate.
 
 **Gate-independence note.** This run is **not** part of the required CI gate: `npm run
 test:conformance` stays green with no network, no seed file, and no wallet checkout, because both
@@ -130,6 +130,6 @@ LIVE_EXIT=0
 
 | Field | Value |
 |---|---|
-| R5 satisfied? | **YES** — run executed against the RC commit `8a684fca261ef0581a1b7b5e4c4ac6517c779561` on a clean tree at version 1.0.0, all five M5 sub-criteria PASS, exit 0. |
+| R5 satisfied? | **YES** — run executed against the RC commit `8a684fca261ef0581a1b7b5e4c4ac6517c779561` on a clean tree at version 1.0.0, all five M5 sub-criteria PASS, exit 0. The tree was re-versioned to `0.9.5` afterwards; that changed no `src/` or `test/` file, so the run remains valid evidence for the shipped code. |
 | Recorded by | Charles Hoskinson |
 | Date | 2026-07-25 |

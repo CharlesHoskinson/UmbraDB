@@ -14,7 +14,8 @@
 >   (`indexer.preprod.midnight.network`), so the local sync never gated the tag.
 >
 > For current status see `ROADMAP.md` §"v1.0.0 program status", the per-gate ledger in
-> `docs/v1-lessons-learned.md`, and the Release Record `docs/releases/v1.0.0.md`.
+> `docs/v1-lessons-learned.md`, and the Release Record `docs/releases/v0.9.5.md` (the pending 1.0.0 record is
+> `docs/releases/v1.0.0.md`).
 
 *The single document to read to pick the v1.0.0 release program back up cold. It captures the exact
 `main` state, the safely-paused Preprod sync and how to resume it, the reproducible-environment

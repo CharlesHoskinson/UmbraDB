@@ -99,7 +99,7 @@ below is **1.0.0**.
   `Formal/FORMALIZATION_ROADMAP.md`, the post-1.0.0 workstream that closes C2a/L1 is
   `openspec/changes/v1.1.0-formal-completion/`, and the recorded **Option A** ruling that authorizes
   closing this item on deferral (rather than widening the frozen set) is in that change's
-  `proposal.md` and in `docs/releases/v1.0.0.md` §G20.
+  `proposal.md` and in `docs/releases/v0.9.5.md` §G20.
 
 ### Frozen 1.0.0 API surface, SemVer policy, error catalog & contracts (G1-G4 -- `openspec/changes/v1.0.0-api-surface`)
 
@@ -295,7 +295,7 @@ cold cross-vendor lane → merge).
 | `infosec-signoff` | G15, G16, G17, G18, G19 | (this change) |
 
 Per-gate evidence — a CI run, a test id, a doc path, or an auditor verdict for **each** of G1–G20 —
-is the Release Record [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md) (R1); a gate with no
+is the Release Record [`docs/releases/v0.9.5.md`](docs/releases/v0.9.5.md) (R1); a gate with no
 evidence pointer is not green. The gate-by-gate narrative page is
 [`docs/roadmapv1.html`](docs/roadmapv1.html) and the blameless lessons log is
 `docs/v1-lessons-learned.md`.
