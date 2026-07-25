@@ -24,8 +24,11 @@ const now  = await kv.get("wallet:balance");    // latest
 const then = await kv.getAt("wallet:balance", { version: 3n });  // point-in-time
 ```
 
-Everything is imported from the package root. There is no supported deep import — the `exports` map
+Everything is imported from the package root. There is no supported deep import: the `exports` map
 exposes a single `"."`, and reaching into internals fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+
+Requires Node 24 or later. Tested against PostgreSQL 17, and the schema uses syntax introduced in
+PostgreSQL 15. No lower bound has been verified, so treat anything below 15 as unsupported.
 
 > **Version 0.9.5.** Under SemVer, `0.y.z` carries **no compatibility guarantee yet**. The surface is
 > already enumerated and drift-tested, but the *promise* not to break it lands at 1.0.0. See
