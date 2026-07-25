@@ -1,5 +1,7 @@
 # UmbraDB
 
+![A near-total solar eclipse: a matte black disc with a single point of light at its upper-left rim, ringed by a faint corona, against a deep indigo field](https://raw.githubusercontent.com/CharlesHoskinson/UmbraDB/main/docs/assets/penumbra.png)
+
 A local, persistent datastore for [Midnight](https://midnight.network) clients: wallets, dev tooling,
 and anything else that needs durable, versioned, content-addressed storage without running a
 heavyweight database service of its own.
