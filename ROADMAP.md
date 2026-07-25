@@ -219,6 +219,31 @@ the roadmap page [`docs/roadmapv1.html`](docs/roadmapv1.html), with the critical
 G6 → G7 → G8 next. The blameless lessons log is `docs/v1-lessons-learned.md`; the current
 resume-from-cold checkpoint is `docs/notes/2026-07-23-resume-checkpoint.md`.
 
+**InfoSec sign-off — G15–G19 complete (`v1.0.0-infosec-signoff`).** The security sign-off obligations
+for the tag are implemented as **documentation + CI + dev-environment tooling, with no `src/` runtime
+behavior change** (G16 is doc-comment-only):
+
+- **G15** — root [`SECURITY.md`](SECURITY.md) threat model (single trusted writer; `schema` is
+  namespacing, not a tenant boundary; the global chunk pool's cross-wallet dedup side channel; no
+  at-rest encryption as a binding precondition; commit policy + vulnerability reporting), linked from
+  `README.md`.
+- **G16** — the `CheckpointStore` cross-wallet dedup interface-doc caveat in
+  `src/interfaces/checkpoint-store.ts` (doc comments only).
+- **G17** — the db-sync TLS `Require`/self-signed caveat surfaced in `nix/midnight-env/README.md` and
+  the opt-in VerifyFull `--ca` de-stub in `enable-db-sync-tls.sh`, with the **localhost `Require`
+  default unchanged**.
+- **G18** — the supply-chain CI gate `.github/workflows/supply-chain.yml` (+ `.npmrc`, `.gitleaks.toml`):
+  `npm ci` + `ignore-scripts` assertion + blocking runtime `npm audit` + full-history `gitleaks` +
+  pinned-digest Trivy scan + `flake.lock` change-control.
+- **G19** — the committed Preview wallet-secret remediation (untrack + `.example` + generator +
+  `gitleaks` allowlist), **no git-history rewrite** (the valueless key stays in history; the
+  full-history gitleaks gate is the go-forward guard).
+
+This change completes the InfoSec **sign-off** (docs + CI) for the 1.0.0 tag. The **P1 code
+fast-follows it documents but does NOT implement — keyed/scoped chunk addressing (the cross-wallet
+dedup-oracle fix) and the `EnvelopeCipher` at-rest-encryption seam — remain separately tracked for
+1.1** and are not part of the tag.
+
 ## 1.0.0 acceptance checklist
 
 A 1.0.0 tag requires all of:
