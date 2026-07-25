@@ -97,11 +97,11 @@ count of `defect-escape` + `gate-miss` + `rework-cause` entries — the trend-an
 | G12 | M5 live Preprod round-trip (manual pre-tag evidence) | recovery-testing | ☐ OPEN — manual run against the RC (R5) | — |
 | G13 | Perf-correctness fixes (UNNEST HP-1, GROUP BY HP-2, fillfactor IS-1) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
 | G14 | Benchmark baseline recorded (GC anti-join envelope) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
-| G15 | SECURITY.md / threat-model doc | infosec-signoff | ☑ CLOSED (merged this change) | — |
-| G16 | CheckpointStore dedup interface-doc caveat | infosec-signoff | ☑ CLOSED (merged this change) | — |
-| G17 | TLS caveat + de-stub VerifyFull/--ca (keep default) | infosec-signoff | ☑ CLOSED (merged this change) | — |
-| G18 | Supply-chain CI gate (npm ci / audit / ignore-scripts / gitleaks / trivy / flake.lock) | infosec-signoff | ☑ CLOSED (merged this change) | — |
-| G19 | Committed Preview wallet secret → generator + .example + allowlist | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G15 | SECURITY.md / threat-model doc | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |
+| G16 | CheckpointStore dedup interface-doc caveat | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |
+| G17 | TLS caveat + de-stub VerifyFull/--ca (keep default) | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |
+| G18 | Supply-chain CI gate (npm ci / audit / ignore-scripts / gitleaks / trivy / flake.lock) | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |
+| G19 | Committed Preview wallet secret → generator + .example + allowlist | infosec-signoff | ☑ CLOSED (merged `7ee8a4b`) | — |
 | G20 | Freeze Lean cut-line {T3,T5,W1,C1} + written deferral | api-surface | ☑ CLOSED (merged `726f567`) | — |
 
 **Cross-cutting friction tally (fill as events land):**

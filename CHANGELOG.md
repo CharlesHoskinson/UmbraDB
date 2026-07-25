@@ -10,7 +10,7 @@ entries below are stated in [`docs/STABILITY.md`](docs/STABILITY.md).
 
 _No unreleased changes._
 
-## [1.0.0]
+## [1.0.0] - 2026-07-25
 
 The first frozen, importable, SemVer-governed public surface. Everything below is imported from the
 package root (`import { ... } from "umbradb"`); there is no supported deep import of an internal
