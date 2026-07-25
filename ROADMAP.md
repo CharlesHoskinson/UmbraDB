@@ -74,10 +74,32 @@ below is **1.0.0**.
   surface. The box is objectively green because every committed property is mechanized and the whole
   tree passes the gate; this does **not** claim `{T3, T5, W1, C1}` is the entire set CI gates.
 - [x] **Written deferral of everything outside the cut-line to post-1.0** (decision only, no proof work
-  in the api-surface change): **C2a / GC**, **ordered reconstruction**, **lease traces**,
-  **keyed-store lifting**, and **SQL / runtime refinement** are explicitly out of the 1.0.0 cut-line
-  and remain future Lean milestones (they are the open item immediately above). This converts the
-  previously-unfalsifiable "tractable properties proved in Lean" checklist item into a checkable box.
+  in the api-surface change). The following are explicitly **NOT PROVED** in Lean, are out of the
+  1.0.0 cut-line, and remain future Lean milestones (they are the open item immediately above):
+    - **C2a — CheckpointStore GC reachability-safety.** Labelled MECHANISM SPECIFIED in
+      `Formal/STORAGE_ALGEBRA.md` §C2a; **no** Live/refs/Deleted model exists in Lean. Enforced at
+      runtime by the same-transaction reachability scan and tested by P8, not proved.
+    - **C2b — eventual collection (grace window).** No liveness/round model; conditional on a GC pass
+      actually running.
+    - **L1 — lease mutual exclusion.** Labelled MECHANISM SPECIFIED in §L1; **no** Transaction/Lease
+      module exists in Lean. Enforced at runtime by the session-scoped advisory lock and tested by
+      P10, not proved.
+    - **Multi-key / keyed-store lifting** (cross-key framing and the cross-writer coordination that
+      T1 leaves OPEN), and **ordered chunk reconstruction** (the `toFinset` projection erases order).
+    - **Cross-module composition** — the transaction-envelope law table (§4) and the watermark
+      cursor-vs-data ordering contract.
+    - **The whole abstract → PostgreSQL / TypeScript refinement.** No theorem relates any Lean
+      definition to SQL DDL, a trigger, `clock_timestamp()`, or the adapter; this is a *trusted,
+      unmechanized* refinement (the AWS TLA+ stance), bridged empirically by the P1–P10 conformance
+      suite.
+
+  This converts the previously-unfalsifiable "tractable properties proved in Lean" checklist item
+  into a checkable box. **`0 sorry` certifies depth, never breadth** — the Lean trust gate proves
+  that what is stated is proved; it cannot detect a missing or too-weak law. The full gap map is
+  `Formal/FORMALIZATION_ROADMAP.md`, the post-1.0.0 workstream that closes C2a/L1 is
+  `openspec/changes/v1.1.0-formal-completion/`, and the recorded **Option A** ruling that authorizes
+  closing this item on deferral (rather than widening the frozen set) is in that change's
+  `proposal.md` and in `docs/releases/v1.0.0.md` §G20.
 
 ### Frozen 1.0.0 API surface, SemVer policy, error catalog & contracts (G1-G4 -- `openspec/changes/v1.0.0-api-surface`)
 
