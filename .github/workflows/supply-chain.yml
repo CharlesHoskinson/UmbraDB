@@ -98,10 +98,12 @@ jobs:
 
       - name: gitleaks full-history secret scan (blocking, G18 D4 / G19)
         # Full git history (default `detect` git mode; needs the fetch-depth: 0 checkout above).
-        # Driven by the committed .gitleaks.toml, whose allowlist covers EXACTLY the historical
-        # preview-test-wallet.json path (valueless Preview secret kept in history -- no rewrite) and
-        # the preview-test-wallet.example.json placeholder. Any real secret on ANY other path -- in
-        # history or the working tree -- fails this step.
+        # Driven by the committed .gitleaks.toml. The historical Preview-wallet finding is suppressed by
+        # EXACT FINGERPRINT in .gitleaksignore (not by a path allowlist, which would exempt that path
+        # forever). Any real secret on ANY path -- in history or the working tree -- fails this step.
+        # A custom umbradb-wallet-seed-hex rule additionally catches `seedHex`, which the stock
+        # rules miss: they trigger on a field name containing "SecretKey", so the SEED -- the value
+        # the night key and address are derived from -- was previously undetectable.
         run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
 
       - name: Image pins agree across flake.nix and start-stack.sh (G18 — audit gap)
@@ -114,11 +116,28 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
+          # Strip comments BEFORE extracting. Re-audit reproduced a bypass where start-stack.sh
+          # actually ran `:latest` while the expected digest survived only in a comment: the
+          # extractor found one matching pin and the check passed. Only live code counts.
+          strip_comments() { sed -e 's/[[:space:]]#.*$//' -e 's/^[[:space:]]*#.*$//' "$1"; }
+
+          # Every reference to these images in live code MUST be digest-pinned. A bare `:tag`
+          # reference is itself a failure, whether or not some other line carries a digest.
+          for f in nix/midnight-env/flake.nix nix/midnight-env/scripts/start-stack.sh; do
+            # Capture the WHOLE reference token (through any @sha256 suffix) before testing it.
+            # Matching only up to the ':' would clip every pinned reference down to
+            # "image:tag" and report it as unpinned.
+            unpinned="$(strip_comments "$f"               | grep -oE "midnightntwrk/(indexer-standalone|proof-server):[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?"               | grep -vE "@sha256:[0-9a-f]{64}$" || true)"
+            if [ -n "$unpinned" ]; then
+              echo "::error::$f references these images WITHOUT a digest pin:"
+              echo "$unpinned" | sed 's/^/::error::  /'
+              fail=1
+            fi
+          done
+
           for image in indexer-standalone proof-server; do
-            # Anchored to the real reference form and required to be UNIQUE in each file: an
-            # unanchored `grep | head -1` could be satisfied by a commented-out line placed above.
-            mapfile -t flake_refs < <(grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" nix/midnight-env/flake.nix | sort -u)
-            mapfile -t stack_refs < <(grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" nix/midnight-env/scripts/start-stack.sh | sort -u)
+            mapfile -t flake_refs < <(strip_comments nix/midnight-env/flake.nix | grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" | sort -u)
+            mapfile -t stack_refs < <(strip_comments nix/midnight-env/scripts/start-stack.sh | grep -oE "midnightntwrk/${image}:[0-9.]+@sha256:[0-9a-f]{64}" | sort -u)
 
             if [ "${#flake_refs[@]}" -ne 1 ]; then
               echo "::error::expected exactly 1 distinct ${image} pin in flake.nix, found ${#flake_refs[@]}"; fail=1; continue
@@ -155,8 +174,18 @@ jobs:
             echo "flake.lock unchanged in this push — ok"
             exit 0
           fi
-          echo "::error::flake.lock changed in a direct push to ${GITHUB_REF_NAME}. Dependency-lock"
-          echo "::error::roll-forwards must go through a pull request carrying the"
+
+          # A MERGE commit landing on main is the prescribed roll-forward path: the PR-side check
+          # above already adjudicated it (label present, or the PR failed). Rejecting it here would
+          # fail the very workflow the guideline tells contributors to use. Enforce only against a
+          # NON-merge direct push, which bypasses PR review entirely.
+          if [ "$(git rev-list --parents -n 1 "$GITHUB_SHA" | wc -w)" -gt 2 ]; then
+            echo "flake.lock changed via a MERGE commit — already adjudicated by the PR-side check; ok"
+            exit 0
+          fi
+
+          echo "::error::flake.lock changed in a non-merge direct push to ${GITHUB_REF_NAME}."
+          echo "::error::Dependency-lock roll-forwards must go through a pull request carrying the"
           echo "::error::'flake-lock-update' label, so the change is reviewable."
           exit 1
 
@@ -219,12 +248,25 @@ jobs:
       - name: Install Trivy (version-pinned official release)
         run: |
           set -euo pipefail
-          # Fetch the installer by IMMUTABLE COMMIT SHA, not by tag: a tag can be moved, and this
-          # script is piped straight into a root shell. Pinning the commit makes the fetched code
-          # fixed even if the tag is repointed.
-          TRIVY_INSTALL_COMMIT=7bcb181268893fdd69ef4582588c040bb1036c33
-          curl -fsSL "https://raw.githubusercontent.com/aquasecurity/trivy/${TRIVY_INSTALL_COMMIT}/contrib/install.sh" -o /tmp/trivy-install.sh
-          sh /tmp/trivy-install.sh -b /usr/local/bin v0.66.0
+          # Content-pin the BINARY, not the installer.
+          #
+          # Two problems with the previous approach, both found by re-audit + verification:
+          #   1. Commit-pinning contrib/install.sh pins the installer's CODE but not what it
+          #      DOWNLOADS. It resolves a version and fetches that release's tarball and checksum
+          #      from the same replaceable release assets, so the checksum it verifies against is
+          #      not an independent pin.
+          #   2. The pinned version v0.66.0 has NO GitHub release — only a git tag. The download
+          #      404s, so this step could never have installed Trivy at all. It sits in the
+          #      schedule-only job, which is why nothing surfaced it.
+          # Fetch the release tarball directly and verify it against a checksum held in THIS repo.
+          VER=0.72.0
+          SHA256=bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${VER}/trivy_${VER}_Linux-64bit.tar.gz" -o /tmp/trivy.tgz
+          echo "${SHA256}  /tmp/trivy.tgz" | sha256sum -c - || {
+            echo "::error::Trivy tarball checksum mismatch — refusing to run an unverified scanner."
+            exit 1
+          }
+          tar -xzf /tmp/trivy.tgz -C /usr/local/bin trivy
           trivy --version
 
       - name: Trivy scan both pinned digests (HIGH,CRITICAL) -> job summary

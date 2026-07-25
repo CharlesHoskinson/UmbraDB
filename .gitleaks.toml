@@ -11,31 +11,38 @@ title = "UmbraDB gitleaks config"
 # Start from gitleaks' built-in rule set (AWS keys, private keys, generic high-entropy, etc.).
 useDefault = true
 
-# --- Wallet seed material -------------------------------------------------------------------
-#
+[[rules]]
+id = "umbradb-wallet-seed-hex"
+description = "Wallet seed / secret-key material (64-char hex) in a seed- or key-named field"
 # WHY THIS RULE EXISTS (found by negative-control testing, not by reading the config).
 #
 # The default `generic-api-key` rule fires on `nightSecretKeyHex` only because the FIELD NAME
 # contains "SecretKey". It does NOT fire on `seedHex` -- there is no trigger keyword in that name.
-# Verified empirically: planting a fresh 64-hex value in `nightSecretKeyHex` is caught, and the
-# identical value in `seedHex` is not.
+# Verified empirically: a fresh 64-hex value in `nightSecretKeyHex` is caught, the identical value
+# in `seedHex` is not. That gap is the wrong way round: the seed is the ROOT secret, from which
+# generate-test-wallet.sh derives both the night secret key and the address.
 #
-# That gap is the wrong way round. The seed is the ROOT secret: `generate-test-wallet.sh` derives
-# both the night secret key and the address from it, so a committed seed compromises the whole
-# wallet, while the derived key compromises less. The gate that exists to stop a committed wallet
-# secret was blind to the most dangerous field in the file.
-#
-# This rule closes that: any 64-char hex value bound to a seed/secret/key-shaped field is a finding.
-# The all-zero placeholder is excluded so the committed .example template stays clean.
-[[rules]]
-id = "umbradb-wallet-seed-hex"
-description = "Wallet seed / secret-key material (64-char hex) in a seed- or key-named field"
-regex = '''(?i)"(seed|seedhex|secret|secrethex|privatekey|privatekeyhex|[a-z]*secretkey[a-z]*|[a-z]*seed[a-z]*)"\s*:\s*"([0-9a-f]{64})"'''
+# Field name accepts JSON ("seedHex"), single-quoted ('seedHex'), bare (seedHex:), and
+# snake/kebab spellings (seed_hex, night_secret_key_hex, root-key) -- re-audit found `seed_hex`
+# and single-quoted forms evading a narrower earlier pattern. Value is 64 hex in either quote
+# style, case-insensitive.
+regex = '''(?i)["']?[a-z0-9_-]*(seed|secret|private[_-]?key|root[_-]?key)[a-z0-9_-]*["']?\s*[:=]\s*["']([0-9a-fA-F]{64})["']'''
 secretGroup = 2
-keywords = ["seed", "secret", "privatekey"]
+keywords = ["seed", "secret", "privatekey", "private_key", "rootkey", "root_key"]
 
+# The all-zero placeholder is NOT a secret -- but this exception is scoped to the committed
+# template PATH. Re-audit found the previous rule-wide allowlist permitted an all-zero (i.e.
+# fully predictable, therefore compromised) seed ANYWHERE in the tree, which is precisely the
+# credential state this gate should refuse.
 [[rules.allowlists]]
-description = "The all-zero placeholder in the committed .example template is not a secret."
+description = "All-zero placeholder, ONLY in the committed .example template."
+# `condition = "AND"` is REQUIRED and is the whole point of this block. Gitleaks defaults an
+# allowlist with multiple criteria to OR, so `paths` + `regexes` without it means "exempt this
+# path OR this value ANYWHERE" -- the all-zero seed would stay globally exempt and the path
+# scoping would be decorative. Verified by negative control: with OR the zero seed is missed on
+# an arbitrary path; with AND it is caught there and still allowed in the template.
+condition = "AND"
+paths = ['''^nix/midnight-env/test-wallets/preview-test-wallet\.example\.json$''']
 regexes = ['''^0{64}$''']
 
 # NO GLOBAL PATH ALLOWLIST. (Audit finding, fixed.)

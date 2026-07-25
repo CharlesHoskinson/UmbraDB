@@ -43,6 +43,7 @@ which is the enforcement mechanism, not a side effect.
 
 ## Scope and pre-1.0 note
 
-The version is held at `0.1.0` until the 1.0.0 tag; the bump to `1.0.0` is the tag step. Everything
+The version was held at `0.1.0` until the 1.0.0 tag; that bump has now been made as the tag step
+(`package.json` and `package-lock.json` both read `1.0.0`). Everything
 in this policy takes effect at the 1.0.0 tag, at which point the surface enumerated in the
 `CHANGELOG.md` `1.0.0` entry becomes the frozen baseline these three commitments govern.

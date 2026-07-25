@@ -43,8 +43,12 @@ As of 1.0.0:
 - **no git-history rewrite was performed.** The old key is verified **valueless** Preview material,
   so rewriting history (`git filter-repo`/BFG) would be disproportionate; its bytes therefore remain
   permanently in git **history**, and that permanence is explicitly **accepted**. The go-forward
-  guard is the **full-history `gitleaks` scan** in CI (`.github/workflows/supply-chain.yml`), whose
-  `.gitleaks.toml` allowlists **exactly** the historical `preview-test-wallet.json` path and this
-  `.example` path — and fails on a real secret introduced anywhere else.
+  guard is the **full-history `gitleaks` scan** in CI (`.github/workflows/supply-chain.yml`). It
+  suppresses **exactly the two historical findings, by fingerprint**, in `.gitleaksignore` — *not*
+  by allowlisting these paths, which would exempt them permanently and hide a real key committed
+  here later. A real secret introduced anywhere, **including on these two paths**, fails the gate.
+  A custom `umbradb-wallet-seed-hex` rule additionally catches `seedHex`, which the stock rules miss
+  (they key on the field name containing "SecretKey", so the *seed* — the value everything else is
+  derived from — went undetected).
 
 **Never** reuse this pattern for mainnet or any key with real value.

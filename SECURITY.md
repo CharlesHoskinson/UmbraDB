@@ -148,20 +148,23 @@ the 1.0.0 library — the obligation to close it sits with the deployer.
 - **No key, seed, password, or credential with ANY value may EVER be committed to this repository** —
   not mainnet, not "just testnet with real funds," not "temporarily." Secret-bearing files are
   **generated locally, never committed**, and are created with `chmod 600` (owner read/write only).
-- **One allowlisted exception, with justification.** A single Midnight **Preview testnet** wallet
+- **One suppressed historical finding, with justification.** A single Midnight **Preview testnet** wallet
   artifact was historically committed at `nix/midnight-env/test-wallets/preview-test-wallet.json`.
   Preview `tDUST` has **no monetary value** and exists only to let the dev environment transact on a
-  throwaway testnet without re-funding on every fresh machine. That specific historical path is the
-  **sole** allowlisted entry in `.gitleaks.toml`. As of 1.0.0 that file is **no longer tracked**
+  throwaway testnet without re-funding on every fresh machine. That specific historical **finding**
+  is suppressed by **exact fingerprint** in `.gitleaksignore` — deliberately not by a path allowlist
+  in `.gitleaks.toml`, because a path allowlist exempts that path *forever* and would hide a real
+  key committed there later. As of 1.0.0 that file is **no longer tracked**
   (untracked + `.gitignore`d); it is replaced by `preview-test-wallet.example.json` (non-secret
   placeholders) and a `generate-test-wallet.sh` generator (see
   `nix/midnight-env/test-wallets/README.md`). Its bytes remain in git **history** (no history
   rewrite was performed, because the key is verified valueless); the go-forward guard is the
-  **full-history `gitleaks` gate** in CI (`.github/workflows/supply-chain.yml`), which allowlists
+  **full-history `gitleaks` gate** in CI (`.github/workflows/supply-chain.yml`), which suppresses
   exactly that one historical path and the `.example` placeholder — and fails on a real secret
   anywhere else.
 - **CI enforces this.** Every pull request and every push to `main` is scanned by `gitleaks` over
-  full git history; a new secret on any non-allowlisted path fails the build.
+  full git history; any new secret fails the build — including on the two historical paths,
+  because the suppression is by exact finding fingerprint, not by path.
 
 ## Reporting a vulnerability
 

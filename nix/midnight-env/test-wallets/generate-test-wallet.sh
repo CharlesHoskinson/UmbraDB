@@ -50,11 +50,12 @@ command -v node >/dev/null 2>&1 || {
 # On missing tooling: named-tool failure, NO file written. On success: writes the four-key file 0600.
 node - "$OUT" <<'NODE'
 const fs = require("fs");
+const crypto = require("crypto");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
 // Mint the seed in the SAME process that derives from it: never in argv, never in env.
-const seedHex = require("crypto").randomBytes(32).toString("hex");
+const seedHex = crypto.randomBytes(32).toString("hex");
 const out = process.argv[2];
 
 // Resolve a package the way test/integration/live-fixtures/midnight-wallet-sdk-loader.ts does:
@@ -159,16 +160,28 @@ function namedToolFailure(missing) {
   // also followed a symlink at `out`. Opening with "wx" fails if the temp path exists and never
   // follows a symlink; rename(2) within a single directory is atomic, so `out` ends up as either
   // the old file or the complete new one -- never partial, never briefly world-readable.
-  const tmp = path.join(path.dirname(out), "." + path.basename(out) + "." + process.pid + ".tmp");
+  const tmp = path.join(
+    path.dirname(out),
+    "." + path.basename(out) + "." + process.pid + "." + crypto.randomBytes(6).toString("hex") + ".tmp",
+  );
   const fd = fs.openSync(tmp, "wx", 0o600);
+  let renamed = false;
   try {
-    fs.writeSync(fd, data);
+    // writeFileSync on a fd loops internally until every byte is written; a bare writeSync can
+    // return a short count and silently truncate the secret.
+    fs.writeFileSync(fd, data);
     fs.fsyncSync(fd);
-  } finally {
     fs.closeSync(fd);
+    fs.chmodSync(tmp, 0o600); // defeat a permissive umask on the temp file itself
+    fs.renameSync(tmp, out);
+    renamed = true;
+  } finally {
+    // If anything above threw, a secret-bearing temp file would otherwise be left on disk.
+    if (!renamed) {
+      try { fs.closeSync(fd); } catch { /* already closed */ }
+      try { fs.unlinkSync(tmp); } catch { /* nothing to clean up */ }
+    }
   }
-  fs.chmodSync(tmp, 0o600); // defeat a permissive umask on the temp file itself
-  fs.renameSync(tmp, out);
   console.log("Wrote " + out + " (mode 0600) with a fresh seed.");
   console.log("Now fund the address at https://faucet.preview.midnight.network/ (Preview tDUST, no value).");
 })();
