@@ -33,11 +33,14 @@ describe("package.json is publishable with a strict exports map (A3)", () => {
       fileURLToPath(new URL("../../CHANGELOG.md", import.meta.url)),
       "utf8",
     );
-    // Newest released heading, skipping [Unreleased].
-    const headings = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]);
-    expect(headings.length, "CHANGELOG must carry at least one released version heading")
+    // Newest RELEASED heading. A version heading may exist for a version that is planned but not
+    // yet cut (e.g. `## [1.0.0] - unreleased` while shipping 0.9.5), so a heading only counts as
+    // released when it carries an ISO date.
+    const headings = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/gm)]
+      .map((m) => m[1]);
+    expect(headings.length, "CHANGELOG must carry at least one DATED (released) version heading")
       .toBeGreaterThan(0);
-    expect(version, "package.json version must match the newest CHANGELOG release heading")
+    expect(version, "package.json version must match the newest DATED CHANGELOG release heading")
       .toBe(headings[0]);
   });
 

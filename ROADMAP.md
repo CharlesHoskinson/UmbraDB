@@ -342,6 +342,59 @@ fast-follows it documents but does NOT implement — keyed/scoped chunk addressi
 dedup-oracle fix) and the `EnvelopeCipher` at-rest-encryption seam — remain separately tracked for
 1.1** and are not part of the tag.
 
+## What blocks 1.0.0 (recorded 2026-07-25)
+
+**All twenty gate items G1–G20 are merged and all five OpenSpec changes are complete.** The release
+nevertheless ships as **`0.9.5`**, not `1.0.0`, on one recorded owner decision:
+
+> **1.0.0 requires a full local sync of UmbraDB against Midnight** — archive node → local indexer →
+> UmbraDB — demonstrated end to end, not merely a wallet-scoped sync against the hosted indexer.
+
+This is a **deliberate tightening** of the gate, and it is worth recording why, because the program's
+own earlier analysis said the opposite. The G12/R5 live-evidence gate was scoped to the **public
+cloud** indexer (`indexer.preprod.midnight.network`), and on that basis the local sync was ruled *not*
+to gate the tag. That ruling stands on its own terms — R5 is satisfied, and the evidence is real
+(`docs/recovery/EVIDENCE.md`, run against the RC). The owner has nonetheless judged that a `1.0.0`
+carrying UmbraDB's durability claims should be demonstrated against a **locally synced chain**, where
+UmbraDB ingests from infrastructure we run rather than one we call. Under `docs/v1-implementation-
+guideline.md` §0.2 an owner MAY add conditions and MUST NOT weaken them; this adds one.
+
+### Why the local sync has not happened yet — and what was actually wrong
+
+It was not slow, it was **broken**, and it had been for days. The archive node
+(`midnight-node-archive`) was wedged at block **#1,078,791**, reporting `0 peers`. The peer count was
+a symptom, not the fault. Every import of the next block panicked:
+
+```
+root should be in the arena (ledger_8):
+BackendLoader::get(): key f8d4e689…783edbdb not in storage arena.
+Are you sure you persisted this key or one of its ancestors?
+```
+
+That is **ParityDB storage-arena corruption**: a block header persisted whose ledger state did not.
+The panic killed tokio workers on every attempt, which took networking down with it — hence `0 peers`.
+No amount of restarting would have fixed it; the corruption was on disk.
+
+**Root cause:** `.wslconfig` declared `autoMemoryReclaim` and `sparseVhd` under `[wsl2]`, where WSL
+rejects them (they belong in `[experimental]`). Both settings were therefore silently inactive, the VM
+ran at ~59 GB of 62 GB used, and the resulting OOM kills terminated the Docker stack mid-write.
+
+**Fixed 2026-07-25:** the `.wslconfig` keys were moved to `[experimental]` (WSL now accepts them; the
+`Unknown key` warnings are gone), and the node was recovered with `midnight-node revert`, which rolled
+back to the last finalized block so the corrupt state is rebuilt on re-import. The node resumed at
+**~11 blk/s with zero arena errors**, and the local sync is progressing for the first time in days.
+
+### The remaining path to 1.0.0
+
+1. Archive node reaches Preprod tip.
+2. The local indexer catches up to the archive node — it is the slower of the two and is the real
+   long pole.
+3. UmbraDB ingests from **that** local stack, end to end, with the evidence recorded alongside
+   `docs/recovery/EVIDENCE.md`.
+4. Then, and only then, `1.0.0` — re-running the tag gate (R1–R12) against the new RC.
+
+Nothing else is outstanding. `0.9.5` ships the identical code today.
+
 ## 1.0.0 acceptance checklist
 
 A 1.0.0 tag requires all of:

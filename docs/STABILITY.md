@@ -1,7 +1,7 @@
 # UmbraDB Stability Policy (SemVer)
 
 UmbraDB follows [Semantic Versioning 2.0.0](https://semver.org/). This document is the binding
-stability contract for the **frozen 1.0.0 public surface** — the single package-root barrel
+stability contract for the **1.0.0 public surface** — the single package-root barrel
 (`import { ... } from "umbradb"`; see [`CHANGELOG.md`](../CHANGELOG.md) for the enumerated surface)
 and the machine-facing error-`code` set ([`docs/ERROR-CATALOG.md`](ERROR-CATALOG.md)).
 
@@ -43,7 +43,23 @@ which is the enforcement mechanism, not a side effect.
 
 ## Scope and pre-1.0 note
 
-The version was held at `0.1.0` until the 1.0.0 tag; that bump has now been made as the tag step
-(`package.json` and `package-lock.json` both read `1.0.0`). Everything
-in this policy takes effect at the 1.0.0 tag, at which point the surface enumerated in the
-`CHANGELOG.md` `1.0.0` entry becomes the frozen baseline these three commitments govern.
+**Current version: `0.9.5` — the commitments above are NOT yet in force.**
+
+SemVer is explicit that in `0.y.z` "anything MAY change at any time; the public API SHOULD NOT be
+considered stable." This policy therefore describes the contract UmbraDB *will* honour from `1.0.0`
+onward, and `0.9.5` is the release candidate for it.
+
+What is already true at `0.9.5`, and is what makes the 1.0.0 promise credible rather than aspirational:
+
+- The surface is **enumerated and mechanically pinned** — the package-root barrel is the only entry
+  point (`exports` exposes a single `"."`), and a drift test derives the error-`code` table from the
+  exported classes with no hard-coded count, so an accidental surface change fails CI today.
+- The packed-tarball smoke test proves a fresh consumer can install, resolve the root import, compile
+  against the shipped `.d.ts` under `--strict`, and that a deep import is blocked.
+
+What is **not** yet true at `0.9.5`: the three commitments above are not binding, so a breaking change
+between `0.9.5` and `1.0.0` is permitted by SemVer. The intent is that none is needed — the surface at
+1.0.0 is expected to be identical — but 0.9.5 exists precisely so that expectation can be tested by
+real consumers before it becomes a promise.
+
+**What turns 0.9.5 into 1.0.0** is recorded in `ROADMAP.md` § "What blocks 1.0.0".

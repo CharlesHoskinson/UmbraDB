@@ -10,12 +10,26 @@ entries below are stated in [`docs/STABILITY.md`](docs/STABILITY.md).
 
 _No unreleased changes._
 
-## [1.0.0] - 2026-07-25
+## [1.0.0] - unreleased
 
-The first frozen, importable, SemVer-governed public surface. Everything below is imported from the
-package root (`import { ... } from "umbradb"`); there is no supported deep import of an internal
-module (the `package.json` `exports` map exposes only `"."`). The exported surface and the error
-`code` set are frozen under [`docs/STABILITY.md`](docs/STABILITY.md).
+**Blocked.** The 1.0.0 tag additionally requires a **full local sync of UmbraDB against Midnight**
+(archive node → local indexer → UmbraDB), which is not yet complete. Until it is, the release below
+ships as `0.9.5`: the same code, without the SemVer freeze commitment that 1.0.0 makes. See
+`ROADMAP.md` § "What blocks 1.0.0".
+
+## [0.9.5] - 2026-07-25
+
+The first importable, published public surface. Everything below is imported from the package root
+(`import { ... } from "umbradb"`); there is no supported deep import of an internal module (the
+`package.json` `exports` map exposes only `"."`).
+
+**SemVer status — read this before depending on it.** This is a `0.y.z` release, so under SemVer the
+surface carries **no compatibility guarantee yet**. The surface *is* frozen in the engineering sense —
+it is enumerated, drift-tested against the exported classes, and documented in
+[`docs/STABILITY.md`](docs/STABILITY.md) — but the *promise* not to break it in a minor or patch
+release is a commitment that takes effect **at 1.0.0**, not here. Treat 0.9.5 as the release
+candidate for that promise: depend on it, report what breaks, and expect the surface to be identical
+at 1.0.0 unless something found in the interim justifies changing it.
 
 ### Added
 

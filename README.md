@@ -1,383 +1,319 @@
 # UmbraDB
 
-A local, persistent datastore for [Midnight](https://midnight.network) clients: wallets, dev
-tooling, and anything else that needs durable, versioned, content-addressed storage without
-running a heavyweight database service of its own.
+A local, persistent datastore for [Midnight](https://midnight.network) clients: wallets, dev tooling,
+and anything else that needs durable, versioned, content-addressed storage without running a
+heavyweight database service of its own.
 
 UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
-[`postgres.js`](https://github.com/porsager/postgres)) and provides five focused primitives:
-
-- **TemporalKV**: a versioned key-value store with point-in-time reads (`getAt`), for state
-  that needs history.
-- **Transaction/Lease**: real Postgres transactions and connection-pinned advisory locks. A
-  `withTransaction` combinator for atomic multi-key writes, and `acquireLease`/`withLease` for
-  single-writer coordination. The other modules compose on top of it.
-- **CheckpointStore**: content-addressed, deduplicated, chunked storage for large periodic
-  snapshots (e.g. wallet sync state), with integrity verification and reachability-based garbage
-  collection.
-- **Watermarks**: simple, unversioned sync-progress cursors with transactional composition.
-- **TransactionHistory**: per-wallet transaction history (`transaction_history`, GIN-indexed on
-  a denormalized `identifiers` array), mirroring the Midnight wallet SDK's
-  `TransactionHistoryStorage` interface with lifecycle-aware upsert/merge and identifier-subset
-  pending-clear.
-
-On top of these, `PgWalletStateEnvelopeStore` persists shielded/unshielded/dust wallet-sync
-snapshots as a single `CheckpointStore.save()` call. It's a capability, not a sixth primitive:
-it adds no table or migration of its own, reusing `CheckpointStore`'s existing chunk/manifest
-storage.
-
-## Why
-
-Client-side blockchain tooling tends to reach for MongoDB by default, then discovers it doesn't
-need most of what that buys: sharding, flexible schema evolution across a large team, an
-aggregation pipeline. What it actually needs is versioned reads, content-addressed dedup, a
-single writer lease, and a boring, well-understood storage engine everyone already has. Postgres
-gives you all of that directly, with real ACID transactions instead of a replica-set-gated
-approximation of them.
-
-## Full-chain storage (1.1 preview, outside the frozen 1.0 surface)
-
-> **This is a 1.1 preview, not part of the frozen 1.0.0 public API.** Full-chain archival storage is
-> deferred to a 1.1 fast-follow (`council/A` ruling (e)). Its `chain_archive` schema is **not** in
-> the frozen 1.0 surface, its error classes are **not** re-exported from the `umbradb` barrel, and
-> its codes are **not** in the frozen [error catalog](docs/ERROR-CATALOG.md) — consistent with the
-> chain-archive error-class strip. The capability is implemented on its own unmerged branch (see
-> [`ROADMAP.md`](ROADMAP.md) → *Beyond 1.0.0*); the live-Preprod validation below is preview evidence
-> of its maturity, not a 1.0 promise.
-
-UmbraDB's **full-chain-storage** capability (Tier-1.5: a chain-scoped `chain_archive` schema that
-archives every block and `pallet_midnight` transaction as a recovery source of last resort) has
-been cross-validated **end-to-end against Midnight's live public Preprod network** (its own AC-8
-acceptance gate) as part of this 1.1 preview track.
-
-`ChainArchiveSyncService` ingests a contiguous height range from the hosted Preprod node
-(`rpc.preprod.midnight.network`) and indexer (`indexer.preprod.midnight.network/api/v4/graphql`),
-and every archived block's `(height, block_hash, parent_hash, state_root, extrinsics_root)` and
-every transaction's `(hash, raw)` is cross-validated against values independently queried from the
-live network — any mismatch is a hard failure. See
-`test/integration/chain-archive-preprod-cloud-crossval.integration.test.ts` (gated behind
-`UMBRADB_LIVE_PREPROD_CLOUD=1`): a contiguous 30-block range + its transactions verify green
-against the real chain.
-
-A reproducible from-source Preprod stack for local runs lives in `nix/midnight-env/` — a Nix flake
-pinning `cardano-node` 11.0.1, `cardano-db-sync` 13.7.1.0, **`midnight-node` 1.0.1 (the Ledger-8
-line Preprod/Mainnet actually run)**, indexer 4.3.3 and proof-server 8.1.0, and it provisions the
-Ledger-8 node's *mandatory* TLS connection to the db-sync Postgres automatically
-(`design/db-sync-tls-feasibility.md`). Note: the 2.x/Ledger-9 node line is a fresh-chain-only dev
-line and cannot join Preprod (it expects ledger-state v18; the preprod genesis is v13, with no
-8→9 migration).
-
-The from-source stack has been run **fully synced to the live Preprod tip** locally: a self-hosted
- 1.0.1 caught up to the live finalized head (block ~1.78M, 14 peers, ),
-and the wallet/cold-boot recovery path is green against it —  and
- both sync the funded preprod wallet, persist its state envelope to UmbraDB
-Postgres, and restore it in a fresh process without a full resync.
-
-## Data-flow visualizer
-
-An interactive, animated walkthrough of how data moves through the Cardano → Midnight stack that
-UmbraDB ingests from (cardano-node → cardano-db-sync → midnight-node → indexer → UmbraDB) is
-published via GitHub Pages:
-
-**▶ [Cardano → Midnight Data-Flow Visualizer](https://charleshoskinson.github.io/UmbraDB/visualizations/cardano-midnight-flow.html)**
-
-Source: [`docs/visualizations/cardano-midnight-flow.html`](docs/visualizations/cardano-midnight-flow.html) — a single self-contained page (React + ReactFlow inlined, no build step, no external requests).
-
-## v1.0.0 roadmap
-
-The release gates, critical path, and explicitly deferred scope for the UmbraDB 1.0.0 release are tracked on a single self-contained page — the gate items span the API surface, a durable checkpoint cursor, recovery testing, a perf baseline, and infosec sign-off, with everything outside that set deferred past 1.0.0 — published via GitHub Pages:
-
-**▶ [UmbraDB v1.0.0 Roadmap](https://charleshoskinson.github.io/UmbraDB/roadmapv1.html)**
-
-Source: [`docs/roadmapv1.html`](docs/roadmapv1.html)
-
-## Getting started
-
-Requires Node 24+ and a real Postgres instance (local, containerized, or managed): the migrations
-create the `btree_gist` extension, exclusion constraints, and trigger functions, so the connecting
-role needs privileges for those, not just network reachability.
+[`postgres.js`](https://github.com/porsager/postgres)). It is a **single-writer, local** store — not a
+distributed database, not an ORM, and not a service you operate for other tenants.
 
 ```bash
-npm install
-npm run typecheck        # tsc --noEmit
-npm test                 # vitest run — spins up Postgres via Testcontainers, needs Docker
-npm run docs:storage     # generate API reference (TypeDoc) into docs/api/storage/
+npm install umbradb
 ```
 
-A Nix flake at `nix/midnight-env/` composes pinned upstream Midnight flakes (`midnight-ledger`,
-`midnight-wallet`, `midnight-dapp-connector-api`) with pinned Cardano release binaries
-(`cardano-node`, `cardano-db-sync`), a pinned `midnight-node` release binary, and PostgreSQL into
-one reproducible `devShell`, plus `start-stack`/`stop-stack`/`backup-state`/`restore-state` apps
-for standing up and snapshotting a full local Midnight+Cardano stack. It is intended to become the
-recommended path for environment setup, but the steps above remain the supported path until it
-is more thoroughly exercised.
+```ts
+import { createClient, runMigrations, PgTemporalKV } from "umbradb";
 
-
-```typescript
-import { createClient, runMigrations, PgTemporalKV, PgTransactionLeaseLayer } from "umbradb";
-
-const sql = createClient({ connectionString: process.env.DATABASE_URL, schema: "my_app" });
-await runMigrations(sql, { schema: "my_app" });
+const sql = createClient({ connectionString: process.env.DATABASE_URL });
+await runMigrations(sql);                       // forward-only; also runs the durability probe
 
 const kv = new PgTemporalKV(sql);
-const leases = new PgTransactionLeaseLayer(sql);
+await kv.put("wallet:balance", { night: "2000" });
+const now  = await kv.get("wallet:balance");    // latest
+const then = await kv.getAt("wallet:balance", { version: 3n });  // point-in-time
+```
 
-// Simple read/write — each call is its own transaction.
-const entry = await kv.put("wallet", "default", "balance", { amount: 100 });
-await kv.get("wallet", "default", "balance");
-await kv.getAt("wallet", "default", "balance", { kind: "version", version: entry.version });
+Everything is imported from the package root. There is no supported deep import — the `exports` map
+exposes a single `"."`, and reaching into internals fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
-// Atomic multi-key write: both puts commit together, or neither does.
-await leases.withTransaction(async (tx) => {
-  await kv.put("wallet", "default", "balance", { amount: 90 }, { tx });
-  await kv.put("wallet", "default", "last-tx", { id: "abc123" }, { tx });
+> **Version 0.9.5.** Under SemVer, `0.y.z` carries **no compatibility guarantee yet**. The surface is
+> already enumerated and drift-tested, but the *promise* not to break it lands at 1.0.0. See
+> [Status](#status).
+
+---
+
+## Contents
+
+- [What it does](#what-it-does) · [Why Postgres](#why-postgres) · [The five primitives](#the-five-primitives)
+- [Durability and crash semantics](#durability-and-crash-semantics) · [Errors](#errors-and-retryability)
+- [Verification: what is proved, checked, and tested](#verification-what-is-proved-checked-and-tested)
+- [Schema and migrations](#schema-and-migrations) · [Performance](#performance-and-ceilings)
+- [Security](#security) · [What UmbraDB is not](#what-umbradb-is-not) · [Status](#status)
+
+---
+
+## What it does
+
+Five focused primitives, plus two capabilities built on them.
+
+| Primitive | Purpose |
+|---|---|
+| **TemporalKV** | Versioned key-value store with point-in-time reads |
+| **CheckpointStore** | Content-addressed, deduplicated, chunked snapshot storage with GC |
+| **Watermarks** | Unversioned sync-progress cursors |
+| **Transaction/Lease** | Real Postgres transactions + connection-pinned advisory locks |
+| **TransactionHistory** | Per-wallet transaction history, GIN-indexed on identifiers |
+
+| Capability | Built from |
+|---|---|
+| **WalletStateEnvelope** | `CheckpointStore` — persists a whole wallet-sync snapshot in one `save()` |
+| **`saveAndAdvance`** | `CheckpointStore` + `Watermarks` — the co-transactional cursor primitive |
+
+## Why Postgres
+
+Client-side blockchain tooling tends to reach for MongoDB by default, then discovers it doesn't need
+most of what that buys: sharding, flexible schema evolution across a large team, an aggregation
+pipeline. What it actually needs is versioned reads, content-addressed dedup, a single-writer lease,
+and a boring, well-understood storage engine everyone already has. Postgres gives you all of that
+directly, with real ACID transactions instead of a replica-set-gated approximation.
+
+---
+
+## The five primitives
+
+### TemporalKV — versioned KV with history
+
+```ts
+const kv = new PgTemporalKV(sql);
+
+await kv.put("key", value);                          // append a new version
+await kv.put("key", value, { expectedVersion: 4n }); // compare-and-swap
+await kv.get("key");                                 // latest
+await kv.getAt("key", { version: 3n });              // by version
+await kv.getAt("key", { asOf: someDate });           // by timestamp
+```
+
+Every `put` appends a version; nothing is overwritten in place. `expectedVersion` makes the write a
+CAS — a mismatch raises `VersionConflictError` rather than clobbering. Point-in-time reads are
+addressable two ways (by version, or by wall-clock `asOf`), and the two agree for any successfully
+persisted write.
+
+**Retention.** History is prunable. Reads inside the retention window are exact; reads for a version
+that has been pruned raise `HistoryUnavailableError` rather than silently returning a neighbour — an
+unavailable answer is distinguishable from a wrong one.
+
+### CheckpointStore — content-addressed snapshots
+
+```ts
+const store = new PgCheckpointStore(sql);
+
+await store.save({ walletId, networkId, data });   // chunks, dedups, writes a manifest
+await store.load({ walletId, networkId });         // newest
+await store.history({ walletId, networkId });      // manifest list with sizes
+await store.prune({ walletId, networkId, keep: 5 });
+```
+
+Large snapshots are split into fixed-size 4 MiB chunks, addressed by content hash, and shared through
+a **global chunk pool** — identical chunks are stored once across all wallets. Each save writes a
+manifest with a `manifest_hash` computed at write time and re-verified on load, so a corrupted or
+partially-written manifest raises `ManifestCorruptError` instead of loading as truncated state.
+
+**GC is two-step.** `prune` first removes manifests, then reclaims chunks no live manifest references,
+subject to a 15-minute grace window. The window is deliberate: it guards against reclaiming a chunk
+that an in-flight, not-yet-committed `save` is about to re-reference. Reads (`load`, `history`) run in
+REPEATABLE READ so they stay consistent against a concurrently committing `prune`.
+
+### Watermarks — sync cursors
+
+```ts
+const wm = new PgWatermarks(sql);
+await wm.set("sync", "preprod", { height: "1807503" });
+await wm.get("sync", "preprod");
+```
+
+Deliberately last-write-wins and unversioned — a cursor has no history worth keeping. Stored in a
+single table at `fillfactor = 90` with **no secondary index**, which is a hard invariant: adding one
+would break HOT update eligibility and turn the hottest write path in the system into a bloat source.
+
+Large integers cross the boundary as decimal **strings**, not JS numbers, so a block height cannot
+silently lose precision.
+
+### Transaction/Lease — the control algebra
+
+```ts
+const tx = new PgTransactionLeaseLayer(sql);
+
+await tx.withTransaction(async (handle) => {
+  await kv.put("a", v1, { tx: handle });
+  await kv.put("b", v2, { tx: handle });          // both, or neither
 });
 
-// Single-writer coordination — one process at a time runs the critical section.
-await leases.withLease("wallet-sync:mainnet", async () => {
-  // ...sync work only one writer should be doing at once...
+await tx.withLease("sync-writer", async () => {   // single-writer coordination
+  // ...
 });
-
-await sql.end();
 ```
 
-## Architecture
+This is the algebra the other modules run inside. `withTransaction` gives real atomicity across
+primitives; `acquireLease` / `tryAcquireLease` / `releaseLease` / `withLease` give single-writer
+coordination via **connection-pinned** advisory locks — the lease is held for the life of the
+connection, with no TTL and no stealing.
 
-Every module is a thin Postgres adapter behind a narrow, hand-written TypeScript interface.
-`Transaction/Lease` is the one module the others depend on. It's how a caller wires a
-`TemporalKV.put()` and a `Watermarks.set()` into the same atomic commit, and it's what
-coordinates a single writer across multiple application instances (on top of, not instead of,
-Postgres's own transactions, constraints, and locking).
+`withLease` surfaces release faults rather than swallowing them: if the body succeeds but the release
+fails, you get an `AggregateError`, not a silent success.
 
-```
-                        +--------------------------------+
-                        |          Application           |
-                        |  (wallet-sync, dev tools, or   |
-                        |  anything embedding UmbraDB)   |
-                        +--------------------------------+
-                                         |
-                 +-----------------------+-----+-----------------------------+
-                 v                             v                             v
-    +------------------------+    +------------------------+    +------------------------+
-    |       TemporalKV       |    |    CheckpointStore     |    |       Watermarks       |
-    |                        |    |                        |    |                        |
-    |       put / get        |    |   content-addressed,   |    | sync-progress cursors  |
-    | getAt (point-in-time)  |    |  deduplicated chunks   |    |                        |
-    |        listKeys        |    |   + reachability GC    |    |                        |
-    |                        |    |                        |    |                        |
-    |     (implemented)      |    |     (implemented)      |    |     (implemented)      |
-    +------------------------+    +------------------------+    +------------------------+
-                 |                             |                             |
-                 | opts.tx / internal composition (Transaction/Lease)        |
-                 +-----------------------+-----------------------------------+
-                                         v
-                    +----------------------------------------+
-                    |           Transaction/Lease            |
-                    |                                        |
-                    |    withTransaction() -> sql.begin()    |
-                    |   acquireLease() / tryAcquireLease()   |
-                    |            / releaseLease()            |
-                    |             -> sql.reserve()           |
-                    |       -> pg_advisory_lock(2, key)      |
-                    |                                        |
-                    |     handle registry (module-level;     |
-                    |    resolves opts.tx across modules)    |
-                    +----------------------------------------+
-                                         |
-                                         v
-                      +------------------------------------+
-                      |         postgres.js driver         |
-                      |   no ORM -- tagged-template SQL    |
-                      +------------------------------------+
-                                         |
-                                         v
-                   +------------------------------------------+
-                   |                PostgreSQL                |
-                   |                                          |
-                   |                kv_current                |
-                   |  kv_history (via BEFORE UPDATE trigger)  |
-                   |                                          |
-                   |             advisory locks:              |
-                   |           class 1 = migrations           |
-                   |          class 2 = writer lease          |
-                   |       class 3 = DDL serialization        |
-                   +------------------------------------------+
+### TransactionHistory + WalletStateEnvelope
+
+`PgTransactionHistoryStorage` mirrors the Midnight wallet SDK's `TransactionHistoryStorage`
+interface — lifecycle-aware upsert/merge, identifier-subset pending-clear, GIN-indexed on a
+denormalized `identifiers` array.
+
+`PgWalletStateEnvelopeStore` persists a shielded/unshielded/dust wallet-sync snapshot as one
+`CheckpointStore.save()`. It's a capability, not a sixth primitive: no table, no migration of its own.
+
+---
+
+## Durability and crash semantics
+
+This is the part most storage layers get quietly wrong, so it's stated explicitly.
+
+**The cursor never outruns the data.** `saveAndAdvance` writes a checkpoint and advances its watermark
+**in one transaction**. Without that, a cursor can commit ahead of the checkpoint it points at, and a
+crash leaves you resuming from a position whose data was never durable — a silent gap. This was the
+single correctness blocker of the 1.0 program, and it is closed:
+
+```ts
+import { saveAndAdvance } from "umbradb";
+await saveAndAdvance(sql, { checkpoint, watermark });   // atomic
 ```
 
-A caller reaching for `opts.tx` on `TemporalKV.put()` or `Watermarks.set()` resolves that handle
-through `Transaction/Lease`'s own registry (a module-level map, not a shared instance), so two
-independently constructed adapters agree on which live `postgres.js` transaction a handle refers
-to, with no dependency-injection container required. `CheckpointStore` is different: its own
-methods compose `Transaction/Lease` internally rather than accepting a caller-supplied handle,
-since a checkpoint save or prune is meant to be one atomic unit of work on its own. An
-application can also call `withTransaction()`/`withLease()` directly, as the usage example above
-does, without going through a data module at all.
+**Startup asserts its own preconditions.** `runMigrations` runs a durability probe: it checks `fsync`,
+`synchronous_commit` and `full_page_writes`, and makes a best-effort detection of a transaction
+pooler sitting in front of Postgres — because a pooler silently breaks the session-scoped advisory
+locks the lease depends on. A violation raises `DurabilityContractError` or
+`TransactionPoolerDetectedError` at startup, not at 3 a.m.
 
-The diagram predates two later additions, both of which compose on what it already shows:
-`TransactionHistory` (its own `transaction_history` table) resolves `opts.tx` through the same
-`Transaction/Lease` registry as `TemporalKV` and `Watermarks`, and `PgWalletStateEnvelopeStore`
-sits entirely above `CheckpointStore`, calling `save()`/`load()` as any caller would -- which is
-why it gets no box in the picture.
+**Failure is bounded.** Server-side `statement_timeout`, `lock_timeout` and
+`idle_in_transaction_session_timeout` are set, and the migration lock acquire is bounded via a
+transaction-scoped `SET LOCAL`, raising `MigrationLockTimeoutError` rather than hanging forever.
 
-## Status
+**Verified by killing it.** The crash suite kills the process *and*, separately, Postgres, mid-save —
+including an **unclean** postmaster kill (SIGQUIT) followed by crash recovery, under both
+`synchronous_commit = on` and `off`. Under `off`, losing a tail of acked commits is acceptable;
+an inverted durability order is a failure. These run in required CI, enforced by test id, so a
+re-introduced skip turns the build red by name rather than passing silently.
 
-All five modules are implemented and merged:
+---
 
-- **TemporalKV** (Sprint 1): `put`/`get`/`getAt`/`listKeys` against a `kv_current`/`kv_history`
-  schema, with a `BEFORE UPDATE` trigger populating history and a same-transaction key-reuse
-  guard.
-- **Transaction/Lease** (Sprint 2): `withTransaction` (real Postgres transactions, isolation
-  levels, statement timeouts) and `acquireLease`/`tryAcquireLease`/`releaseLease`/`withLease`
-  (connection-pinned advisory locks), wired into `TemporalKV`'s `opts.tx` parameter.
-- **CheckpointStore** (Sprint 3): `save`/`load`/`history`/`prune`, content-addressed chunking and
-  global deduplication, integrity verification, snapshot-consistent reads, and two-step
-  manifest/chunk garbage collection.
-- **Watermarks** (Sprint 4): transactional `set`/`get` sync cursors, with HOT-update-oriented
-  storage settings and runtime guards for the opaque JSON progress value.
-- **TransactionHistory** (Sprint 7): `PgTransactionHistoryStorage`, a Postgres-backed
-  implementation of the Midnight wallet SDK's `TransactionHistoryStorage` interface
-  (structurally mirrored, never imported) against its own `transaction_history` table --
-  `gotPending`/`gotFinalized`/`gotRejected` upsert/merge, a GIN-indexed identifier-subset
-  pending-clear query, and `opts.tx` composition through the same `Transaction/Lease` registry
-  as `TemporalKV`/`Watermarks`.
+## Errors and retryability
 
-Also merged, on top of the five rather than as a sixth: **wallet-state envelope persistence**
-(Sprint 8) -- `PgWalletStateEnvelopeStore`, one atomic `CheckpointStore.save()` call per
-`(walletId, networkId)`, stored in `CheckpointStore`'s existing `ckpt_*` tables.
-
-Every module went through the same cycle before merge: draft an
-[OpenSpec](https://github.com/Fission-AI/OpenSpec) change in EARS format, put it through several
-independent review passes, fix what they find, and re-review until nothing new turns up. Every
-sprint turned up genuine bugs: a race in `CREATE EXTENSION` DDL serialization, a
-cursor-cancellation gap in `postgres.js`, a connection-reservation wait with no timeout or abort
-handling, among others. That's the point of running it this way instead of shipping on the first
-green test run.
-
-Beyond the merged modules above, further work is active but **not yet merged into `main`** — see
-[`ROADMAP.md`](ROADMAP.md) for current status on each:
-
-- **Full-chain archival storage** (a `chain_archive` schema/migration lineage, content-addressed
-  raw block/tx/blob storage independent of the indexer, plus a chain-archive-sync ingestion
-  service): implemented on `feature/full-chain-storage-implementation`, through several
-  design-council and Codex GPT-5.6 Sol audit-fix rounds, but still unmerged and not yet
-  through a final review round.
-- **Verifiable wallet-state snapshot root-of-trust** (`design/verifiable-snapshot-design.md`):
-  design-only, no implementation yet, at v9 after eight design-council review rounds, on
-  `fix/verifiable-snapshot-v2`.
-- **BitTorrent-based alternative retrieval / bootstrap trust**
-  (`design/network-torrent-bootstrap-design.md`): design-only, no implementation yet, one
-  design-council review round in, on `feature/network-torrent`.
-
-## Formal verification
-
-Lean M1 is complete for the abstract per-key TemporalKV history model. The kernel-checked slice
-covers successful version assignment and append behavior, failed-write preservation, strict
-timestamp-invariant preservation, basic version/time lookup characterizations, accepted-write
-replay, and agreement between version and timestamp addressing. M2 derives bounded half-open
-validity intervals plus the live tail, proves pairwise disjointness and exact horizon coverage,
-and adds executable prefix retention. Retention-aware time and exact version lookup distinguish
-absence from unavailable history, preserve original versions and the live event, and agree with
-the complete M1 history throughout the certified retained horizon.
-
-Lean M3a adds an executable abstract Watermarks store over the complete `(kind, key)` address
-and proves W1: unconditional overwrite, same-address last-write-wins and state idempotence,
-distinct-address framing and commutation, trace composition, and lookup by the final matching
-command with initial-store fallback. The generic value layer also distinguishes an untouched
-address from a stored null-like abstract value (`none` versus `some none`).
-
-M3b (CheckpointStore C1) is complete for the abstract save-side projection only. The Lean model
-proves unconditional finite chunk-identity joins, existing-left-biased finite-map merge laws,
-commutation for compatible maps, and a local collision-free-on-bound-values compatibility
-bridge. It also executes the same-hash/different-bytes order-dependence counterexample rather
-than assuming SHA-256 injectivity. The runtime's corrected `(manifest_id, position)` key
-preserves repeated ordered chunk references, but ordered reconstruction is a future Lean
-theorem.
-
-Keyed-store lifting, SQL retention/refinement and retention-floor error wiring, Checkpoint
-C2a/GC, ordered reconstruction, collision handling, leases, and liveness remain deferred. The
-T3/T5, W1, and C1 results concern abstract stores; SQL constraints, pruning atomicity, triggers,
-JSON validation, timestamps, transactions, and runtime refinement remain external obligations.
-The small API smoke module checks imports and selected library theorem contracts; it does not
-prove the later store models themselves. The default Lake build compiles those contracts and an
-elaborated-environment audit that rejects new axiom declarations or project declarations outside
-the approved `propext`, `Classical.choice`, and `Quot.sound` dependency set.
-
-```sh
-cd Formal/Lean
-lake build
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-trust.ps1
-```
-
-The committed manifest supplies the pinned dependency revisions. Run `lake update` only when
-intentionally refreshing that manifest.
-
-See [`ROADMAP.md`](ROADMAP.md) for the full milestone breakdown (formal verification, the
-property-test suite, performance benchmarking, and the eventual cutover) and
-[`openspec/changes/`](openspec/changes/) / [`openspec/specs/`](openspec/specs/) for the
-in-progress and completed module specs.
-
-## Design
-
-- [`design/proposal.md`](design/proposal.md): why this exists, what it replaces, and the scope
-  of the initial build.
-- [`design/design.md`](design/design.md): concrete schema (DDL) for every module.
-- [`design/design-interfaces.md`](design/design-interfaces.md): the original consolidated
-  TypeScript interface contract (shared conventions, then each module's interface). It predates
-  the per-module OpenSpec changes under [`openspec/changes/`](openspec/changes/), which are
-  authoritative for anything implemented; see the file's own staleness notes where the two
-  disagree.
-- [`design/design-algebra.md`](design/design-algebra.md): the algebraic structure each module is
-  meant to satisfy (event-sourced monoid actions, idempotent join-semilattices, and which
-  properties are currently guaranteed by a schema constraint versus merely intended), with a
-  derived list of property-based tests.
-- [`Formal/`](Formal/): formal specifications plus the Lean 4 TemporalKV kernel, including
-  retention-aware T3 and validity-chain T5 proofs, the abstract Watermarks W1 model/laws, and the
-  abstract save-side CheckpointStore C1 projection; C2a/GC, ordered reconstruction, collision
-  handling, leases, keyed transactions, and SQL/runtime refinement remain future milestones.
-- [`openspec/`](openspec/): the source of truth for anything implemented. `openspec/specs/`
-  holds requirements for sprints archived after merge (currently just TemporalKV);
-  `openspec/changes/` holds work in progress or completed changes awaiting archival -- currently
-  Transaction/Lease, CheckpointStore, Watermarks, TransactionHistory, and wallet-state envelope
-  persistence, each with its proposal → design → tasks → EARS-format spec record.
-
-## Layout
+Every error is a `StorageError` subclass with a stable `code` and a machine-readable `retryable`
+field. **24 codes**, of which exactly four are retryable:
 
 ```
-src/
-  interfaces/
-    storage-errors.ts      shared error hierarchy every module builds on
-    transaction-lease.ts   transactions + writer leases (implemented)
-    temporal-kv.ts         versioned key-value store (implemented)
-    checkpoint-store.ts    content-addressed checkpoint persistence (implemented)
-    watermarks.ts          sync-progress cursors (implemented)
-    transaction-history-storage.ts   per-wallet transaction history (implemented)
-    wallet-state-envelope.ts         WalletStateEnvelope codec (implemented)
-  postgres/
-    client.ts              connection factory (schema isolation, bigint typing)
-    migrate.ts             schema-versioned migration runner
-    migrations/            one file per migration, in order
-    errors.ts              raw postgres.js errors -> the shared StorageError hierarchy
-    abort.ts               shared AbortSignal helpers
-    temporal-kv.ts         PgTemporalKV
-    transaction-lease.ts   PgTransactionLeaseLayer + the cross-module handle registry
-    checkpoint-store.ts    PgCheckpointStore + chunk integrity and garbage collection
-    watermarks.ts          PgWatermarks transactional cursor storage
-    transaction-history-storage.ts   PgTransactionHistoryStorage
-    wallet-state-envelope.ts         PgWalletStateEnvelopeStore (wraps CheckpointStore, no own table)
-test/
-  postgres/                unit + property-based tests, run against real Postgres
-                           (Testcontainers), not mocked
+CONNECTION_ERROR · TRANSACTION_FAULT · LEASE_TIMEOUT · MIGRATION_LOCK_TIMEOUT
 ```
+
+```ts
+try { await kv.put(k, v); }
+catch (e) {
+  if (e instanceof StorageError && e.retryable) { /* safe to retry */ }
+}
+```
+
+The catalog in [`docs/ERROR-CATALOG.md`](docs/ERROR-CATALOG.md) is not maintained by hand — a drift
+test derives it from the exported classes with no hard-coded count, and fails CI if the table, the
+CHANGELOG and the exported surface disagree.
+
+**Known limitation:** Postgres `28xxx` authentication failures currently surface as a retryable
+`ConnectionError`. Bound your retries accordingly. A distinct `AuthenticationError` is an additive
+1.1 candidate — it was deliberately *not* added during the surface freeze, because a freeze freezes
+the existing surface rather than adding behaviour to it.
+
+---
+
+## Verification: what is proved, checked, and tested
+
+UmbraDB has a formal storage algebra ([`Formal/STORAGE_ALGEBRA.md`](Formal/STORAGE_ALGEBRA.md)) of
+eleven laws. Three verification methods apply to it, and they are **not interchangeable**:
+
+| Status | Method | Strength |
+|---|---|---|
+| `PROVED` | Lean 4 + mathlib, CI-gated | unbounded, for the abstract model |
+| `MODEL-CHECKED` | Quint (planned — `v1.1.0-quint-model-checking`) | bounded — no counterexample up to N |
+| `RUNTIME-TESTED` | P1–P10 property tests vs real Postgres | sampled, on the real adapter |
+
+| Law | Status |
+|---|---|
+| T3 temporal projection, T5 coherence, W1 last-write-wins, C1 chunk semilattice | **`PROVED`** (the frozen 1.0 cut-line) |
+| T1 per-key, T2 CAS, T4 dual-addressing | `PROVED` (in-tree) |
+| C2a GC safety, L1 lease mutex | `RUNTIME-TESTED` only (P8, P10) — model checking planned |
+| C2b eventual collection | mechanism tested; **liveness not verified** |
+| T1 cross-writer | **OPEN** |
+| abstract → PostgreSQL refinement | **unmechanized**, trusted |
+
+Two things this table is careful about:
+
+**`0 sorry` certifies depth, not breadth.** The Lean trust gate scans the whole tree for
+`sorry`/`admit`/`axiom`/`unsafe`, then builds and independently re-checks every declaration. That
+proves *what is stated* is proved. It cannot detect a law that was never stated.
+
+**The refinement gap is real and deliberate.** No theorem relates any Lean definition to SQL DDL, a
+trigger, `clock_timestamp()`, or the TypeScript adapter. Following the AWS TLA+ precedent, the
+adapter is a trusted, unmechanized refinement, bridged empirically by the P1–P10 property tests
+running against real Postgres via Testcontainers.
+
+---
+
+## Schema and migrations
+
+Forward-only, lineage `000` → `006`, applied by `runMigrations` under a bounded advisory lock. There
+is no down-migration: rolling back means restoring a backup. `schema` is a **namespace, not a
+security boundary** — see [Security](#security).
+
+Full reference: [`docs/SCHEMA.md`](docs/SCHEMA.md), contracts in [`docs/CONTRACT.md`](docs/CONTRACT.md).
+
+## Performance and ceilings
+
+A committed benchmark baseline (`bench/baseline.1.0.0-perf-baseline.1.json`) covers versioned KV
+throughput/latency, checkpoint save/load/dedup ratio, GC pass duration as the chunk store grows, and
+lease contention. Hot paths are batched: chunk and junction inserts are multi-row, and `history()`
+is a single grouped query rather than N+1.
+
+**No performance number gates a release** — only that a reproducible baseline exists. Documented
+scalability ceilings (SC-1…SC-6) are in [`Performance/CEILINGS.md`](Performance/CEILINGS.md); the GC
+anti-join curve is measured to 10⁶ chunks in the baseline artifact.
 
 ## Security
 
-UmbraDB is a **single-node, single-writer** storage library with a deliberately small trust model:
-one trusted writer against one trusted local Postgres. [`SECURITY.md`](SECURITY.md) is the
-authoritative threat model — it states the binding deployer preconditions the code relies on but
-does not itself enforce (single trusted writer; `schema` is namespacing, **not** a tenant boundary;
-the global chunk pool is one trust domain with a cross-wallet dedup side channel; **no** at-rest
-encryption is provided), the commit policy, and how to report a vulnerability. **Read it before
-deploying UmbraDB to persist secret-bearing data.**
+Read [`SECURITY.md`](SECURITY.md) before deploying. The load-bearing points:
+
+- **Single trusted writer.** The threat model assumes one writer that is trusted.
+- **`schema` is namespacing, not a tenant boundary.** Do not use it to isolate mutually distrusting
+  parties.
+- **No at-rest encryption.** This is a *binding deployer precondition*: anyone who can read the
+  Postgres data files, a backup, or a replica reads your data in the clear. Encrypt the substrate.
+- **Cross-wallet dedup is a side channel.** The global chunk pool means storing a chunk reveals
+  whether an identical chunk already exists. Under the single-writer model both channels require
+  already being the writer; per-wallet keyed chunking is a 1.1 item.
+
+## What UmbraDB is not
+
+- **Not an ORM or query builder.** Five narrow interfaces, not "do anything with Postgres".
+- **Not distributed or multi-node.** Single writer, single Postgres instance.
+- **Not multi-tenant.** See the schema/dedup caveats above.
+- **Not a chain indexer.** It stores what a client gives it; it is deliberately indexer-agnostic.
+- **Not encrypted at rest.**
+
+---
+
+## Status
+
+**Current release: `0.9.5`.**
+
+All twenty gate items of the 1.0.0 program (G1–G20) are merged, across five OpenSpec changes covering
+the public-surface freeze, durable checkpoint cursor, recovery testing, performance baseline and
+security sign-off. `0.9.5` ships that code.
+
+**What 1.0.0 additionally requires:** a full local sync of UmbraDB against Midnight — archive node →
+local indexer → UmbraDB, end to end — demonstrated on infrastructure we run rather than a hosted
+indexer we call. Progress and rationale: [`ROADMAP.md`](ROADMAP.md) § "What blocks 1.0.0".
+
+**Next:** [Quint model checking](openspec/changes/v1.1.0-quint-model-checking/) for C2a, C2b, L1 and
+cross-writer T1 — the concurrency and liveness laws a sequential proof model handles badly.
+
+- Roadmap: [`ROADMAP.md`](ROADMAP.md) · Stability policy: [`docs/STABILITY.md`](docs/STABILITY.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md) · Release records: [`docs/releases/`](docs/releases/)
 
 ## License
 
