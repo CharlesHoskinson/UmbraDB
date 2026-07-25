@@ -68,7 +68,7 @@ export {
   LeaseFaultError, TransactionHandleInvalidError,
 } from "./interfaces/transaction-lease.js";
 export { EnvelopeVersionUnsupportedError, EnvelopeCorruptError } from "./interfaces/wallet-state-envelope.js";
-export { ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError } from "./postgres/errors.js";
+export { ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError } from "./postgres/errors.js";
 // Durability-contract error classes (G6): a consumer catches these from `runMigrations`, so they
 // are part of the public durability surface even though they are thrown by the startup probe.
 export { DurabilityContractError, TransactionPoolerDetectedError } from "./postgres/durability-probe.js";
@@ -83,10 +83,10 @@ export type { Migration, RunMigrationsOptions } from "./postgres/migrate.js";
 export type { SaveAndAdvanceDeps, SaveAndAdvanceCursor } from "./postgres/save-and-advance.js";
 
 // --- Retryability classification (the type of every StorageError's `retryable` field) ---
-export type { Retryability } from "./interfaces/storage-errors.js";
+export type { Retryability, SharedStorageErrorCode } from "./interfaces/storage-errors.js";
 
 // --- TemporalKV contract + value types ---
-export type { TemporalKV, VersionedEntry, AsOf, JsonValue, Namespace, Scope, Key, Version } from "./interfaces/temporal-kv.js";
+export type { TemporalKV, VersionedEntry, AsOf, JsonValue, Namespace, Scope, Key, Version, TemporalKVErrorCode } from "./interfaces/temporal-kv.js";
 
 // --- Watermarks contract + value types ---
 export type { Watermarks, WatermarkKind, WatermarkKey, WatermarkValue } from "./interfaces/watermarks.js";
@@ -94,14 +94,14 @@ export type { Watermarks, WatermarkKind, WatermarkKey, WatermarkValue } from "./
 // --- CheckpointStore contract + value types ---
 export type {
   CheckpointStore, CheckpointSummary, CheckpointRecord, PruneResult, SaveCheckpointOptions,
-  HistoryOptions, CheckpointSequence, ContentHash,
+  HistoryOptions, CheckpointSequence, ContentHash, CheckpointStoreErrorCode,
 } from "./interfaces/checkpoint-store.js";
 
 // --- Transaction/Lease contract + value types (withTransaction/withLease are methods of the
 //     TransactionLeaseLayer interface / PgTransactionLeaseLayer class, not standalone symbols). ---
 export type {
   TransactionLeaseLayer, TransactionHandle, Lease, TransactionOptions, LeaseAcquireOptions,
-  TransactionRollbackCause,
+  TransactionRollbackCause, TransactionLeaseErrorCode,
 } from "./interfaces/transaction-lease.js";
 
 // --- Transaction-history contract + value types ---
@@ -112,4 +112,4 @@ export type {
 } from "./interfaces/transaction-history-storage.js";
 
 // --- Wallet-state-envelope value type ---
-export type { WalletStateEnvelope } from "./interfaces/wallet-state-envelope.js";
+export type { WalletStateEnvelope, WalletStateEnvelopeErrorCode } from "./interfaces/wallet-state-envelope.js";

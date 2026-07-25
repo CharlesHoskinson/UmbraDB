@@ -40,9 +40,16 @@ enumerates. Concretely (names verified against real exports):
   are frozen as part of that class's (and the `TransactionLeaseLayer` interface's) surface; the
   barrel re-exports the class, not phantom free functions. A builder MUST NOT invent standalone
   wrapper functions to satisfy this — that would add new API at the freeze moment (Fable audit B2).
+- **The co-transactional composition primitive** -- `saveAndAdvance` (`postgres/save-and-advance.ts`)
+  and its `SaveAndAdvanceDeps` / `SaveAndAdvanceCursor` types (G5's durable-composition capability).
+  It composes only in-repo primitives and its signature is frozen. Re-exported by `src/index.ts` and
+  drift-tested; the original design predated its inclusion, reconciled here (audit BLOCK 1).
 - **All `src/interfaces/` types** — the interface contracts (`TemporalKV`, `CheckpointStore`,
   `Watermarks`, `TransactionLeaseLayer`, `TransactionHistoryStorage`, wallet-envelope types) and
-  their associated value/handle types (`TransactionHandle`, versioned-entry types, etc.).
+  their associated value/handle types (`TransactionHandle`, versioned-entry types, etc.), and the
+  per-module error-`code` union types (`SharedStorageErrorCode`, `TemporalKVErrorCode`,
+  `CheckpointStoreErrorCode`, `TransactionLeaseErrorCode`, `WalletStateEnvelopeErrorCode`) for typed
+  error handling (audit BLOCK 2).
 - **The error hierarchy** — `StorageError` and every concrete subclass *except* the chain-archive
   classes (see §3.3): `ValidationError`, `SerializationFailedError`, `ConnectionError`
   (`storage-errors.ts`); `VersionConflictError`, `HistoryUnavailableError`,
@@ -52,12 +59,17 @@ enumerates. Concretely (names verified against real exports):
   `LeaseFaultError`, `TransactionHandleInvalidError` (`transaction-lease.ts`);
   `EnvelopeVersionUnsupportedError`, `EnvelopeCorruptError` (`wallet-state-envelope.ts`);
   `ExclusionViolationError`, `ClockRegressionError`, `UnrecognizedPostgresError`
-  (`postgres/errors.ts`).
+  (`postgres/errors.ts`); plus the already-shipped G6/G7 startup/migration error classes
+  `MigrationLockTimeoutError` (`postgres/migrate.ts`), `DurabilityContractError` and
+  `TransactionPoolerDetectedError` (`postgres/durability-probe.ts`); plus the audit-added
+  `AuthenticationError` (`postgres/errors.ts`, SQLSTATE 28000/28P01, non-retryable). All are
+  re-exported by the barrel and catchable by a consumer (via `runMigrations`/`createClient` and the
+  adapter error translator).
 - **The `Rollback` control primitive** — `Rollback` (`transaction-lease.ts:134`) is re-exported
   too, but it is **an `Error` subclass, NOT a `StorageError`**, and deliberately carries **no
   catalog `code`**: a caller constructs and throws it inside a `withTransaction` callback to request
   a deliberate rollback (`transaction-lease.ts:129-131`). It is frozen public API, but it is **not**
-  one of the 21 catalog codes — do not "fix" the catalog by inventing a 22nd code for it (Fable
+  one of the 25 catalog codes — do not "fix" the catalog by inventing a 26th code for it (Fable
   audit B3 / Opus F4). The spec requirement, task 4.1, and acceptance A1 name it explicitly so an
   "exactly and only" barrel built from the `StorageError`-hierarchy wording does not drop it.
 
@@ -72,6 +84,14 @@ plumbing), `resolveTransaction` and `assertValidSchemaName`, and `withAbort`/`ab
 (`postgres/abort.ts` — the cancellation *behavior* is frozen and documented in G4 §4.3, but the
 helper functions are not public symbols). Default to the smallest surface: when in doubt, do not
 export.
+
+**Reconciliation to the shipped surface (cross-vendor audit BLOCK 1/2).** The frozen list above is
+brought into agreement with what `src/index.ts` actually re-exports and what the drift test
+(`test/api-surface/error-catalog-drift.test.ts`) enforces: `saveAndAdvance` (+ its two types) is
+frozen surface (it shipped with G5 and is re-exported by the G1 build); the per-module error-`code`
+union types are exported for typed error handling; and the frozen error catalog is the drift-tested
+set of **25** codes (see 3.1), not the design's original 21. The drift test -- not any prose number
+-- is the authority, so no builder note can silently supersede design/spec/acceptance.
 
 ### 1.2 `package.json` — make it publishable with a strict `exports`
 
@@ -120,9 +140,8 @@ No `CHANGELOG.md` exists at repo root today (root `.md` files are `AGENTS.md`,
 
 Error `code` discriminants are a machine-facing part of the public API (`StorageError.code` is
 `abstract readonly code: string`, `storage-errors.ts:9`, documented "stable across
-serialization"). The frozen 1.0.0 catalog is exactly these **21** codes (chain-archive excluded per
-§3.3 — verified: `grep -rhoE 'readonly code = "[A-Z_]+"' src/ | grep -vE 'CHAIN|BLOB|BLOCK' | sort
--u | wc -l` → 21), grouped by owning module. The count is not a magic number: it is defined as *the
+serialization"). The frozen 1.0.0 catalog is the drift-tested set of **25** codes (chain-archive excluded per
+section 3.3), grouped by owning module. The count is not a magic number: it is defined as *the
 complete set of non-chain-archive `StorageError.code` values on `main`*, and task 5.2's drift test
 (catalog ≡ exported classes) is the guard that keeps it exact:
 
@@ -149,9 +168,24 @@ complete set of non-chain-archive `StorageError.code` values on `main`*, and tas
 | `EXCLUSION_VIOLATION` | ExclusionViolationError | postgres | no |
 | `CLOCK_REGRESSION` | ClockRegressionError | postgres | **conditional** |
 | `UNRECOGNIZED_POSTGRES_ERROR` | UnrecognizedPostgresError | postgres | no |
+| `MIGRATION_LOCK_TIMEOUT` | MigrationLockTimeoutError | postgres/migrate | **yes** |
+| `DURABILITY_CONTRACT_VIOLATION` | DurabilityContractError | postgres/durability-probe | no |
+| `TRANSACTION_POOLER_DETECTED` | TransactionPoolerDetectedError | postgres/durability-probe | no |
+| `AUTHENTICATION_FAILED` | AuthenticationError | postgres | no |
 
 The `retryable` column is the published `{code → meaning → retryable}` table Council A gate G3 and
 report 01 item 7 require, living in the G4 contract doc.
+
+**Reconciliation (cross-vendor audit BLOCK 1/3/4).** The frozen catalog is the **25** codes the
+drift test enforces: the 21 above plus the already-shipped G6/G7 `MIGRATION_LOCK_TIMEOUT` /
+`DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED` (all thrown from `runMigrations`, so
+already-observable public surface) and the audit-added `AUTHENTICATION_FAILED` (SQLSTATE 28000/28P01
+split off the retryable `ConnectionError`). Two retryability corrections landed with them:
+`AUTHENTICATION_FAILED` is **non-retryable** (a rejected credential cannot clear by retrying) and
+`MIGRATION_LOCK_TIMEOUT` is **retryable** (transient migration-lock contention that clears once the
+concurrent migration commits -- parity with `LEASE_TIMEOUT`), so the frozen retryable set is
+`{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}`. `docs/ERROR-CATALOG.md`
+carries the full rationale; the drift test, not this prose, is the authority on the count.
 
 ### 3.2 Promote retryability to a machine-readable field
 
@@ -166,7 +200,9 @@ boundary; do not retry a sustained backward step) or expose a sub-discriminant �
 the nuance either way so callers do not treat it as uniformly non-retryable (that mischaracterization
 is exactly what the fourth-round audit corrected in that class's own docstring). `ConnectionError`,
 `TransactionFaultError` (serialization-failure/deadlock, `errors.ts` 40001/40P01 mappings), and
-`LeaseTimeoutError` are the unambiguously-retryable codes (report 01 item 9's "retryable set").
+`LeaseTimeoutError` are the unambiguously-retryable codes (report 01 item 9's "retryable set"),
+joined by `MigrationLockTimeoutError` (retryable per the 3.1 reconciliation above -- transient
+migration-lock contention that clears once the concurrent migration commits).
 
 ### 3.3 Strip / mark-experimental the chain-archive error classes (pre-freeze obligation)
 

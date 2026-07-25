@@ -18,8 +18,9 @@ Optional-feature ("WHERE \<feature>, the system SHALL...") form — as in Sprint
 The package SHALL provide a single public entry point (`src/index.ts`, compiled to
 `dist/index.js`) that re-exports exactly, and only: `createClient`, `runMigrations`, the five
 adapters (`PgTemporalKV`, `PgCheckpointStore`, `PgWatermarks`, `PgTransactionLeaseLayer`,
-`PgTransactionHistoryStorage`), `PgWalletStateEnvelopeStore`, all `src/interfaces/` contract and
-value types, the `Rollback` control primitive (an `Error` subclass with no catalog `code`, thrown
+`PgTransactionHistoryStorage`), `PgWalletStateEnvelopeStore`, the `saveAndAdvance` co-transactional composition primitive (with its
+`SaveAndAdvanceDeps` / `SaveAndAdvanceCursor` types), all `src/interfaces/` contract and
+value types (including the per-module error-`code` union types), the `Rollback` control primitive (an `Error` subclass with no catalog `code`, thrown
 by callers to request a deliberate `withTransaction` rollback), and the `StorageError` hierarchy
 except the chain-archive error classes (see the chain-archive requirement below). The
 `withTransaction`/`withLease` combinators are frozen as **methods** of the exported
@@ -55,6 +56,13 @@ symbol, or the `nix/midnight-env` dev stack (`council/A` §4(a)). (G1)
   `umbradb/src/postgres/temporal-kv.js`)
 - **THEN** module resolution SHALL fail with `ERR_PACKAGE_PATH_NOT_EXPORTED`, because the strict
   `exports` map exposes only the root subpath
+
+> **Reconciliation (cross-vendor audit BLOCK 1/2).** `saveAndAdvance` and its `SaveAndAdvanceDeps` /
+> `SaveAndAdvanceCursor` types (frozen with G5's durable composition) and the per-module error-`code`
+> union types (`SharedStorageErrorCode`, `TemporalKVErrorCode`, `CheckpointStoreErrorCode`,
+> `TransactionLeaseErrorCode`, `WalletStateEnvelopeErrorCode`) are part of the frozen surface; they
+> are re-exported by `src/index.ts` and asserted by `test/api-surface/frozen-types.test.ts`. This
+> section is reconciled to the shipped barrel + drift test.
 
 ### Requirement: package.json is publishable with a strict exports map and no deep-import escape hatch
 
@@ -139,7 +147,7 @@ enumerates the initial public surface (the five primitives + `PgWalletStateEnvel
 
 ### Requirement: The error-code catalog is frozen and published with a retryable field
 
-The release SHALL publish a `{code → meaning → retryable}` table covering exactly the 21 frozen
+The release SHALL publish a `{code → meaning → retryable}` table covering exactly the 25 frozen
 error codes enumerated in design §3.1 (the shared, TemporalKV, CheckpointStore, Transaction/Lease,
 wallet-envelope, and postgres-adapter codes — the complete set of non-chain-archive
 `StorageError.code` values on `main`) and SHALL NOT include any `CHAIN_ARCHIVE_*`, `BLOB_*`, or
@@ -147,8 +155,8 @@ wallet-envelope, and postgres-adapter codes — the complete set of non-chain-ar
 
 #### Scenario: The published catalog lists every frozen code with a retryability marking
 - **WHEN** the error-code catalog document is read
-- **THEN** each of the 21 frozen codes SHALL appear with a one-line meaning and a retryable marking
-- **AND** `CONNECTION_ERROR`, `TRANSACTION_FAULT`, and `LEASE_TIMEOUT` SHALL be marked retryable
+- **THEN** each of the 25 frozen codes SHALL appear with a one-line meaning and a retryable marking
+- **AND** `CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT`, and `MIGRATION_LOCK_TIMEOUT` SHALL be marked retryable
 - **AND** no `CHAIN_ARCHIVE_INVARIANT_VIOLATION`, `CHAIN_ARCHIVE_CHECK_VIOLATION`,
   `BLOB_INTEGRITY`, `BLOB_MISSING`, or `BLOCK_NOT_FOUND` code SHALL appear in the catalog
 
@@ -235,16 +243,18 @@ quick write may complete. (G4)
 
 ### Requirement: A save-retry caveat documents the non-blind-retry rule
 
-The release SHALL document that `CheckpointStore.save` is not blindly retryable — that on a
-`ConnectionError` a caller SHALL re-check `history()` before retrying, because a lost-COMMIT-ack
+The release SHALL document that `CheckpointStore.save` is not blindly retryable -- that on the default in-transaction save's retryable
+`TransactionFaultError("connection-lost")` (or a `ConnectionError` on a non-transactional path) a caller
+SHALL re-check `history()` before retrying, because a lost-COMMIT-ack
 retry produces a benign identical-content duplicate at the next sequence pruned by `retainCount` —
 and SHALL state that the `idempotency_key` UNIQUE constraint is a deferred additive 1.1 migration,
 not a 1.0 code change (`council/A` critique #1). (G4)
 
 #### Scenario: The save-retry caveat states the re-check rule and the deferral
 - **WHEN** the save-retry caveat is read
-- **THEN** it SHALL instruct callers to re-check `history()` before retrying `save` after a
-  `ConnectionError`
+- **THEN** it SHALL instruct callers to re-check `history()` before retrying `save` after a save
+  connection failure -- the default in-transaction path's `TransactionFaultError("connection-lost")`
+  (retryable), or a `ConnectionError` on a non-transactional path (cross-vendor audit BLOCK 5)
 - **AND** it SHALL state that automatic idempotency (the `idempotency_key` UNIQUE migration) is a
   1.1 fast-follow, not part of 1.0
 
@@ -284,14 +294,17 @@ itself. (G4)
 
 ### Requirement: A format-headroom note reserves keyed/encrypted chunk modes for 1.1
 
-The release SHALL document that chunk addressing and the wallet-state envelope encoding are
-versioned, such that a v2 keyed/encrypted chunk mode (and at-rest encryption) can be introduced
-additively in 1.1 without a breaking migration (`council/A` critique #7). This is the documentation
+The release SHALL document that the wallet-state envelope encoding is versioned (an explicit
+`ENVELOPE_VERSION` field) while chunk content-addressing is a fixed SHA-256 that is **not** versioned in
+1.0, such that a v2 keyed/encrypted or alternate-hash chunk mode (and at-rest encryption) would be
+introduced via an additive migration adding a hash-algorithm/version field in 1.1, not a breaking
+migration (cross-vendor audit BLOCK 6) (`council/A` critique #7). This is the documentation
 half of the deferred dedup-oracle mitigation; no keyed-chunking or encryption code ships in 1.0. (G4)
 
 #### Scenario: The format-headroom note reserves additive space for 1.1 chunk modes
 - **WHEN** the format-headroom note is read
-- **THEN** it SHALL state that chunk addressing and envelope encoding are versioned
+- **THEN** it SHALL state that the envelope encoding is versioned and that chunk content-addressing is
+  a fixed, unversioned SHA-256 in 1.0
 - **AND** it SHALL state that a keyed/encrypted chunk mode can be added additively in 1.1 without a
   breaking migration
 

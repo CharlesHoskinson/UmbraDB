@@ -10,7 +10,7 @@ import {
   TransactionRolledBackError, TransactionFaultError, LeaseTimeoutError, LeaseNotHeldError,
   LeaseFaultError, TransactionHandleInvalidError,
   EnvelopeVersionUnsupportedError, EnvelopeCorruptError,
-  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError,
+  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError,
   DurabilityContractError, TransactionPoolerDetectedError, MigrationLockTimeoutError,
   type Retryability,
 } from "../../src/index.js";
@@ -25,9 +25,9 @@ import {
  * machine-readable `.retryable`, and asserts the doc's code set, class set, and per-code retryable
  * markings all equal the surface (table ≡ surface). If a future minor adds an error class to the
  * barrel, `EXPORTED_CONCRETE` grows, the instance-list guard fails, and the doc must be updated to
- * match — the number self-corrects. It is 24 today (design §3.1's 21 + the already-shipped G6/G7
- * `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED`), but
- * no assertion hard-codes 24.
+ * match — the number self-corrects. It is 25 today (design §3.1's 21 + the already-shipped G6/G7
+ * `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED`, plus the audit-added `AUTHENTICATION_FAILED`), but
+ * no assertion hard-codes 25.
  */
 
 // One instance of every exported concrete StorageError subclass. `.code` and `.retryable` are class
@@ -58,6 +58,7 @@ const SURFACE_INSTANCES: StorageError[] = [
   new ExclusionViolationError("m"),
   new ClockRegressionError("m"),
   new UnrecognizedPostgresError("m"),
+  new AuthenticationError("m"),
   new MigrationLockTimeoutError("s", 10),
   new DurabilityContractError("m", []),
   new TransactionPoolerDetectedError("m"),
@@ -129,9 +130,9 @@ describe("frozen error-code catalog: table ≡ surface, no drift (C1, C4)", () =
     }
   });
 
-  it("the retryable set is exactly {CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT} (C2)", () => {
+  it("the retryable set is exactly {CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT} (C2)", () => {
     const retryable = catalog.filter((r) => r.retryable === "retryable").map((r) => r.code).sort();
-    expect(retryable).toEqual(["CONNECTION_ERROR", "LEASE_TIMEOUT", "TRANSACTION_FAULT"]);
+    expect(retryable).toEqual(["CONNECTION_ERROR", "LEASE_TIMEOUT", "MIGRATION_LOCK_TIMEOUT", "TRANSACTION_FAULT"]);
   });
 
   it("CLOCK_REGRESSION is conditional, not uniformly non-retryable (C6)", () => {

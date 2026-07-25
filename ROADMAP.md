@@ -72,6 +72,27 @@ below is **1.0.0**.
   and remain future Lean milestones (they are the open item immediately above). This converts the
   previously-unfalsifiable "tractable properties proved in Lean" checklist item into a checkable box.
 
+### Frozen 1.0.0 API surface, SemVer policy, error catalog & contracts (G1-G4 -- `openspec/changes/v1.0.0-api-surface`)
+
+The same `v1.0.0-api-surface` change that froze the Lean cut-line (G20, above) also addresses gate
+items **G1-G4**:
+
+- [x] **G1 -- Public API surface.** A single frozen barrel (`src/index.ts` -> `dist/index.js` +
+  `dist/index.d.ts`), a strict escape-hatch-free `package.json` `exports` map, a declaration build, and
+  a packed-tarball install smoke test that compiles a real TypeScript consumer against the shipped
+  `.d.ts`.
+- [x] **G2 -- SemVer stability policy + CHANGELOG** (`docs/STABILITY.md`, `CHANGELOG.md`): no
+  incompatible change to the exported surface or the error-`code` set in a minor/patch.
+- [x] **G3 -- Frozen error catalog with a machine-readable `retryable` field** (`docs/ERROR-CATALOG.md`),
+  drift-tested against the exported surface (25 codes; frozen retryable set `{CONNECTION_ERROR,
+  TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}`); the chain-archive classes are excluded.
+- [x] **G4 -- The eight written release contracts** (`docs/CONTRACT.md`): durability, forward-only
+  migration, cancellation, save-retry, lease limitation, backup/restore, threat-model pointer, and
+  format headroom -- each stated true of the code as shipped.
+
+(Task-level check-off in `openspec/changes/v1.0.0-api-surface/tasks.md` is handled at that change's
+merge close-out.)
+
 ## Milestone 2 — Core implementation (module implementations complete)
 
 Per `design/tasks.md` §§0–8: environment setup, then each module

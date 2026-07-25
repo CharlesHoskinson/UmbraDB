@@ -16,7 +16,7 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 
 | # | Criterion | Verify | Req / Task |
 |---|---|---|---|
-| A1 | Every frozen name (`createClient`, `runMigrations`, the five adapters, `PgWalletStateEnvelopeStore`, the `Rollback` control primitive, all interface types, the `StorageError` hierarchy minus chain-archive) resolves when imported from the built barrel; `withTransaction`/`withLease` are reachable as methods on a `PgTransactionLeaseLayer` instance (NOT as standalone barrel exports). | [unit][CI] | "barrel exports exactly the frozen surface" / 4.1 |
+| A1 | Every frozen name (`createClient`, `runMigrations`, the five adapters, `PgWalletStateEnvelopeStore`, `saveAndAdvance` (with `SaveAndAdvanceDeps`/`SaveAndAdvanceCursor`), the `Rollback` control primitive, all interface types (including the per-module error-`code` union types), the `StorageError` hierarchy minus chain-archive) resolves when imported from the built barrel; `withTransaction`/`withLease` are reachable as methods on a `PgTransactionLeaseLayer` instance (NOT as standalone barrel exports). | [unit][CI] | "barrel exports exactly the frozen surface" / 4.1 |
 | A2 | A representative internal symbol (a Zod schema, `translatePostgresError`, `resolveTransaction`, a chain-archive class) is NOT re-exported by the barrel: a named import of it fails at link time ("does not provide an export named …"). | [unit][CI] | "barrel exports exactly the frozen surface" / 4.1 |
 | A3 | Built `package.json` has no `private:true`; has `main`, `types`, and an `exports` map with a `"."` entry and no wildcard/deep subpath; no `exports` entry resolves a `src/postgres/*` or `src/interfaces/*` path. | [unit][CI] | "publishable with a strict exports map" / 3.2 |
 | A4 | A consumer's deep import `umbradb/src/postgres/temporal-kv.js` fails module resolution (`ERR_PACKAGE_PATH_NOT_EXPORTED`) from the installed package. | [unit][CI] | "publishable with a strict exports map" + smoke test / 3.2, 7.1 |
@@ -38,8 +38,8 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 
 | # | Criterion | Verify | Req / Task |
 |---|---|---|---|
-| C1 | The published `{code → meaning → retryable}` table lists exactly the 21 frozen codes (the complete non-chain-archive `StorageError.code` set on `main`, per design §3.1), each with a meaning and a retryable marking; C4's drift test — not the literal number — is the authority the count is checked against. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
-| C2 | `CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT` are marked retryable in the table. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
+| C1 | The published `{code → meaning → retryable}` table lists exactly the 25 frozen codes (the complete non-chain-archive `StorageError.code` set on `main`, per design §3.1), each with a meaning and a retryable marking; C4's drift test — not the literal number — is the authority the count is checked against. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
+| C2 | `CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT`, `MIGRATION_LOCK_TIMEOUT` are the frozen retryable set, each marked retryable in the table. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
 | C3 | No `CHAIN_ARCHIVE_INVARIANT_VIOLATION`/`CHAIN_ARCHIVE_CHECK_VIOLATION`/`BLOB_INTEGRITY`/`BLOB_MISSING`/`BLOCK_NOT_FOUND` code appears in the catalog. | [doc][unit] | "chain-archive classes excluded" / 5.2, 2.1 |
 | C4 | A test cross-checks the catalog's code set against the actually-exported error classes' `code` values (table ≡ surface, no drift). | [unit][CI] | "error-code catalog is frozen" / 5.2 |
 | C5 | Every `StorageError` subclass exposes a machine-readable `retryable` value; a caught instance exposes it without message parsing. | [unit] | "retryability is a machine-readable field" / 1.1 |
@@ -48,6 +48,14 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 | C8 | `translatePostgresError` still routes a chain-archive-named SQLSTATE 23514 to the correct internal class; those classes are marked experimental/internal. | [unit] | "chain-archive classes excluded" / 2.1 |
 | C9 | The 23514 fall-through to `ClockRegressionError` for unknown constraint names is unchanged. | [unit] | "chain-archive classes excluded" / 2.1 |
 
+> **Reconciliation (cross-vendor audit BLOCK 1/3/4).** The frozen surface list (A1) and catalog
+> count (C1) are reconciled to what `src/index.ts` re-exports and the drift test enforces:
+> `saveAndAdvance` (+ its two types) is frozen surface, and the catalog is **25** codes (the design's
+> original 21 + the already-shipped G6/G7 `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` /
+> `TRANSACTION_POOLER_DETECTED` + the audit-added `AUTHENTICATION_FAILED`). The frozen retryable set
+> is `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}`. The drift test --
+> not any prose number -- is the authority.
+
 ## G4 — Contract doc set (all true)
 
 | # | Criterion | Verify | Req / Task |
@@ -55,11 +63,11 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 | D1 | Durability contract states the cursor never advances past durable checkpoint data AND names the required `fsync`/`synchronous_commit`/`full_page_writes` + no-transaction-pooler precondition. | [doc] | "durability contract" / 5.3 |
 | D2 | Migration contract states forward-only, no rollback, no supported downgrade, major-may-require-migration, and links `docs/SCHEMA.md`. | [doc] | "forward-only migration contract" / 5.3 |
 | D3 | Cancellation contract states the three abort timings (before dispatch = no query; mid-long-read = cursor/lease freed; mid-quick-write = may complete). | [doc] | "cancellation contract" / 5.3 |
-| D4 | Save-retry caveat instructs re-check `history()` before retrying `save` after `ConnectionError`, and states idempotency is a 1.1 fast-follow. | [doc] | "save-retry caveat" / 5.3 |
+| D4 | Save-retry caveat instructs re-check `history()` before retrying `save` after the default in-transaction save's `TransactionFaultError("connection-lost")` (retryable; `ConnectionError` applies on non-transactional paths), and states idempotency is a 1.1 fast-follow. | [doc] | "save-retry caveat" / 5.3 |
 | D5 | Lease-limitation contract states no fencing against connection death and no two writer processes in the 1.0 model. | [doc] | "lease-limitation contract" / 5.3 |
 | D6 | Backup guidance states consistent `pg_dump` of an UmbraDB schema, chunk/manifest consistency, and mid-GC-dump safety. | [doc] | "backup/restore guidance" / 5.3 |
 | D7 | The contract set contains a pointer/link to the (separately authored, G15) threat-model document; this change does NOT author that document. | [doc] | "threat-model pointer" / 5.3 |
-| D8 | The format-headroom note states chunk addressing + envelope encoding are versioned and a keyed/encrypted chunk mode is additively introducible in 1.1 without a breaking migration; no keyed-chunking/encryption code ships. | [doc][manual] | "format-headroom note" / 5.3 |
+| D8 | The format-headroom note states the wallet-state envelope encoding is versioned while chunk content-addressing is a fixed, unversioned SHA-256 in 1.0, and that a keyed/encrypted or alternate-hash chunk mode is additively introducible in 1.1 via a hash-version field (not a breaking migration); no keyed-chunking/encryption code ships. | [doc][manual] | "format-headroom note" / 5.3 |
 | D9 | The README no longer presents full-chain archival as part of the 1.0 public surface; it is labelled a 1.1 preview. | [doc] | boundary hygiene / 5.4 |
 
 ## G20 — Lean cut-line

@@ -2,9 +2,11 @@ import { describe, expectTypeOf, it } from "vitest";
 import {
   createClient, runMigrations, saveAndAdvance, Rollback, DEFAULT_SCHEMA,
   PgTemporalKV, PgCheckpointStore, PgWatermarks, PgTransactionLeaseLayer,
-  PgTransactionHistoryStorage, PgWalletStateEnvelopeStore, StorageError,
+  PgTransactionHistoryStorage, PgWalletStateEnvelopeStore, StorageError, AuthenticationError,
   type UmbraDBSql, type UmbraDBConnectionOptions, type Migration, type RunMigrationsOptions,
   type Retryability,
+  type SharedStorageErrorCode, type TemporalKVErrorCode, type CheckpointStoreErrorCode,
+  type TransactionLeaseErrorCode, type WalletStateEnvelopeErrorCode,
   type TemporalKV, type VersionedEntry, type AsOf, type JsonValue, type Namespace, type Scope,
   type Key, type Version,
   type Watermarks, type WatermarkKind, type WatermarkKey, type WatermarkValue,
@@ -40,6 +42,7 @@ describe("frozen surface: every export is a concrete, non-any type from the buil
     expectTypeOf(PgWalletStateEnvelopeStore).not.toBeAny();
     expectTypeOf(Rollback).not.toBeAny();
     expectTypeOf(StorageError).not.toBeAny();
+    expectTypeOf(AuthenticationError).not.toBeAny();
   });
 
   it("each concrete adapter instance implements its frozen interface", () => {
@@ -101,5 +104,10 @@ describe("frozen surface: every export is a concrete, non-any type from the buil
     expectTypeOf<WalletStateEnvelope>().not.toBeAny();
     expectTypeOf<SaveAndAdvanceDeps>().not.toBeAny();
     expectTypeOf<SaveAndAdvanceCursor>().not.toBeAny();
+    expectTypeOf<SharedStorageErrorCode>().not.toBeAny();
+    expectTypeOf<TemporalKVErrorCode>().not.toBeAny();
+    expectTypeOf<CheckpointStoreErrorCode>().not.toBeAny();
+    expectTypeOf<TransactionLeaseErrorCode>().not.toBeAny();
+    expectTypeOf<WalletStateEnvelopeErrorCode>().not.toBeAny();
   });
 });

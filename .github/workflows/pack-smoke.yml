@@ -10,8 +10,11 @@ name: Pack-install smoke test
 # This is a SEPARATE workflow (not the required conformance gate) so its `npm pack` + tarball install
 # never runs inside `vitest run`. Like `bench-smoke.yml` it uses Testcontainers (@testcontainers/
 # postgresql), which starts its own disposable Postgres 17 container via the Docker daemon present on
-# ubuntu-latest runners — no `services: postgres` block is needed. On a host with no Docker the smoke
-# script prints SKIP and exits 0, so the no-Docker path is never broken.
+# ubuntu-latest runners -- no `services: postgres` block is needed. The Docker-INDEPENDENT oracles
+# (npm pack, install, root import, deep-import rejection, .d.ts present, and a tsc consumer compile of
+# the shipped declarations) run UNCONDITIONALLY; only the migrate + round-trip needs Docker. In CI a
+# MISSING Docker FAILS the smoke script (a required workflow must never report green having tested
+# nothing); a local no-Docker run skips ONLY the round-trip.
 
 permissions:
   contents: read
@@ -43,6 +46,7 @@ jobs:
 
       - name: Packed-tarball install smoke test (build -> pack -> install -> import + round-trip)
         # `npm run test:smoke` runs `npm run build` first (task 3 dist dependency), then the standalone
-        # smoke harness. It fails the job on a real surface regression; it exits 0 (SKIP) only if Docker
-        # is absent, which never happens on this runner.
+        # smoke harness. The pack/install/import/type-declaration oracles run unconditionally; the
+        # migrate + round-trip needs Docker (present on ubuntu-latest). In CI (`process.env.CI`) a
+        # missing Docker FAILS the job rather than skipping, so a green run always exercised the surface.
         run: npm run test:smoke

@@ -7,7 +7,7 @@ import {
   TransactionRolledBackError, TransactionFaultError, LeaseTimeoutError, LeaseNotHeldError,
   LeaseFaultError, TransactionHandleInvalidError,
   EnvelopeVersionUnsupportedError, EnvelopeCorruptError,
-  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError,
+  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError,
   DurabilityContractError, TransactionPoolerDetectedError, MigrationLockTimeoutError,
   type Retryability,
 } from "../../src/index.js";
@@ -18,8 +18,8 @@ import {
  * G6/G7 reconciliation additions), that CLOCK_REGRESSION is "conditional" (not uniformly
  * non-retryable), and that CONNECTION_ERROR / TRANSACTION_FAULT / LEASE_TIMEOUT are retryable.
  *
- * The frozen 1.0.0 exported StorageError code set is 24 (design §3.1's 21 + the already-shipped
- * MIGRATION_LOCK_TIMEOUT, DURABILITY_CONTRACT_VIOLATION, TRANSACTION_POOLER_DETECTED from G6/G7).
+ * The frozen 1.0.0 exported StorageError code set is 25 (design §3.1's 21 + the already-shipped
+ * MIGRATION_LOCK_TIMEOUT, DURABILITY_CONTRACT_VIOLATION, TRANSACTION_POOLER_DETECTED from G6/G7, plus the audit-added AUTHENTICATION_FAILED).
  */
 
 const AS_OF = { kind: "version", version: 1n } as const;
@@ -53,15 +53,16 @@ const TABLE: Row[] = [
   { instance: new ExclusionViolationError("m"), code: "EXCLUSION_VIOLATION", retryable: "non-retryable" },
   { instance: new ClockRegressionError("m"), code: "CLOCK_REGRESSION", retryable: "conditional" },
   { instance: new UnrecognizedPostgresError("m"), code: "UNRECOGNIZED_POSTGRES_ERROR", retryable: "non-retryable" },
-  { instance: new MigrationLockTimeoutError("s", 10), code: "MIGRATION_LOCK_TIMEOUT", retryable: "non-retryable" },
+  { instance: new AuthenticationError("m"), code: "AUTHENTICATION_FAILED", retryable: "non-retryable" },
+  { instance: new MigrationLockTimeoutError("s", 10), code: "MIGRATION_LOCK_TIMEOUT", retryable: "retryable" },
   { instance: new DurabilityContractError("m", []), code: "DURABILITY_CONTRACT_VIOLATION", retryable: "non-retryable" },
   { instance: new TransactionPoolerDetectedError("m"), code: "TRANSACTION_POOLER_DETECTED", retryable: "non-retryable" },
 ];
 
 describe("retryability is a machine-readable field on every StorageError (C5, C6)", () => {
-  it("covers exactly the 24 frozen codes, each unique", () => {
-    expect(TABLE).toHaveLength(24);
-    expect(new Set(TABLE.map((r) => r.code)).size).toBe(24);
+  it("covers exactly the 25 frozen codes, each unique", () => {
+    expect(TABLE).toHaveLength(25);
+    expect(new Set(TABLE.map((r) => r.code)).size).toBe(25);
   });
 
   it("every concrete class exposes a machine-readable retryable value matching the frozen table (no message parsing)", () => {
@@ -73,9 +74,9 @@ describe("retryability is a machine-readable field on every StorageError (C5, C6
     }
   });
 
-  it("CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT are the retryable set (C2)", () => {
+  it("CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT are the retryable set (C2)", () => {
     const retryable = TABLE.filter((r) => r.instance.retryable === "retryable").map((r) => r.code).sort();
-    expect(retryable).toEqual(["CONNECTION_ERROR", "LEASE_TIMEOUT", "TRANSACTION_FAULT"]);
+    expect(retryable).toEqual(["CONNECTION_ERROR", "LEASE_TIMEOUT", "MIGRATION_LOCK_TIMEOUT", "TRANSACTION_FAULT"]);
   });
 
   it("CLOCK_REGRESSION is conditional, not uniformly non-retryable (C6)", () => {

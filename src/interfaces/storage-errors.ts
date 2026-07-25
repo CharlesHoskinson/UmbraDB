@@ -5,8 +5,9 @@ import { z } from "zod";
  * A caught error exposes this alongside its stable `code`, so a caller decides whether to retry
  * without parsing a message string:
  *
- * - `"retryable"` -- a transient infrastructure fault an immediate in-process retry can clear
- *   (`CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT`).
+ * - `"retryable"` -- a transient fault a retry can clear: `CONNECTION_ERROR`, `TRANSACTION_FAULT`,
+ *   `LEASE_TIMEOUT` (an immediate in-process retry), and `MIGRATION_LOCK_TIMEOUT` (a bounded
+ *   backoff-then-retry, which clears once the concurrent migration finishes).
  * - `"non-retryable"` -- retrying cannot succeed without changing the input, the data, or the
  *   deployment (validation, integrity, conflict, config, and lease-ownership failures).
  * - `"conditional"` -- retryability depends on the specific cause; the only 1.0.0 case is

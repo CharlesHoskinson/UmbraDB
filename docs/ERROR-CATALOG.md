@@ -22,7 +22,7 @@ deliberately carries no `code`.
 |---|---|---|---|
 | `VALIDATION_FAILED` | `ValidationError` | Input failed its Zod boundary schema; rejected before any backend work. | non-retryable |
 | `SERIALIZATION_FAILED` | `SerializationFailedError` | A value failed to round-trip through the backend encoding (JSONB/bytea). | non-retryable |
-| `CONNECTION_ERROR` | `ConnectionError` | Driver-level connection failure (a network code or a Postgres class-08 / auth / shutdown SQLSTATE). | retryable |
+| `CONNECTION_ERROR` | `ConnectionError` | Driver-level connection failure (a network code or a Postgres class-08 / shutdown SQLSTATE; authentication failures are `AUTHENTICATION_FAILED`, not this). | retryable |
 | `VERSION_CONFLICT` | `VersionConflictError` | Optimistic-concurrency check failed: the key's current version did not match the expected version. | non-retryable |
 | `HISTORY_UNAVAILABLE` | `HistoryUnavailableError` | A point-in-time read addressed a version or time that has been pruned below the retained history horizon. | non-retryable |
 | `TRANSACTION_KEY_REUSE` | `TransactionKeyReuseError` | The same transaction wrote the same key twice (the same-transaction key-reuse guard fired). | non-retryable |
@@ -41,14 +41,15 @@ deliberately carries no `code`.
 | `EXCLUSION_VIOLATION` | `ExclusionViolationError` | A Postgres exclusion constraint fired (23P01), or a key-reuse conflict arrived with no key context. | non-retryable |
 | `CLOCK_REGRESSION` | `ClockRegressionError` | A 23514 check on the temporal-kv history range fired, from one of two causes with different retry characteristics (see below). | conditional |
 | `UNRECOGNIZED_POSTGRES_ERROR` | `UnrecognizedPostgresError` | A real driver/database error with a SQLSTATE this adapter does not specifically translate (so no raw driver error escapes). | non-retryable |
-| `MIGRATION_LOCK_TIMEOUT` | `MigrationLockTimeoutError` | `runMigrations` timed out acquiring the class-1 migration advisory lock (another instance holds it). | non-retryable |
+| `AUTHENTICATION_FAILED` | `AuthenticationError` | The PostgreSQL server rejected the supplied credentials or role (SQLSTATE 28000 / 28P01); retrying the same credential cannot succeed without a configuration change. | non-retryable |
+| `MIGRATION_LOCK_TIMEOUT` | `MigrationLockTimeoutError` | `runMigrations` timed out acquiring the class-1 migration advisory lock while another instance is mid-migration; the lock clears once that migration finishes. | retryable |
 | `DURABILITY_CONTRACT_VIOLATION` | `DurabilityContractError` | The startup durability probe rejected the server configuration (e.g. `fsync` or `full_page_writes` off). | non-retryable |
 | `TRANSACTION_POOLER_DETECTED` | `TransactionPoolerDetectedError` | The startup probe detected a transaction-pooling proxy (session advisory locks are unsupported there). | non-retryable |
 
 ## The count is enforced, not asserted
 
 The catalog above is exactly the set of `code` values on the concrete `StorageError` subclasses
-re-exported from the package-root barrel. It is currently **24 codes**, but that number is not
+re-exported from the package-root barrel. It is currently **25 codes**, but that number is not
 hard-coded anywhere as an authority: `test/api-surface/error-catalog-drift.test.ts` cross-checks
 **this table against the actually-exported error classes** (table ≡ surface) — it instantiates
 every exported concrete `StorageError` subclass, collects its `.code`, and asserts the doc's code
@@ -59,12 +60,14 @@ and the count self-corrects.
 
 ## The retryable set
 
-Exactly three codes are **retryable** — a transient infrastructure fault an immediate in-process
+Exactly four codes are **retryable** — a transient infrastructure fault an immediate in-process
 retry can clear:
 
 - `CONNECTION_ERROR`
 - `TRANSACTION_FAULT`
 - `LEASE_TIMEOUT`
+- `MIGRATION_LOCK_TIMEOUT` (a bounded backoff-then-retry: the migration advisory lock is
+  released the moment the concurrent migration commits -- see the reconciliation note below)
 
 `CLOCK_REGRESSION` is **conditional**; every other code is **non-retryable**.
 
@@ -86,13 +89,13 @@ distinction a fourth-round cross-vendor re-audit added, having found the prior b
 The `retryable` value is therefore `"conditional"`; a caller MUST NOT treat `CLOCK_REGRESSION` as
 uniformly non-retryable.
 
-## Reconciliation rationale (why 24, not the design's earlier 21)
+## Reconciliation rationale (why 25, not the design's earlier 21)
 
 `design.md` §3.1 enumerated **21** codes. That grep (`grep -rhoE 'readonly code = "[A-Z_]+"' src/ |
 grep -vE 'CHAIN|BLOB|BLOCK'`) was taken **before** the G6 (durability probe) and G7 (migration-lock
 hardening) work merged, and the design's own framing says the drift test — not the literal number —
 is the authority on the count. Three already-shipped codes join the frozen catalog, bringing it to
-24:
+24; a fourth cross-vendor audit then added `AUTHENTICATION_FAILED` (below), for **25** total:
 
 - `MIGRATION_LOCK_TIMEOUT` (`MigrationLockTimeoutError`, G7),
 - `DURABILITY_CONTRACT_VIOLATION` (`DurabilityContractError`, G6),
@@ -103,17 +106,24 @@ that calls `runMigrations` (every consumer does, at startup) can already `catch`
 are therefore **already-shipped public error surface**, and their classes are re-exported from the
 barrel. Freezing the catalog without them would understate the surface a consumer actually observes.
 
-**Why `MIGRATION_LOCK_TIMEOUT` is non-retryable even though it resembles `LEASE_TIMEOUT`.** Both are
-advisory-lock waits that time out, and `LEASE_TIMEOUT` **is** retryable — so the natural question is
-why `MIGRATION_LOCK_TIMEOUT` is not. The answer is the operational context, not the mechanism:
-`LEASE_TIMEOUT` is an **in-operation** contention signal (another writer holds the lease right now;
-retrying the lease acquire shortly is the correct recovery). `MIGRATION_LOCK_TIMEOUT` is a
-**startup/migration-time** fault — another instance is running migrations under the class-1
-migration lock. The correct recovery is for the orchestrator to back off and restart the process
-(or wait for the other instance to finish migrating and start clean), **not** an in-process retry
-loop hammering the migration lock. The frozen retryable set was fixed as exactly
-`{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT}` for this reason; `MIGRATION_LOCK_TIMEOUT` is
-non-retryable.
+**Why `AUTHENTICATION_FAILED` was added (25th code, cross-vendor audit BLOCK).** Before the audit,
+`translatePostgresError` mapped SQLSTATE `28000`/`28P01` (invalid authorization / invalid password)
+to the **retryable** `ConnectionError`. But a rejected credential is not a transient connection
+fault: retrying the same credential can never succeed without changing the deployment
+configuration. The audit split authentication failures into their own **non-retryable**
+`AuthenticationError` (`src/postgres/errors.ts`), leaving `ConnectionError` for the genuinely
+transient class-08 connection-loss codes only.
+
+**Why `MIGRATION_LOCK_TIMEOUT` is retryable, in parity with `LEASE_TIMEOUT` (cross-vendor audit
+BLOCK).** It fires when `runMigrations` cannot acquire the class-1 migration advisory lock within
+its bound because another instance is **mid-migration**. That is a transient condition: the lock is
+released the moment the concurrent migration commits, so a bounded backoff-then-retry can succeed
+once that migration finishes -- exactly the same transient advisory-lock-wait character as the
+retryable `LEASE_TIMEOUT` (the writer-lease acquire). An earlier draft marked it non-retryable on
+the grounds that "the orchestrator should back off and restart the process"; the audit found that
+an *operational preference* for how to retry is not a *retryability fact* about the error. The
+frozen retryable set is therefore `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT,
+MIGRATION_LOCK_TIMEOUT}`.
 
 ## Excluded: the deferred chain-archive codes
 

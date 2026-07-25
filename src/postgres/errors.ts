@@ -16,6 +16,22 @@ export class ExclusionViolationError extends StorageError {
 }
 
 /**
+ * SQLSTATE `28000` (invalid_authorization_specification) / `28P01` (invalid_password) -- the
+ * PostgreSQL server rejected the supplied credentials or role at connection establishment. Unlike a
+ * class-08 connection loss (a transient fault an immediate retry can clear), retrying the SAME bad
+ * credentials can NEVER succeed without changing the deployment configuration, so this is
+ * **non-retryable** -- a cross-vendor audit BLOCK: routing `28000`/`28P01` to the retryable
+ * `ConnectionError` told a machine-facing caller to retry something that cannot clear on its own.
+ * Kept distinct from `ConnectionError`, which stays for the genuinely transient class-08
+ * connection-loss codes.
+ */
+export class AuthenticationError extends StorageError {
+  readonly code = "AUTHENTICATION_FAILED" as const;
+  readonly retryable = "non-retryable" as const;
+  constructor(message: string, cause?: unknown) { super(message, cause); }
+}
+
+/**
  * SQLSTATE `23514` (check_violation) firing on `kv_history_range`, from EITHER of two distinct
  * causes with different retry characteristics — **corrected by a fourth-round cross-vendor
  * re-audit, which found the prior wording only described one of them and blanket-claimed
@@ -169,7 +185,7 @@ function isPgDriverError(err: unknown): err is PgDriverError {
   if (!(err instanceof Error) || typeof (err as { code?: unknown }).code !== "string") return false;
   const code = (err as PgDriverError).code;
   const looksLikeRealPostgresError = typeof (err as { severity?: unknown }).severity === "string";
-  return looksLikeRealPostgresError || CONNECTION_FAILURE_CODES.has(code);
+  return looksLikeRealPostgresError || CONNECTION_FAILURE_CODES.has(code) || AUTHENTICATION_FAILURE_CODES.has(code);
 }
 
 /** Exported so callers that see arbitrary, non-adapter-internal errors (`withTransaction`'s
@@ -206,9 +222,11 @@ export function isLockTimeout(err: unknown): boolean {
  * Connection-failure codes, translated to `ConnectionError`. Two distinct namespaces share
  * this one set (both surface via the same driver `.code` property, so one lookup covers both):
  * Node-level codes (no SQLSTATE — the driver never reached/kept a connection to the server),
- * and real Postgres SQLSTATEs for connection/authentication/shutdown failures. **Revised after
+ * and real Postgres SQLSTATEs for connection/shutdown failures (authentication failures `28000`/
+ * `28P01` are handled separately by `AUTHENTICATION_FAILURE_CODES` below, since a rejected
+ * credential is not a retryable transient fault). **Revised after
  * a cross-vendor audit found the original set covered only the Node-level half** — a real
- * Postgres error (a wrong password, an admin-initiated shutdown, a dropped connection
+ * Postgres error (an admin-initiated shutdown, a dropped connection
  * mid-query) has its own SQLSTATE and was previously falling through to the `default` branch
  * unchanged, contradicting the documented no-raw-driver-errors contract.
  */
@@ -230,14 +248,22 @@ const CONNECTION_FAILURE_CODES = new Set([
   "08006", // connection_failure
   "08007", // transaction_resolution_unknown
   "08P01", // protocol_violation
-  // Authentication failures — a wrong password/role is a connection-establishment failure from
-  // this adapter's point of view, not a data-model error
-  "28000", // invalid_authorization_specification
-  "28P01", // invalid_password
   // Server-initiated termination while a connection was in use
   "57P01", // admin_shutdown
   "57P02", // crash_shutdown
   "57P03", // cannot_connect_now
+]);
+
+/**
+ * Authentication-failure SQLSTATEs, translated to `AuthenticationError` (NON-retryable). Split out
+ * of `CONNECTION_FAILURE_CODES` by a cross-vendor audit BLOCK: a rejected credential/role is not a
+ * transient connection fault, so retrying it unchanged can never succeed. Included in the
+ * `isPgDriverError` recognition set so a genuine auth failure is still classified as a driver
+ * error (never leaked raw) even on the rare driver path that omits `.severity`.
+ */
+const AUTHENTICATION_FAILURE_CODES = new Set([
+  "28000", // invalid_authorization_specification
+  "28P01", // invalid_password
 ]);
 
 /**
@@ -264,6 +290,13 @@ export function translatePostgresError(
   if (err instanceof StorageError) return err;
 
   if (!isPgDriverError(err)) return err instanceof Error ? err : new Error(String(err));
+
+  // Authentication failures (28000/28P01) are NOT retryable -- a rejected credential can never
+  // clear by retrying the same input (cross-vendor audit BLOCK). Routed to AuthenticationError,
+  // checked BEFORE the retryable ConnectionError connection-loss branch below.
+  if (err.code && AUTHENTICATION_FAILURE_CODES.has(err.code)) {
+    return new AuthenticationError(err.message, err);
+  }
 
   if (err.code && CONNECTION_FAILURE_CODES.has(err.code)) {
     return new ConnectionError(err.message, err);

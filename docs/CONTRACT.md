@@ -54,8 +54,11 @@ The generated schema reference is [`docs/SCHEMA.md`](SCHEMA.md).
 
 ## 3. Cancellation semantics
 
-Every method threads an `AbortSignal` (`opts.signal`); the guarantee, as public contract, depends on
-**when** the abort lands (three timings):
+The read and write operations accept an `AbortSignal` (`opts.signal`) and pre-check it; a few
+signal-less methods are the exceptions -- notably `TransactionLeaseLayer.releaseLease(lease)`,
+which takes no `opts` and threads no signal (release is the always-run cleanup half of a lease and
+must not be cancellable out from under a still-held advisory lock). Where a signal IS accepted, the
+guarantee, as public contract, depends on **when** the abort lands (three timings):
 
 - **Before dispatch** (an already-aborted signal) — **no query is issued**; the call rejects
   immediately without touching the backend.
@@ -68,11 +71,18 @@ Every method threads an `AbortSignal` (`opts.signal`); the guarantee, as public 
 
 ## 4. Save-retry caveat
 
-`CheckpointStore.save` is **not blindly retryable**. On a `ConnectionError` (which is marked
-`retryable` in the catalog), a lost-`COMMIT`-ack means the save may or may not have landed. A caller
-MUST **re-check `history()` before retrying** `save`: a blind retry of an actually-committed save
-produces a benign identical-content duplicate at the next sequence, which `retainCount` prunes — but
-the re-check is the documented rule so a caller never assumes the first attempt was lost.
+`CheckpointStore.save` is **not blindly retryable**. The default `save()` (no caller-supplied
+`opts.tx`) runs in its own `withTransaction` (`src/postgres/checkpoint-store.ts`), so a connection
+lost around its `COMMIT` -- including the case where the commit outcome is **uncertain** because the
+`COMMIT` acknowledgement itself was lost -- surfaces as a **retryable** `TransactionFaultError` with
+`faultKind: "connection-lost"` (`src/postgres/transaction-lease.ts`), **not** a `ConnectionError`.
+(`ConnectionError` is what a consumer sees on the **non-transactional** paths -- a connection failure
+outside a `withTransaction`.) On that `TransactionFaultError("connection-lost")` a caller MUST
+**re-check `history()` before retrying** `save`, because the commit may or may not have landed: a
+blind retry of an actually-committed save produces a benign identical-content duplicate at the next
+sequence, which `retainCount` prunes -- but the re-check is the documented rule so a caller never
+assumes the first attempt was lost. (Consistent with the recovery-testing C1 reconciliation, which
+fixed the same code-vs-doc mismatch for the crash tests.)
 
 Automatic idempotency (an `idempotency_key` `UNIQUE` constraint that would make the retry a no-op
 without the `history()` re-check) is a **deferred additive 1.1 migration**, not a 1.0 code change. No
@@ -124,10 +134,16 @@ reserved pointer so the contract set is complete.
 
 ## 8. Format headroom (reserved for 1.1)
 
-Chunk addressing and the wallet-state envelope encoding are **versioned**: manifests already carry
-enough structure, and the envelope already carries a version field (`ENVELOPE_VERSION`), to introduce
-a **v2 keyed/encrypted chunk mode additively in 1.1 without a breaking migration**. That reserved
-headroom lets 1.1 add per-consumer/keyed chunking (which also closes the dedup-oracle side channel of
-§7) and at-rest encryption as an additive format version, not a schema break. This is the
-documentation half of the deferred dedup-oracle mitigation; **no keyed-chunking or encryption code
-ships in 1.0.**
+The **wallet-state envelope** encoding is **versioned**: the envelope carries an explicit
+`ENVELOPE_VERSION` field (`src/postgres/wallet-state-envelope.ts`), so a v2 envelope format can be
+introduced additively.
+
+**Chunk content-addressing is NOT versioned in 1.0.** Chunks are addressed by a hard-coded SHA-256
+over their bytes (`src/postgres/checkpoint-store.ts`), and the schema stores bare, unversioned
+manifest/chunk hashes (`src/postgres/migrations/002_checkpoint_store.ts`: `ckpt_chunks.hash` and
+`ckpt_manifests.manifest_hash` are plain `bytea`, with no algorithm/version column). A future
+keyed/encrypted or alternate-hash chunk mode (which would also close the dedup-oracle side channel
+of section 7) therefore requires an **additive migration adding a hash-algorithm/version field**,
+reserved for **1.1**. Such a migration is additive (a new column defaulting to the current SHA-256
+mode), so it is not a breaking change -- but 1.0 ships **no** such field and **no** keyed-chunking or
+encryption code. This is honest headroom, not a claim that chunk addressing is already versioned.
