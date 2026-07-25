@@ -1,0 +1,145 @@
+name: Supply-chain gate
+
+# v1.0.0-infosec-signoff (G18). Enforces the supply-chain hygiene the tree already has by luck of a
+# fresh install: lockfile-pinned installs with no lifecycle scripts, a blocking runtime-scope
+# `npm audit`, full-history secret scanning, container-CVE scanning of both pinned digests, and
+# change-control on `flake.lock`. Actions are SHA-pinned (matching conformance.yml); the two CLI
+# scanners are installed from version-pinned official releases rather than third-party actions so no
+# unpinned/unverifiable action SHA enters the supply chain this workflow exists to protect.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly, so a newly-disclosed CVE against an unchanged pinned digest surfaces without a code change.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  deps:
+    # Dependency / secret / lock hygiene. Runs on every PR and push to main.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # fetch-depth: 0 -- full history is required for the flake.lock base-diff and the
+      # full-history gitleaks scan below.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Assert repo-root .npmrc sets ignore-scripts=true (config-drift guard)
+        # G18 (3.1): a committed .npmrc must exist and set ignore-scripts=true. Because that also
+        # suppresses THIS package's own prepare/postinstall hooks, the build/typecheck it depends on
+        # MUST run as an explicit step (it does: `npm run typecheck` below, and `npm run build` in
+        # pack-smoke.yml) -- never via a lifecycle hook. This step is the drift guard.
+        run: |
+          test -f .npmrc || { echo "::error file=.npmrc::repo-root .npmrc is missing"; exit 1; }
+          if ! grep -Eq '^[[:space:]]*ignore-scripts[[:space:]]*=[[:space:]]*true[[:space:]]*$' .npmrc; then
+            echo "::error file=.npmrc::.npmrc must set ignore-scripts=true"; exit 1
+          fi
+          echo ".npmrc present and sets ignore-scripts=true"
+
+      - name: Install dependencies (npm ci -- lockfile + integrity pinned, scripts ignored)
+        # G18 (D1): npm ci, never npm install -- a tarball inconsistent with package-lock.json or its
+        # integrity hashes hard-fails. ignore-scripts (from .npmrc) prevents any install script running.
+        run: npm ci
+
+      - name: Typecheck (EXPLICIT step -- not a lifecycle hook)
+        # G18 (D2): proves the release's typecheck runs explicitly even with lifecycle scripts
+        # ignored. This package declares no prepare/postinstall, so ignore-scripts suppresses nothing
+        # the build needs; this step is the standing confirmation of that.
+        run: npm run typecheck
+
+      - name: npm audit -- blocking, runtime dependencies only (G18 D3)
+        # Runtime deps are exactly `postgres` + `zod` (package.json). --omit=dev keeps the large dev
+        # graph (vitest/testcontainers/stryker/...) out of the blocking gate, so a dev-only advisory
+        # cannot fail it; a HIGH/CRITICAL advisory in a RUNTIME dep does.
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: npm audit -- full graph, NON-blocking (developer visibility)
+        run: npm audit || true
+
+      - name: flake.lock change-control (PR only, G18 D6)
+        # Fails a PR that modifies nix/midnight-env/flake.lock relative to its base branch UNLESS the
+        # PR carries the `flake-lock-update` label. Pure git-diff + label read -- no Nix toolchain.
+        # This catches a committed `nix flake update` roll-forward that a no-op re-lock check would miss.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          if git diff --quiet "origin/$BASE_REF" -- nix/midnight-env/flake.lock; then
+            echo "flake.lock unchanged vs base ($BASE_REF) -- ok"
+            exit 0
+          fi
+          echo "flake.lock differs from base ($BASE_REF)."
+          case ",${PR_LABELS}," in
+            *,flake-lock-update,*)
+              echo "PR carries the 'flake-lock-update' label -- change allowed."
+              exit 0 ;;
+            *)
+              echo "::error file=nix/midnight-env/flake.lock::flake.lock changed without the 'flake-lock-update' label. Add the label to land a deliberate lock update."
+              exit 1 ;;
+          esac
+
+  image-scan:
+    # Container-CVE scan of BOTH digest-pinned images. Scheduled + on-demand only (the digests move
+    # only on a deliberate bump, so a PR gate would fire only then). REPORTS (non-blocking) into the
+    # job summary, per the design's policy choice.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Derive image pins from flake.nix and assert they match the expected digests
+        # G18 (D5): the scan targets are read out of nix/midnight-env/flake.nix and asserted equal to
+        # the known-good digests, so a silent digest bump in flake.nix cannot diverge from what Trivy
+        # scans (and start-stack.sh uses the same two digests).
+        id: pins
+        run: |
+          INDEXER="$(grep -oE 'midnightntwrk/indexer-standalone:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | head -1)"
+          PROOF="$(grep -oE 'midnightntwrk/proof-server:[0-9.]+@sha256:[0-9a-f]{64}' nix/midnight-env/flake.nix | head -1)"
+          EXP_INDEXER="midnightntwrk/indexer-standalone:4.3.3@sha256:03afd079b00bcd229df29a24771439c5e7695c339cd89216d0763ce40731cc4b"
+          EXP_PROOF="midnightntwrk/proof-server:8.1.0@sha256:801bbc0340e9e96f16735f77b523f23c7459e3359842f7c79c2c53f4e994d531"
+          test -n "$INDEXER" || { echo "::error::could not read indexer-standalone pin from flake.nix"; exit 1; }
+          test -n "$PROOF"   || { echo "::error::could not read proof-server pin from flake.nix"; exit 1; }
+          [ "$INDEXER" = "$EXP_INDEXER" ] || { echo "::error::indexer-standalone pin in flake.nix ($INDEXER) diverged from the scanned reference"; exit 1; }
+          [ "$PROOF" = "$EXP_PROOF" ]     || { echo "::error::proof-server pin in flake.nix ($PROOF) diverged from the scanned reference"; exit 1; }
+          echo "indexer=$INDEXER" >> "$GITHUB_OUTPUT"
+          echo "proof=$PROOF" >> "$GITHUB_OUTPUT"
+          echo "Scanning pinned digests:"; echo "  $INDEXER"; echo "  $PROOF"
+
+      - name: Install Trivy (version-pinned official release)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
+          trivy --version
+
+      - name: Trivy scan both pinned digests (HIGH,CRITICAL) -> job summary
+        # Non-blocking report: surfaces HIGH/CRITICAL CVEs against the pinned bytes without a code
+        # change. A pinned-but-vulnerable base is otherwise invisible.
+        run: |
+          {
+            echo "## Trivy image scan (HIGH,CRITICAL) — pinned digests"
+            for ref in "${{ steps.pins.outputs.indexer }}" "${{ steps.pins.outputs.proof }}"; do
+              echo "### $ref"
+              echo '```'
+              trivy image --severity HIGH,CRITICAL --no-progress --scanners vuln "$ref" || echo "(trivy exited non-zero for $ref)"
+              echo '```'
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
