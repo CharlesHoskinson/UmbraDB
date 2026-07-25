@@ -83,26 +83,26 @@ count of `defect-escape` + `gate-miss` + `rework-cause` entries — the trend-an
 
 | Gate | Item (short) | Owner | Status | Retro-relevant events (LL-IDs) |
 |---|---|---|---|---|
-| G1  | Public API surface / barrel / exports / tarball smoke |  | ☐ open | — |
-| G2  | SemVer stability policy + CHANGELOG |  | ☐ open | — |
-| G3  | Frozen error-code catalog (retryable); strip chain_archive |  | ☐ open | — |
-| G4  | Contract docs (durability/migration/cancellation/lease/…) |  | ☐ open | — |
+| G1 | Public API surface / barrel / exports / tarball smoke | api-surface | ☑ CLOSED (merged `726f567`) | — |
+| G2 | SemVer stability policy + CHANGELOG | api-surface | ☑ CLOSED (merged `726f567`) | — |
+| G3 | Frozen error-code catalog (retryable); strip chain_archive | api-surface | ☑ CLOSED (merged `726f567`) | — |
+| G4 | Contract docs (durability/migration/cancellation/lease/…) | api-surface | ☑ CLOSED (merged `726f567`) | — |
 | G5  | Co-transactional watermark+data (THE blocker) | release run | ☑ CLOSED (merged `e5fcdaa`) | LL-002, LL-003 |
-| G6  | Durability startup probe |  | ☐ open | — |
-| G7  | Server-side timeouts (statement/lock/idle/migration) |  | ☐ open | — |
-| G8  | Contract-integrity fixes (id validation, JSON depth bound, withLease) |  | ☐ open | — |
-| G9  | Crash-injection / cold-start suite in REQUIRED CI |  | ☐ open | — |
-| G10 | Full-sync soak + load-under-concurrent-prune |  | ☐ open | — |
-| G11 | Differential-equivalence gate (in-repo, fault-schedule) |  | ☐ open | — |
-| G12 | M5 live Preprod round-trip (manual pre-tag evidence) |  | ☐ open | — |
-| G13 | Perf-correctness fixes (UNNEST HP-1, GROUP BY HP-2, fillfactor IS-1) |  | ☐ open | — |
-| G14 | Benchmark baseline recorded (GC anti-join envelope) |  | ☐ open | — |
-| G15 | SECURITY.md / threat-model doc |  | ☐ open | — |
-| G16 | CheckpointStore dedup interface-doc caveat |  | ☐ open | — |
-| G17 | TLS caveat + de-stub VerifyFull/--ca (keep default) |  | ☐ open | — |
-| G18 | Supply-chain CI gate (npm ci / audit / ignore-scripts / gitleaks / trivy / flake.lock) |  | ☐ open | — |
-| G19 | Committed Preview wallet secret → generator + .example + allowlist |  | ☐ open | — |
-| G20 | Freeze Lean cut-line {T3,T5,W1,C1} + written deferral |  | ☐ open | — |
+| G6 | Durability startup probe | durable-checkpoint-cursor | ☑ CLOSED (merged `2cb5d00`) | — |
+| G7 | Server-side timeouts (statement/lock/idle/migration) | durable-checkpoint-cursor | ☑ CLOSED (merged `2cb5d00`) | — |
+| G8 | Contract-integrity fixes (id validation, JSON depth bound, withLease) | durable-checkpoint-cursor | ☑ CLOSED (merged `2cb5d00`) | — |
+| G9 | Crash-injection / cold-start suite in REQUIRED CI | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
+| G10 | Full-sync soak + load-under-concurrent-prune | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
+| G11 | Differential-equivalence gate (in-repo, fault-schedule) | recovery-testing | ☑ CLOSED (merged `4e04926`) | — |
+| G12 | M5 live Preprod round-trip (manual pre-tag evidence) | recovery-testing | ☐ OPEN — manual run against the RC (R5) | — |
+| G13 | Perf-correctness fixes (UNNEST HP-1, GROUP BY HP-2, fillfactor IS-1) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
+| G14 | Benchmark baseline recorded (GC anti-join envelope) | perf-baseline | ☑ CLOSED (merged `855fb22`) | — |
+| G15 | SECURITY.md / threat-model doc | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G16 | CheckpointStore dedup interface-doc caveat | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G17 | TLS caveat + de-stub VerifyFull/--ca (keep default) | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G18 | Supply-chain CI gate (npm ci / audit / ignore-scripts / gitleaks / trivy / flake.lock) | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G19 | Committed Preview wallet secret → generator + .example + allowlist | infosec-signoff | ☑ CLOSED (merged this change) | — |
+| G20 | Freeze Lean cut-line {T3,T5,W1,C1} + written deferral | api-surface | ☑ CLOSED (merged `726f567`) | — |
 
 **Cross-cutting friction tally (fill as events land):**
 

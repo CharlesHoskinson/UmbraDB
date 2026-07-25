@@ -159,35 +159,66 @@ but verified equivalent to the reference behavior it's replacing.
   four modules in this milestone's checklist — see the note below on what
   that does and doesn't mean for Milestone 2 as a whole.
 
-**Note:** all four modules above now have their own implementation done
-and reviewed, but per this milestone's own opening framing ("not just
-'its own tests pass,' but verified equivalent to the reference behavior
-it's replacing"), the differential state-equivalence gate itself is a
-separate, still-outstanding cross-cutting item — see Milestone 3 and the
-1.0.0 checklist below, where it's tracked jointly with Milestone 3, not
-resolved by this or any single sprint.
+**Note:** all four modules above have their own implementation done and
+reviewed. Per this milestone's own opening framing ("not just 'its own
+tests pass,' but verified equivalent to the reference behavior it's
+replacing"), the differential state-equivalence gate was tracked as a
+separate cross-cutting item rather than resolved by any single sprint —
+**it is now closed, in rescoped form**, by G11 in
+`openspec/changes/v1.0.0-recovery-testing` (merged `4e04926`). The oracle is
+an in-repo fault-free reference built from UmbraDB's own adapters, not an
+imported foreign consumer; see Milestone 3's last item and the Release
+Record §G11 for why that rescope was chosen and what it does not claim.
 
-## Milestone 3 — Testing (current)
+## Milestone 3 — Testing (complete for 1.0.0)
 
-- [ ] The property-based test suite (P1–P10) derived directly from
+Delivered by `openspec/changes/v1.0.0-recovery-testing` (G9/G10/G11, merged `4e04926`). Every item
+below is enforced by id: `test/integration/required-tests.manifest.json` lists 25 required test ids,
+and `scripts/conformance-gate.mjs` fails the required CI gate **by id** if any of them did not
+execute-and-pass — so a re-introduced `describe.skipIf` turns CI red by name, not by luck.
+
+- [x] The property-based test suite (P1–P10) derived directly from
   `Formal/STORAGE_ALGEBRA.md` §5 — implemented in TypeScript against real
-  Postgres (via Testcontainers, `design/design.md` §8), not mocked.
-- [ ] **Full sync test** — exercise the storage layer through an entire
-  realistic sync run (not a unit-test-sized fixture): sustained writes,
-  checkpoint cadence, GC passes, and lease contention at a scale that
-  resembles real wallet-sync duration and data volume.
-- [ ] **Retrieval correctness under load** — targeted tests that read back
-  (`get`, `getAt`, `load`, `loadAt`) data written earlier in the same run
-  and assert byte-for-byte/value-for-value correctness, including
-  point-in-time reads that must reconstruct a past state exactly.
-- [ ] **Cold-start survival** — kill the process (and, separately, kill
-  Postgres) mid-operation and verify the next start recovers cleanly:
-  leases don't wedge, in-flight transactions don't leave partial state
-  visible, and sync resumes from the last durable checkpoint/watermark
-  rather than corrupting or silently skipping data.
-- [ ] Differential equivalence gate (`design/design.md` §10) as the
-  release-blocking acceptance test for the underlying cutover this project
-  originated from.
+  Postgres (via Testcontainers, `design/design.md` §8), not mocked. All ten
+  are live: P1/P10 `save-and-advance.property.test.ts`; P2–P5
+  `temporal-kv.property.test.ts`; P6–P8 `checkpoint-store.property.test.ts`;
+  P9 `watermarks.property.test.ts`.
+- [x] **Full sync test** — `soak.full-sync.invariants-hold`
+  (`test/integration/soak/full-sync-soak.integration.test.ts`): a sustained
+  concurrent mix (KV puts + checkpoint/watermark cadence + periodic prune +
+  a held lease) at a **declared 10^5-chunk envelope**, sampling four
+  P1–P10-derived SQL invariants *during* the run, proving a GC pass genuinely
+  reclaims backdated chunks, and ending replay-equivalent to a fault-free
+  reference. Paired with `soak.load-under-prune.snapshot-isolation-safe`
+  for load under a concurrently-committing prune.
+- [x] **Retrieval correctness under load** — the `getAt`/`loadAt`
+  point-in-time reads are the subject of P2–P5
+  (`temporal-kv.property.test.ts`, temporal projection and coherence over
+  arbitrary event sequences) and P6–P8
+  (`checkpoint-store.property.test.ts`, content-addressed round-trip and
+  manifest reconstruction), with the byte-level round-trip asserted in
+  `temporal-kv.test.ts` and `wallet-state-envelope.test.ts`.
+- [x] **Cold-start survival** — the crash-injection suite kills the process
+  *and*, separately, Postgres, mid-operation:
+  `crash.process-kill-save.no-partial-checkpoint`,
+  `crash.pg-kill-save.typed-connection-error`,
+  `crash.pg-kill-save.retry-benign-duplicate`,
+  `crash.lease-nonwedge.no-wedge-cold-start`, and the four
+  `crash.cursor-durability.*` legs — including
+  `synchronous-commit-off` under an **unclean** postmaster kill
+  (SIGQUIT/immediate) plus crash recovery, where a lost tail of acked
+  commits is acceptable but an inverted durability order is a failure.
+- [x] Differential equivalence gate (`design/design.md` §10) — landed
+  **rescoped**, per the G11 ruling recorded in `docs/roadmapv1.html` §C: the
+  in-repo `differential.fault-schedule.state-equivalent` compares a
+  fault-schedule run against a fault-free reference built from UmbraDB's own
+  adapters, guarded by `differential.fault-schedule.negative-control-fires`
+  (the oracle must be able to fail) and
+  `differential.reference.import-clean` (the reference imports no consumer
+  code). Importing a foreign consumer as the oracle was **deliberately
+  rejected** — it would break the indexer-agnostic boundary this project
+  holds. The original cutover-oracle framing is therefore satisfied in
+  rescoped form, not literally; see the Release Record §G11.
 
 ## Milestone 4 — Performance (`Performance/`)
 
@@ -202,7 +233,9 @@ how long that took). See `Performance/README.md`; being seeded by a
 dedicated research pass before any tooling choice is locked in.
 
 - [ ] Research pass on profiling/benchmarking/logging tooling for a local
-  Postgres-backed storage layer, reviewed before adoption.
+  Postgres-backed storage layer, reviewed before adoption. **Post-1.0.0** —
+  not a 1.0.0 gate item; G14's rule is that the gate is the baseline
+  artifact's existence and structural reproduction, never a number.
 - [x] Benchmark suite covering the workloads above, with a baseline
   recorded (G14): the in-repo `bench/` harness drives UmbraDB's own adapters
   against a pinned Testcontainers PG17 and emits the committed
@@ -214,7 +247,9 @@ dedicated research pass before any tooling choice is locked in.
   `Performance/CEILINGS.md`.
 - [ ] Activity logging wired into all four modules, with a documented way
   to correlate a slow application-level call down to the SQL and query
-  plan that caused it.
+  plan that caused it. **Post-1.0.0** — deliberately *not* a 1.0.0 gate
+  item (observability is not part of the frozen surface; see
+  `docs/roadmapv1.html` §05). Tracked with Sprint 9.
 
 **Sprint 9** (`sprint-9-cleanup-perf-connection`) is this milestone's next planned change: retry/
 idempotency semantics for transient connection errors, a finality-vs-per-address-cursor
@@ -228,18 +263,50 @@ Per `design/tasks.md` §§9–10: rewire real call sites onto UmbraDB, run a
 live round-trip against a real network, then remove the storage engine
 UmbraDB replaces from the environment it originated in.
 
-## v1.0.0 program status (2026-07-23)
+**For 1.0.0 this milestone is scoped to its middle step only.** G12/R5 is
+the live round-trip: a funded wallet syncs against **public preprod** with
+UmbraDB injected as the tx-history store, then a cold boot resumes from the
+durable envelope cursor without a full resync. That is the one gate CI
+structurally cannot run, so it is executed manually against the release
+candidate and its transcript is pasted into the Release Record.
 
-The 1.0.0 release is now driven as a gated, per-item program. The five OpenSpec changes for it are
+Rewiring every real call site and *removing* the storage engine UmbraDB
+replaces are **not** 1.0.0 gate items — 1.0.0 ships the frozen, importable
+library; adopting it everywhere and decommissioning the incumbent are
+downstream migrations that follow the tag.
+
+## v1.0.0 program status (2026-07-25)
+
+The 1.0.0 release is driven as a gated, per-item program. The five OpenSpec changes for it are
 committed under `openspec/changes/v1.0.0-*` (`api-surface`, `durable-checkpoint-cursor`,
 `recovery-testing`, `perf-baseline`, `infosec-signoff`) and governed by
 [`docs/v1-implementation-guideline.md`](docs/v1-implementation-guideline.md) (per-gate
 verify → red/green/self-verify in an isolated worktree → independent audit including a mandatory
-cold cross-vendor lane → merge). Of the 20 gate items, **G5 — co-transactional `save()`
-(the durable-checkpoint-cursor keystone) — is merged** (`e5fcdaa`); the remaining 19 are tracked in
-the roadmap page [`docs/roadmapv1.html`](docs/roadmapv1.html), with the critical path running
-G6 → G7 → G8 next. The blameless lessons log is `docs/v1-lessons-learned.md`; the current
-resume-from-cold checkpoint is `docs/notes/2026-07-23-resume-checkpoint.md`.
+cold cross-vendor lane → merge).
+
+**All 20 gate items G1–G20 are merged to `main`, and all five changes are complete.**
+
+| Change | Gates | Merge |
+|---|---|---|
+| `durable-checkpoint-cursor` | G5, G6, G7, G8 | `e5fcdaa`, `2cb5d00` |
+| `perf-baseline` | G13, G14 | `855fb22` |
+| `recovery-testing` | G9, G10, G11 | `4e04926` |
+| `api-surface` | G1, G2, G3, G4, G20 | `726f567` |
+| `infosec-signoff` | G15, G16, G17, G18, G19 | (this change) |
+
+Per-gate evidence — a CI run, a test id, a doc path, or an auditor verdict for **each** of G1–G20 —
+is the Release Record [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md) (R1); a gate with no
+evidence pointer is not green. The gate-by-gate narrative page is
+[`docs/roadmapv1.html`](docs/roadmapv1.html) and the blameless lessons log is
+`docs/v1-lessons-learned.md`.
+
+What remains before the tag is the release process itself (guideline §4.2 R1–R12), not gate work:
+the Release Record, the manual G12/R5 live-preprod round-trip against the release candidate, an
+independent cold release audit (R6), and a recorded Go/No-Go (R9).
+
+**Superseded:** `docs/notes/2026-07-23-resume-checkpoint.md` describes the program at 1-of-20 gates
+with the Preprod sync paused at 55%. Both facts are stale — it is kept as a historical record of that
+moment and must not be read as current status.
 
 ## 1.0.0 acceptance checklist
 
@@ -250,10 +317,20 @@ A 1.0.0 tag requires all of:
   trust gate), with a written deferral of C2a/GC, ordered reconstruction, lease traces, keyed-store
   lifting, and SQL/runtime refinement to post-1.0. See *Milestone 1 → Frozen 1.0.0 Lean cut-line*
   above (G20, `openspec/changes/v1.0.0-api-surface`).
-- [ ] P1–P10 property tests green against real Postgres.
-- [ ] Full sync test, retrieval-correctness tests, and cold-start-survival
-  tests all green.
-- [ ] Differential state-equivalence gate green (Milestone 2/3).
+- [x] P1–P10 property tests green against real Postgres — all ten implemented against
+  Testcontainers Postgres (not mocked) and enforced by id through the required conformance gate;
+  see *Milestone 3* above for the file-by-file mapping.
+- [x] Full sync test, retrieval-correctness tests, and cold-start-survival
+  tests all green — `soak.full-sync.invariants-hold` at the declared 10^5 envelope,
+  the P2–P8 point-in-time/round-trip reads, and the crash-injection suite (process kill **and**
+  unclean Postgres kill, both `synchronous_commit` legs). All are required manifest ids, so the
+  gate fails by name if any self-skips.
+- [x] Differential state-equivalence gate green (Milestone 2/3) — **landed rescoped**:
+  an in-repo fault-schedule-vs-fault-free comparison over UmbraDB's own adapters, with a
+  negative control proving the oracle can fail and an import-cleanliness test proving the
+  reference pulls in no consumer code. Importing a foreign consumer as the oracle was
+  deliberately rejected as a violation of the indexer-agnostic boundary. Recorded as a rescope,
+  not as the literal original framing — Release Record §G11.
 - [x] Performance benchmark baseline recorded (G14): committed as
   `bench/baseline.1.0.0-perf-baseline.1.json` after the G13 perf-correctness
   fixes landed (HP-1 batched save, HP-2 grouped history over the IS-2
@@ -262,13 +339,29 @@ A 1.0.0 tag requires all of:
   `Performance/CEILINGS.md`, and the GC anti-join curve + K/D cliff
   adjudication live in the baseline artifact. The CV-aware regression gate is
   the first post-1.0.0 obligation.
-- [ ] Live round-trip against a real network (Milestone 5) succeeds.
+- [ ] Live round-trip against a real network (Milestone 5) succeeds — G12/R5. This is the one
+  gate CI structurally cannot run: it is executed manually **against the release candidate** and
+  its transcript is pasted into the Release Record. It stays unticked until that RC run exists,
+  and it MUST NOT be ticked from an earlier run against a different commit.
 
 ## Beyond 1.0.0 — additional tracks in progress
 
-These sit outside the 1.0.0 checklist above (they extend scope rather than complete it) and are
-**not yet merged into `main`**. Listed here for visibility; each has its own branch and review
-history.
+These sit outside the 1.0.0 checklist above — they extend scope rather than complete it. Listed here
+for visibility; each has its own branch and review history.
+
+**Merge status (corrected 2026-07-25 — the previous blanket "not yet merged into `main`" was stale
+for two of these).** Full-chain archival storage and the Nix dev-environment flake **are** merged to
+`main`; the verifiable-snapshot and BitTorrent tracks are **not** (13 and 2 unmerged commits
+respectively), and per tag precondition R4 they MUST NOT be merged before the 1.0.0 tag.
+
+Chain-archive code being *on `main`* does not put it *on the 1.0.0 surface*, and the distinction is
+enforced mechanically rather than by reviewer memory: the built barrel exports **36 symbols, none of
+them chain-archive**; the six chain-archive error classes are `@experimental` and excluded from both
+the barrel and `docs/ERROR-CATALOG.md`; the error-catalog drift test asserts the published table
+equals the exported classes' `code` set with no hard-coded count; and the chain-archive suites report
+**SKIPPED, never PASS**, outside a preprod environment. `translatePostgresError`'s internal `23514`
+constraint-name routing is deliberately left intact — routing preserved, surface not frozen. The
+track ships as the 1.1 headline.
 
 - **Full-chain archival storage** (`design/full-chain-storage-design.md` on
   `feature/full-chain-storage-implementation`, branched from `main` after Sprint 8). A
@@ -280,8 +373,10 @@ history.
   design went through four audited revisions (v1–v4) before implementation; the implementation
   itself has been through a 3-reviewer sprint-fix round and a Codex GPT-5.6 Sol audit-fix round
   (most recently closing findings 1–7, with the full test suite passing locally and two
-  preprod-gated suites self-skipping outside that environment). Substantial and reviewed, but
-  still unmerged, still on its own branch, and not confirmed to have cleared a final review round.
+  preprod-gated suites self-skipping outside that environment). **Merged to `main`** (`4d9da43`,
+  after 7 audit rounds / 346 tests) but deliberately **excluded from the frozen 1.0.0 surface** —
+  it is a scope extension, and freezing it would enlarge what SemVer must then protect. Its
+  remaining branch work must stay unmerged until after the tag (R4).
 - **Verifiable wallet-state snapshot root-of-trust** (`design/verifiable-snapshot-design.md`, on
   `fix/verifiable-snapshot-v2`, previously `feature/verifiable-snapshot`). A design for
   authenticating wallet-state snapshots against on-chain data (liveness/anti-rollback beacons,
@@ -300,8 +395,9 @@ history.
   fill the cold-bootstrap trust gap between the two designs above. Informational only; identifies
   a real blocker (Midnight does not currently persist per-epoch committee stake weight) and does
   not recommend adoption.
-- **Nix dev-environment flake** (`nix/midnight-env/`, on an unmerged, not-yet-pushed feature
-  branch). See [Getting started](README.md#getting-started) in the README for what it provides.
+- **Nix dev-environment flake** (`nix/midnight-env/`) — **merged to `main`** (`0e24ca4`, hardened
+  in `a3a3c99` which pins nixpkgs to an exact revision and documents the reproducibility contract).
+  See [Getting started](README.md#getting-started) in the README for what it provides.
 
 ## Non-goals
 

@@ -228,7 +228,7 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 8. G12 — manual pre-tag Preprod evidence run  ⟵ release step 7, against the RC
 
-- [ ] 8.1 `docs/recovery/EVIDENCE.md` template (`design.md` §6; `01` §"Cutover"): the recorded fields —
+- [x] 8.1 `docs/recovery/EVIDENCE.md` template (`design.md` §6; `01` §"Cutover"): the recorded fields —
   run date, RC commit/tag, synced tip height, durable cursor value at kill, restored
   balance/tx-history, pass/fail per M5 sub-criterion, and the explicit note that "remove the
   replaced engine" is the consumer project's clause. **Acceptance:** the template enumerates every
