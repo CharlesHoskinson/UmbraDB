@@ -247,7 +247,15 @@ separate change) — do not let perf work starve T1–T5.
 
 ## 9. Change close-out
 
-- [ ] 9.1 Whole-change differential review: an Opus auditor re-reads this proposal/design/spec
+> **Close-out record (2026-07-25).** 9.1 and 9.2 were performed but left unticked at merge.
+> 9.1 was satisfied by **four change-level cold cross-vendor audit rounds** (13 → 4 → 6 → 9
+> findings) whose first two rounds were specifically vacuity findings against the crash tests —
+> i.e. exactly the "tests that pass for the wrong reason" risk this task exists to check — all
+> fixed before merge; see `AUTONOMOUS_RUN_LOG.md`. 9.2 is satisfied by `ROADMAP.md`'s Milestone 3
+> section, which now attributes G9/G10/G11 to this change with per-item test-id evidence and
+> records G11 as **rescoped** rather than over-claiming the original framing.
+
+- [x] 9.1 Whole-change differential review: an Opus auditor re-reads this proposal/design/spec
   against the actual committed tests and confirms every "Acceptance" criterion above was actually
   checked — a green CI run is not sufficient evidence on its own, per every prior sprint's
   close-out standard, and is *especially* insufficient here where the risk is tests that pass for
@@ -256,7 +264,7 @@ separate change) — do not let perf work starve T1–T5.
   actually fire, the soak samples its enumerated invariants mid-run, the skip-enforcement check
   (0.4/7.1) catches a deliberately-skipped required test while tolerating the `"deferred"` scenario,
   and the G5-dependent tests (3.1, 3.2, 6.2) are correctly gated on G5's merge.
-- [ ] 9.2 Update `ROADMAP.md`'s 1.0.0 gate: mark G9, G10, G11 done (required-gate green) and record
+- [x] 9.2 Update `ROADMAP.md`'s 1.0.0 gate: mark G9, G10, G11 done (required-gate green) and record
   G12 as "evidence run pending RC / recorded at tag". Note that the perf baseline (G13/G14) and the
   API-surface freeze (G1–G4) are separate changes this one does not close. **Acceptance:** the
   roadmap reflects exactly what this change delivered — no over-claim that the whole testing
