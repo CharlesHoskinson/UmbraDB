@@ -1,6 +1,8 @@
 {
   "name": "umbradb",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "A local, single-writer, PostgreSQL-backed temporal and content-addressed store for Midnight wallet state.",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,8 +17,21 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CharlesHoskinson/UmbraDB.git"
+  },
+  "homepage": "https://github.com/CharlesHoskinson/UmbraDB#readme",
+  "bugs": {
+    "url": "https://github.com/CharlesHoskinson/UmbraDB/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=24"
   },

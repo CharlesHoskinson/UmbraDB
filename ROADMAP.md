@@ -308,15 +308,51 @@ independent cold release audit (R6), and a recorded Go/No-Go (R9).
 with the Preprod sync paused at 55%. Both facts are stale — it is kept as a historical record of that
 moment and must not be read as current status.
 
+**InfoSec sign-off — G15–G19, merged (`v1.0.0-infosec-signoff`).** The security sign-off
+obligations for the tag are delivered as **documentation + CI + dev-environment tooling, with no
+`src/` runtime behavior change** (G16 is doc-comment-only). The change also closes **R7**, the
+release-publication artifact the guideline assigns here:
+
+- **G15** — root [`SECURITY.md`](SECURITY.md) threat model (single trusted writer; `schema` is
+  namespacing, not a tenant boundary; the global chunk pool's cross-wallet dedup side channel; no
+  at-rest encryption as a binding precondition; commit policy + vulnerability reporting), linked from
+  `README.md`.
+- **G16** — the `CheckpointStore` cross-wallet dedup interface-doc caveat in
+  `src/interfaces/checkpoint-store.ts` (doc comments only).
+- **G17** — the db-sync TLS `Require`/self-signed caveat surfaced in `nix/midnight-env/README.md` and
+  the opt-in VerifyFull `--ca` de-stub in `enable-db-sync-tls.sh`, with the **localhost `Require`
+  default unchanged**.
+- **G18** — the supply-chain CI gate `.github/workflows/supply-chain.yml` (+ `.npmrc`, `.gitleaks.toml`):
+  `npm ci` + `ignore-scripts` assertion + blocking runtime `npm audit` + full-history `gitleaks` +
+  pinned-digest Trivy scan + `flake.lock` change-control.
+- **G19** — the committed Preview wallet-secret remediation (untrack + `.example` + generator),
+  **no git-history rewrite** (the valueless key stays in history; the full-history gitleaks gate is
+  the go-forward guard). The historical finding is suppressed by **exact fingerprint** in
+  `.gitleaksignore`, deliberately **not** by a path allowlist — a path allowlist exempts that path
+  forever and would hide a real key committed there later. A custom `umbradb-wallet-seed-hex` rule
+  additionally catches `seedHex`, which the stock rules never matched (they trigger on a field name
+  containing "SecretKey", so the *seed* — the value the key and address are derived from — was
+  undetectable).
+- **R7** — `.github/workflows/publish.yml` (tag-triggered, OIDC `id-token: write`, `npm publish
+  --provenance`) plus the publish metadata `package.json` lacked: `repository` (**required** for
+  provenance) and `license` (undefined despite the Apache-2.0 `LICENSE`).
+
+This change completes the InfoSec **sign-off** (docs + CI) for the 1.0.0 tag. The **P1 code
+fast-follows it documents but does NOT implement — keyed/scoped chunk addressing (the cross-wallet
+dedup-oracle fix) and the `EnvelopeCipher` at-rest-encryption seam — remain separately tracked for
+1.1** and are not part of the tag.
+
 ## 1.0.0 acceptance checklist
 
 A 1.0.0 tag requires all of:
 
 - [x] Formal spec's tractable properties proved in Lean, not just stated — the 1.0.0 Lean cut-line is
   frozen as exactly `{T3, T5, W1, C1}` (mechanized in `Formal/Lean` and covered by the required Lean
-  trust gate), with a written deferral of C2a/GC, ordered reconstruction, lease traces, keyed-store
-  lifting, and SQL/runtime refinement to post-1.0. See *Milestone 1 → Frozen 1.0.0 Lean cut-line*
-  above (G20, `openspec/changes/v1.0.0-api-surface`).
+  trust gate), with a written deferral to post-1.0 of **C2a/GC, C2b, L1 (lease traces), multi-key
+  lifting, ordered reconstruction, cross-module composition, and the whole SQL/runtime refinement**.
+  See *Milestone 1 → Frozen 1.0.0 Lean cut-line* above (G20,
+  `openspec/changes/v1.0.0-api-surface`), the recorded **Option A** ruling, and the post-1.0.0
+  workstream `openspec/changes/v1.1.0-formal-completion`.
 - [x] P1–P10 property tests green against real Postgres — all ten implemented against
   Testcontainers Postgres (not mocked) and enforced by id through the required conformance gate;
   see *Milestone 3* above for the file-by-file mapping.

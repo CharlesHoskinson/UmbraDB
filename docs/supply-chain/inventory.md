@@ -154,8 +154,8 @@ Tools the build, test, and CI depend on that are not captured as package entries
 | `lake` / `elan` (Lean) | with `v4.32.0` | `Formal/Lean/` | Build/check proofs | lean4 releases |
 | `openspec` CLI | host | change-spec workflow (`openspec/`) | Manages change proposals/specs | openspec releases |
 | GitHub Actions (pinned by SHA) | `actions/checkout@11d5960…` (v4), `actions/setup-node@49933ea…` (v4) | `.github/workflows/conformance.yml` | CI runner actions, SHA-pinned | Dependabot / action releases |
-| `gitleaks` | CI-side (planned G18) | `supply-chain.yml` | Full-history secret scan | gitleaks releases |
-| `trivy` | CI-side (planned G18) | `supply-chain.yml` | HIGH/CRITICAL CVE scan of the two image digests | trivy releases |
+| `gitleaks` | CI-side (G18, this change) | `supply-chain.yml` | Full-history secret scan | gitleaks releases |
+| `trivy` | CI-side (G18, this change) | `supply-chain.yml` | HIGH/CRITICAL CVE scan of the two image digests | trivy releases |
 
 ---
 

@@ -113,6 +113,69 @@ the sha256-pinned tarballs. `result*` symlinks are git-ignored.
 
 ---
 
+## Security — db-sync TLS posture (READ BEFORE ENABLING TLS)
+
+The Ledger-8 Midnight node **mandates a TLS connection** to the `cexplorer` DB. Both
+`scripts/start-stack.sh` (step [0]) and the standalone `scripts/enable-db-sync-tls.sh <container>`
+provision that TLS endpoint with `ssl = on` and a **self-signed** certificate. With the node's
+`ssl_root_cert` **unset** this is `PgSslMode::Require`. **Understand exactly what that does and does
+not protect:**
+
+> **`Require` + self-signed gives you ENCRYPTION ONLY — NO server-identity validation, and NO
+> protection against a man-in-the-middle.** The bytes are encrypted on the wire, but the node does
+> **not** verify that the server it connected to is the real Postgres. An active on-host or
+> on-network attacker who can interpose can present **their own** self-signed certificate,
+> impersonate the Postgres endpoint, and **harvest the `cexplorer` DB credentials** the node
+> presents — the encryption does not stop this, because nothing checks the server's identity.
+
+**Safety condition.** `Require` + self-signed is safe **ONLY** when the Midnight node and the
+PostgreSQL server are **co-located on a single trusted host** (the default this repo ships — the
+local dev stack runs node and DB on one machine), where no untrusted network segment or hostile
+local process can interpose.
+
+**Off-host / hardened — use VerifyFull with a pinned CA.** For any deployment where the node and
+Postgres are **not** co-located on one trusted host (a multi-host setup, an untrusted segment
+between them, or production hardening), `Require` is **not** sufficient. The recommended posture is
+**`VerifyFull`**: the node validates the server certificate against a **pinned CA** and checks the
+hostname (SAN). Enable it with the script's opt-in `--ca` mode:
+
+```bash
+# co-located / local dev (default): Require — encryption only, no identity check
+nix develop -c bash scripts/enable-db-sync-tls.sh <postgres-container>
+
+# off-host / hardened: VerifyFull — generate a local CA, sign the server cert with a SAN
+# matching the host= the node dials, and print the exact --ssl_root_cert to give the node
+nix develop -c bash scripts/enable-db-sync-tls.sh --ca <postgres-container>
+```
+
+`--ca` generates a local CA (private key `chmod 600`), signs the server certificate with a SAN
+including `$DB_TLS_CN` / `$DB_TLS_SANS` (the host the node dials), copies the CA certificate out to
+the **host** filesystem, and prints the exact `--ssl_root_cert=<host-path>` to pass to the node.
+Because the Midnight node is a **host binary** (not a container — `nix/midnight-env/flake.nix:149`),
+give `--ssl_root_cert` that **host** path to the CA cert (the printed absolute path), **not** the
+in-container path; the node then uses `PgSslMode::VerifyFull` (certificate **and** hostname
+validation).
+
+| Posture | Node config | Server config | Guarantee | Use when |
+|---|---|---|---|---|
+| **Require** (default) | `ssl_root_cert` unset → `PgSslMode::Require` | `ssl=on` + self-signed cert | Encryption on the wire; **no** server-identity check (**MITM-susceptible**) | Node and Postgres co-located on one trusted host |
+| **VerifyFull** (`--ca`) | `ssl_root_cert=<CA cert>` → `PgSslMode::VerifyFull` | `ssl=on` + cert signed by that CA, SAN = the host the node dials | Encryption **and** certificate + hostname validation | Untrusted segment between node and DB, or production hardening |
+
+> **Why the default is NOT VerifyFull.** Forcing VerifyFull as the shipped default would impose
+> CA-management friction on a single-host dev stack where it buys nothing, and the common escape from
+> that friction is to disable verification entirely (a `rejectUnauthorized: false`-style opt-out) —
+> **strictly worse** than an honest `Require`. So the default stays `Require` for the co-located
+> case, and VerifyFull is a deliberate, documented opt-in. See the repo-root `SECURITY.md` (a
+> VerifyFull default is a documented-but-not-implemented 1.0.0 fast-follow). Enabling `ssl = on` is
+> *permissive*, not *forcing*, so `cardano-db-sync`'s own documented plaintext connection keeps
+> working (`pg_hba.conf` is left untouched — do not switch the server to `hostssl`-only without
+> giving db-sync a TLS client config first, or ingestion breaks).
+
+The full feasibility write-up (driver, evidence, cert-rotation and `pg_hba.conf` caveats) is in
+`design/db-sync-tls-feasibility.md`.
+
+---
+
 ## 4. Validation performed
 
 - `nix flake metadata` — resolves; all inputs show immutable revs/narHashes.

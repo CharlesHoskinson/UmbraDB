@@ -108,7 +108,10 @@ export interface PruneResult {
    * proof nothing became unreferenced). Chunk storage is globally content-addressed and
    * shared, so a chunk still referenced by another wallet's manifest is never reclaimed either,
    * for an unrelated reason — and this count can be zero even when many checkpoints were
-   * pruned, for either reason.
+   * pruned, for either reason. SECURITY: because that "referenced by another wallet's manifest"
+   * state is cross-wallet, this return value is also a cross-wallet reference-state SIDE CHANNEL —
+   * it leaks whether ANOTHER wallet in the shared pool still references a chunk this wallet just
+   * unreferenced. The shared pool is one trust domain; see the interface doc above and `SECURITY.md`.
    */
   reclaimedChunks: number;
   reclaimedBytes: number;
@@ -176,6 +179,17 @@ export class ManifestCorruptError extends CheckpointStoreError {
  * manifest write or deletion, so a concurrent `save` in another wallet can never resurrect a
  * reference to a chunk mid-reclamation.
  *
+ * SECURITY — the global pool is ONE shared trust domain. Because chunk storage is global and
+ * content-addressed *across wallets* (above), chunk existence and garbage-collection behavior are
+ * OBSERVABLE ACROSS WALLETS: a `save` of bytes already in the pool deduplicates to a metadata-only
+ * no-op (a `save`-timing existence oracle), and `prune`'s `reclaimedChunks`/`reclaimedBytes` depend
+ * on whether ANOTHER wallet's manifest still references a chunk (a cross-wallet reference-state
+ * channel). This is the classic cross-user deduplication side channel; it is only safe when every
+ * wallet sharing this store is in a single trust domain — one user's wallet application managing its
+ * own wallets, NOT multi-tenancy across mutually-distrusting principals. Placing
+ * mutually-distrusting principals on one store is UNSUPPORTED (give each its own store). Full trust
+ * model and the fixed-size-chunking bound on the leak: see `SECURITY.md`.
+ *
  * Each method is an atomic unit of work. With no `opts.tx`, implementations compose the
  * Transaction/Lease layer internally to make manifest + chunk writes all-or-nothing. `save`
  * additionally accepts an `opts.tx` transaction handle so a caller can compose the checkpoint
@@ -218,7 +232,10 @@ export interface CheckpointStore {
    * Deletes all but the `retainCount` newest checkpoints (manifests) for this wallet+network,
    * then reclaims any chunk whose GLOBAL reference count dropped to zero as a result. The
    * checkpoint selection is wallet+network-scoped; the chunk reclamation decision never is —
-   * see the interface doc above.
+   * see the interface doc above. SECURITY: because that reclamation decision spans every wallet
+   * in the shared pool, the returned `reclaimedChunks`/`reclaimedBytes` expose cross-wallet
+   * reference state (an observable side channel) and are only meaningful within a single shared
+   * trust domain — see the interface doc above and `SECURITY.md`.
    */
   prune(
     walletId: string, networkId: string, retainCount: number,

@@ -24,3 +24,6 @@ stryker.log
 
 # Build output (declaration + JS emitted by `npm run build`; never committed)
 dist/
+
+# v1.0.0-infosec-signoff (G19): locally generated Preview test wallet -- never commit a key
+nix/midnight-env/test-wallets/preview-test-wallet.json

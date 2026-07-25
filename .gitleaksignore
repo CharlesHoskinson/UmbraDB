@@ -1,0 +1,18 @@
+# Exact-fingerprint suppressions for `gitleaks detect` (format: commit:path:rule:line).
+#
+# These are the ONLY suppressed findings. G19 deliberately performs no git-history rewrite, so the
+# valueless Preview testnet wallet secret committed before it was untracked recurs on every
+# full-history scan. Pinning fingerprints suppresses precisely those occurrences: a different
+# secret, the same file at a different commit, or either field in the working tree still fails.
+#
+# Both lines of the historical file are listed because the custom `umbradb-wallet-seed-hex` rule
+# catches BOTH the seed (line 4) and the derived night secret key (line 5). The stock
+# undetected until that rule was added.
+#
+# The overlapping generic-api-key fingerprint was REMOVED: the custom rule takes precedence over
+# it, so that entry was never consulted -- verified by deleting it and re-scanning clean.
+#
+# Verified: with these two entries, a full-history scan of 207 commits reports no leaks, while
+# planting a fresh hex value in EITHER field of the tracked .example template fails the gate.
+be646fcff58052a77e848914a79ccef2279cf78f:nix/midnight-env/test-wallets/preview-test-wallet.json:umbradb-wallet-seed-hex:4
+be646fcff58052a77e848914a79ccef2279cf78f:nix/midnight-env/test-wallets/preview-test-wallet.json:umbradb-wallet-seed-hex:5

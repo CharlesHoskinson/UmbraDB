@@ -71,8 +71,9 @@ The governing rule differs by ecosystem, because the *security value* of each pi
 
 Today the one merge gate is **`.github/workflows/conformance.yml`**: it already installs with
 `npm ci` (enforcing the lockfile + integrity hashes) and pins every GitHub Action by commit SHA,
-but it runs *tests only*. The planned **G18 supply-chain gate** (`.github/workflows/supply-chain.yml`,
-specified in `openspec/changes/v1.0.0-infosec-signoff/`) adds six blocking/scheduled sub-gates:
+but it runs *tests only*. The **G18 supply-chain gate** (`.github/workflows/supply-chain.yml`,
+from `openspec/changes/v1.0.0-infosec-signoff/`) — **landed in this change** — adds six
+blocking/scheduled sub-gates:
 
 1. **`npm ci` everywhere** (never `npm install`) — a tampered tarball fails the integrity check.
 2. **Blocking `npm audit --audit-level=high --omit=dev`** on the tiny runtime scope, plus a
@@ -88,8 +89,8 @@ specified in `openspec/changes/v1.0.0-infosec-signoff/`) adds six blocking/sched
    explicit `flake-lock-update` label, so an unreviewed `nix flake update` cannot land.
 
 > Note: the G18 config files (`.npmrc`, `.gitleaks.toml`, `SECURITY.md`, `supply-chain.yml`) are
-> **specified but not yet committed** on `main`. This directory documents the intended posture and
-> the current state honestly; see `slsa.md` for the gap mapping.
+> **committed as part of this change** (`v1.0.0-infosec-signoff`) and are **pending merge to `main`**.
+> This directory documents the posture and the current state honestly; see `slsa.md` for the gap mapping.
 
 ## SLSA posture in one paragraph
 
