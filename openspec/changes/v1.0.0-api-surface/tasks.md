@@ -81,7 +81,7 @@ validates the packed result of everything above.
 
 ## 1. Pre-freeze: retryability field (G3)
 
-- [ ] 1.1 Add a machine-readable retryability field to the `StorageError` base
+- [x] 1.1 Add a machine-readable retryability field to the `StorageError` base
   (`src/interfaces/storage-errors.ts:7`) — `abstract readonly retryable` (boolean, or a small
   `Retryability` enum to express the conditional case) — and set it on every concrete subclass
   across `storage-errors.ts`, `temporal-kv.ts`, `checkpoint-store.ts`, `transaction-lease.ts`,
@@ -95,7 +95,7 @@ validates the packed result of everything above.
 
 ## 2. Pre-freeze: strip / mark-experimental the chain-archive error classes (G3)
 
-- [ ] 2.1 Ensure the six chain-archive error classes are excluded from the frozen surface:
+- [x] 2.1 Ensure the six chain-archive error classes are excluded from the frozen surface:
   `ChainArchiveInvariantError`/`ChainArchiveCheckViolationError` (`src/postgres/errors.ts:61,67`)
   and `ChainArchiveError`/`BlobIntegrityError`/`BlobMissingError`/`BlockNotFoundError`
   (`src/interfaces/chain-archive-store.ts:131-152`). They are NOT re-exported from `src/index.ts`
@@ -111,7 +111,7 @@ validates the packed result of everything above.
 
 ## 3. The freeze: build + package.json (G1)
 
-- [ ] 3.1 Add a declaration-emitting build. Add `tsconfig.build.json` (extends the base;
+- [x] 3.1 Add a declaration-emitting build. Add `tsconfig.build.json` (extends the base;
   `declaration: true`, `emitDeclarationMap: true`, `outDir: dist`, no `noEmit`) and a `"build"`
   script (`tsc -p tsconfig.build.json`). Today the only build-ish script is `"typecheck": "tsc
   --noEmit"` — nothing emits `.d.ts`. **Acceptance:** `npm run build` produces `dist/index.js` and
@@ -119,7 +119,7 @@ validates the packed result of everything above.
   under `noImplicitAny` asserts each frozen export resolves to a concrete type with no implicit-`any`
   fallback and no "could not find a declaration file" diagnostic. Satisfies **"The published package
   ships type declarations."**
-- [ ] 3.2 Update `package.json`: remove `private: true`; add `main` (`dist/index.js`), `types`
+- [x] 3.2 Update `package.json`: remove `private: true`; add `main` (`dist/index.js`), `types`
   (`dist/index.d.ts`), a strict `exports` map with a single `"."` entry and **no** wildcard/deep
   subpath; add `"files"` allowlisting `dist/` + `README`/`CHANGELOG`/`LICENSE`; keep `version` at
   `0.1.0` until tag time (bump to `1.0.0` is the tag step, not here). **Acceptance:** a test parses
@@ -129,7 +129,7 @@ validates the packed result of everything above.
 
 ## 4. The freeze: the public barrel (G1)
 
-- [ ] 4.1 Write `src/index.ts` re-exporting EXACTLY the frozen surface (design §1.1): `createClient`,
+- [x] 4.1 Write `src/index.ts` re-exporting EXACTLY the frozen surface (design §1.1): `createClient`,
   `UmbraDBConnectionOptions`, `UmbraDBSql`, `DEFAULT_SCHEMA`, `runMigrations`, `Migration`,
   `RunMigrationsOptions`; the five adapters + `PgWalletStateEnvelopeStore`; all `src/interfaces/`
   contract + value types (`TemporalKV`, `CheckpointStore`, `Watermarks`, `TransactionLeaseLayer`,
@@ -151,7 +151,7 @@ validates the packed result of everything above.
 
 ## 5. Release contract docs (G2, G4)
 
-- [ ] 5.1 **SemVer stability policy + CHANGELOG (G2).** Add a stability policy (README section or
+- [x] 5.1 **SemVer stability policy + CHANGELOG (G2).** Add a stability policy (README section or
   `docs/STABILITY.md`) stating: no breaking changes to the exported surface or error-`code` set in
   minor/patch; deprecate-in-minor / remove-in-major; a major may require a forward migration, no
   supported downgrade. Add `CHANGELOG.md` (Keep-a-Changelog) with the `1.0.0` entry enumerating the
@@ -159,7 +159,7 @@ validates the packed result of everything above.
   commitment clauses verbatim-in-substance; `CHANGELOG.md` exists with a `1.0.0` entry naming the
   frozen surface. Satisfies **"A written SemVer stability policy governs the frozen surface"** +
   **"A CHANGELOG records the 1.0.0 surface."**
-- [ ] 5.2 **Frozen error-code catalog table (G3).** Publish the `{code → meaning → retryable}` table
+- [x] 5.2 **Frozen error-code catalog table (G3).** Publish the `{code → meaning → retryable}` table
   (design §3.1) covering exactly the 21 frozen codes (the complete set of non-chain-archive
   `StorageError.code` values on `main`), excluding all chain-archive codes, with the retryability
   from task 1.1. **Acceptance:** the catalog lists all 21 codes with meaning + retryable marking;
@@ -168,7 +168,7 @@ validates the packed result of everything above.
   `code` values (table ≡ surface, no drift — this drift test, not the literal number, is the
   authority on the count). Satisfies **"The error-code catalog is frozen and published with a
   retryable field."** Depends on 1.1, 2.1.
-- [ ] 5.3 **Contract doc set (G4).** Author `docs/CONTRACT.md` (or README sections) with all eight
+- [x] 5.3 **Contract doc set (G4).** Author `docs/CONTRACT.md` (or README sections) with all eight
   contracts (design §4): durability (+ probe precondition), forward-only/no-downgrade migration
   (link `docs/SCHEMA.md`), cancellation semantics, save-retry caveat, lease limitation, backup/restore
   guidance, threat-model **pointer** (not the doc itself — that is G15), and the format-headroom
@@ -178,7 +178,7 @@ validates the packed result of everything above.
   timings; save-retry states re-check-`history()` + 1.1 deferral; lease states no-fencing/no-two-writers;
   backup states chunk/manifest consistency under GC; threat-model section is a pointer; format-headroom
   reserves keyed/encrypted chunk modes for 1.1). Satisfies the seven **G4** contract requirements.
-- [ ] 5.4 **README consistency (G4 boundary hygiene).** Reframe the README front-matter section
+- [x] 5.4 **README consistency (G4 boundary hygiene).** Reframe the README front-matter section
   "Full-chain storage — validated live against public Preprod (AC-8)" as a 1.1 *preview* explicitly
   outside the frozen 1.0 surface (it currently markets a deferred track as a headline). **Acceptance:**
   the README no longer presents full-chain archival as part of the 1.0 public surface; it labels it a
@@ -186,7 +186,7 @@ validates the packed result of everything above.
 
 ## 6. Freeze the Lean cut-line (G20)
 
-- [ ] 6.1 Record the frozen 1.0.0 formal cut-line as exactly `{T3, T5, W1, C1}` (mechanized,
+- [x] 6.1 Record the frozen 1.0.0 formal cut-line as exactly `{T3, T5, W1, C1}` (mechanized,
   trust-gated in `.github/workflows/lean.yml`) with a written deferral of C2a/GC, ordered
   reconstruction, lease traces, keyed-store lifting, and SQL/runtime refinement — in `ROADMAP.md`'s
   Milestone-1 checklist and/or the `Formal/` plan. **Acceptance:** the record names exactly the four
@@ -196,7 +196,7 @@ validates the packed result of everything above.
 
 ## 7. Packed-tarball install smoke test (G1)
 
-- [ ] 7.1 Add `test/smoke/pack-install.*`: `npm pack` → install the tarball into a throwaway scratch
+- [x] 7.1 Add `test/smoke/pack-install.*`: `npm pack` → install the tarball into a throwaway scratch
   project → `import { createClient, runMigrations, PgTemporalKV, StorageError } from "umbradb"` → run
   `runMigrations` + one `PgTemporalKV.put`/`get` round-trip against a Testcontainers Postgres → assert
   it resolves; additionally assert (a) a deep import `umbradb/src/postgres/temporal-kv.js` FAILS to
@@ -209,7 +209,7 @@ validates the packed result of everything above.
 
 ## 8. Change close-out
 
-- [ ] 8.1 Whole-change differential review: an Opus auditor re-reads this `proposal.md`/`design.md`/
+- [x] 8.1 Whole-change differential review: an Opus auditor re-reads this `proposal.md`/`design.md`/
   `spec.md` against the actual committed code + docs and confirms every "Acceptance" criterion above
   was actually checked — a passing CI run is not sufficient evidence on its own, per every prior
   sprint's close-out standard. Confirm specifically: the barrel excludes every internal symbol it
@@ -219,9 +219,9 @@ validates the packed result of everything above.
   exactly 21 codes (equal to the exported non-chain-archive `StorageError.code` set — verify via the
   drift test, not a hard-coded number); the `save` signature frozen matches post-G5; no deferred code
   (idempotency, keyed chunking, encryption, observability) leaked in.
-- [ ] 8.2 Update `ROADMAP.md`'s 1.0.0 gate checklist to mark G1-G4 and G20 addressed by this change,
+- [x] 8.2 Update `ROADMAP.md`'s 1.0.0 gate checklist to mark G1-G4 and G20 addressed by this change,
   cross-referencing the change id `v1.0.0-api-surface`, so the roadmap doesn't drift from what's built.
-- [ ] 8.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit the
+- [x] 8.3 Per this repo's `CLAUDE.md`: re-run `graphify --update` against the repo root and commit the
   refreshed `graphify-out/` outputs in this close-out commit, so the knowledge graph doesn't silently
   drift stale behind this change's new openspec change and code. **Do NOT run graphify while drafting
   this change** (MEMORY: Codex-auditor graphify stall) — this is a close-out-only step.
