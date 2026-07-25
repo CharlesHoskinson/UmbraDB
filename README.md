@@ -10,8 +10,18 @@ UmbraDB is PostgreSQL-backed (JSONB + `bytea`, no ORM, driven directly through
 [`postgres.js`](https://github.com/porsager/postgres)). It is a **single-writer, local** store — not a
 distributed database, not an ORM, and not a service you operate for other tenants.
 
+Not published to npm yet. Install from the repository until it is:
+
 ```bash
-npm install umbradb
+npm install github:CharlesHoskinson/UmbraDB#v0.9.5
+```
+
+or from a tarball built locally:
+
+```bash
+git clone https://github.com/CharlesHoskinson/UmbraDB && cd UmbraDB
+npm ci && npm run build && npm pack
+npm install /path/to/umbradb-0.9.5.tgz
 ```
 
 ```ts

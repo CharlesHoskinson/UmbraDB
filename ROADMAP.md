@@ -333,9 +333,11 @@ release-publication artifact the guideline assigns here:
   additionally catches `seedHex`, which the stock rules never matched (they trigger on a field name
   containing "SecretKey", so the *seed* — the value the key and address are derived from — was
   undetectable).
-- **R7** — `.github/workflows/publish.yml` (tag-triggered, OIDC `id-token: write`, `npm publish
-  --provenance`) plus the publish metadata `package.json` lacked: `repository` (**required** for
-  provenance) and `license` (undefined despite the Apache-2.0 `LICENSE`).
+- **R7** — the publish metadata `package.json` lacked was added: `repository` (**required** for
+  provenance) and `license` (undefined despite the Apache-2.0 `LICENSE`). The tag-triggered
+  `publish.yml` was built and then **removed again for 0.9.5**, because npm publication is deferred
+  to a later version. It must be restored before 1.0.0 can satisfy R7; the ruling is recorded in
+  `docs/releases/v0.9.5.md` §R7.
 
 This change completes the InfoSec **sign-off** (docs + CI) for the 1.0.0 tag. The **P1 code
 fast-follows it documents but does NOT implement — keyed/scoped chunk addressing (the cross-wallet

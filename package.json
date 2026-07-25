@@ -28,10 +28,6 @@
   "bugs": {
     "url": "https://github.com/CharlesHoskinson/UmbraDB/issues"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "engines": {
     "node": ">=24"
   },
