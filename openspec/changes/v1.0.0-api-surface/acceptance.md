@@ -38,7 +38,7 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 
 | # | Criterion | Verify | Req / Task |
 |---|---|---|---|
-| C1 | The published `{code → meaning → retryable}` table lists exactly the 25 frozen codes (the complete non-chain-archive `StorageError.code` set on `main`, per design §3.1), each with a meaning and a retryable marking; C4's drift test — not the literal number — is the authority the count is checked against. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
+| C1 | The published `{code → meaning → retryable}` table lists exactly the 24 frozen codes (the complete non-chain-archive `StorageError.code` set on `main`, per design §3.1), each with a meaning and a retryable marking; C4's drift test — not the literal number — is the authority the count is checked against. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
 | C2 | `CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT`, `MIGRATION_LOCK_TIMEOUT` are the frozen retryable set, each marked retryable in the table. | [doc][unit] | "error-code catalog is frozen" / 5.2 |
 | C3 | No `CHAIN_ARCHIVE_INVARIANT_VIOLATION`/`CHAIN_ARCHIVE_CHECK_VIOLATION`/`BLOB_INTEGRITY`/`BLOB_MISSING`/`BLOCK_NOT_FOUND` code appears in the catalog. | [doc][unit] | "chain-archive classes excluded" / 5.2, 2.1 |
 | C4 | A test cross-checks the catalog's code set against the actually-exported error classes' `code` values (table ≡ surface, no drift). | [unit][CI] | "error-code catalog is frozen" / 5.2 |
@@ -48,13 +48,15 @@ Nothing here gates on a performance number (roadmap §D; `council/A` critique #2
 | C8 | `translatePostgresError` still routes a chain-archive-named SQLSTATE 23514 to the correct internal class; those classes are marked experimental/internal. | [unit] | "chain-archive classes excluded" / 2.1 |
 | C9 | The 23514 fall-through to `ClockRegressionError` for unknown constraint names is unchanged. | [unit] | "chain-archive classes excluded" / 2.1 |
 
-> **Reconciliation (cross-vendor audit BLOCK 1/3/4).** The frozen surface list (A1) and catalog
-> count (C1) are reconciled to what `src/index.ts` re-exports and the drift test enforces:
-> `saveAndAdvance` (+ its two types) is frozen surface, and the catalog is **25** codes (the design's
-> original 21 + the already-shipped G6/G7 `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` /
-> `TRANSACTION_POOLER_DETECTED` + the audit-added `AUTHENTICATION_FAILED`). The frozen retryable set
-> is `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}`. The drift test --
-> not any prose number -- is the authority.
+> **Reconciliation (cross-vendor audit BLOCK 1/3/4; freeze-scope re-audit).** The frozen surface list
+> (A1) and catalog count (C1) are reconciled to what `src/index.ts` re-exports and the drift test
+> enforces: `saveAndAdvance` (+ its two types) is frozen surface, and the catalog is **24** codes (the
+> design's original 21 + the already-shipped G6/G7 `MIGRATION_LOCK_TIMEOUT` /
+> `DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED`). A prior draft's audit-added
+> `AUTHENTICATION_FAILED` code + routing was reverted as out-of-freeze-scope feature work (deferred to
+> an additive 1.1 minor), so `28xxx` stays a retryable `ConnectionError`. The frozen retryable set is
+> `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}`. The drift test -- not
+> any prose number -- is the authority.
 
 ## G4 — Contract doc set (all true)
 

@@ -11,7 +11,7 @@ import {
   TransactionRolledBackError, TransactionFaultError, LeaseTimeoutError, LeaseNotHeldError,
   LeaseFaultError, TransactionHandleInvalidError,
   EnvelopeVersionUnsupportedError, EnvelopeCorruptError,
-  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError,
+  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError,
   DurabilityContractError, TransactionPoolerDetectedError, MigrationLockTimeoutError,
 } from "../../src/index.js";
 
@@ -36,7 +36,7 @@ describe("frozen barrel: every frozen value name resolves from the built package
     }
   });
 
-  it("the full StorageError hierarchy (base + 25 concrete codes) resolves; each concrete is a StorageError subclass", () => {
+  it("the full StorageError hierarchy (base + 24 concrete codes) resolves; each concrete is a StorageError subclass", () => {
     const concreteErrorClasses = [
       ValidationError, SerializationFailedError, ConnectionError,
       VersionConflictError, HistoryUnavailableError, TransactionKeyReuseError,
@@ -46,9 +46,8 @@ describe("frozen barrel: every frozen value name resolves from the built package
       EnvelopeVersionUnsupportedError, EnvelopeCorruptError,
       ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError,
       DurabilityContractError, TransactionPoolerDetectedError, MigrationLockTimeoutError,
-      AuthenticationError,
     ];
-    expect(concreteErrorClasses).toHaveLength(25);
+    expect(concreteErrorClasses).toHaveLength(24);
     expect(typeof StorageError).toBe("function");
     for (const cls of concreteErrorClasses) {
       expect(cls.prototype).toBeInstanceOf(StorageError);
@@ -71,7 +70,7 @@ describe("frozen barrel: every frozen value name resolves from the built package
     expect((rb as unknown as { code?: unknown }).code).toBeUndefined();
   });
 
-  it("the runtime namespace exposes exactly the 37 frozen value names (type-only exports are erased)", () => {
-    expect(Object.keys(umbra).sort()).toHaveLength(37);
+  it("the runtime namespace exposes exactly the 36 frozen value names (type-only exports are erased)", () => {
+    expect(Object.keys(umbra).sort()).toHaveLength(36);
   });
 });

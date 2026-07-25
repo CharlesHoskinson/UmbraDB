@@ -88,6 +88,16 @@ Automatic idempotency (an `idempotency_key` `UNIQUE` constraint that would make 
 without the `history()` re-check) is a **deferred additive 1.1 migration**, not a 1.0 code change. No
 idempotency code ships in 1.0.
 
+**Retryability caveat -- a persistent `28xxx` auth/config failure surfaces as a retryable
+`ConnectionError`.** An authentication failure (SQLSTATE `28000`/`28P01` -- a rejected credential or
+role) is translated to `ConnectionError`, which is marked **retryable**. A transient authorization
+hiccup can clear on retry, but a *persistent* wrong-credential / revoked-role / misconfiguration
+failure will **not** clear without a deployment change, so a caller MUST **bound its retries** of a
+retryable `ConnectionError` rather than retry indefinitely. A distinct non-retryable
+`AuthenticationError` code is a candidate for an **additive 1.1 minor** (adding a new error code is
+non-breaking per [`docs/STABILITY.md`](STABILITY.md)); it is deliberately outside the frozen 1.0
+surface. See [`docs/ERROR-CATALOG.md`](ERROR-CATALOG.md) for the full rationale.
+
 ## 5. Lease limitation
 
 The writer lease (`acquireLease` / `withLease`, connection-pinned Postgres advisory locks) guards
@@ -135,7 +145,7 @@ reserved pointer so the contract set is complete.
 ## 8. Format headroom (reserved for 1.1)
 
 The **wallet-state envelope** encoding is **versioned**: the envelope carries an explicit
-`ENVELOPE_VERSION` field (`src/postgres/wallet-state-envelope.ts`), so a v2 envelope format can be
+`ENVELOPE_VERSION` field (`src/interfaces/wallet-state-envelope.ts`), so a v2 envelope format can be
 introduced additively.
 
 **Chunk content-addressing is NOT versioned in 1.0.** Chunks are addressed by a hard-coded SHA-256

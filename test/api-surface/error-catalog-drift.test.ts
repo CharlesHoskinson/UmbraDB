@@ -10,7 +10,7 @@ import {
   TransactionRolledBackError, TransactionFaultError, LeaseTimeoutError, LeaseNotHeldError,
   LeaseFaultError, TransactionHandleInvalidError,
   EnvelopeVersionUnsupportedError, EnvelopeCorruptError,
-  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError,
+  ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError,
   DurabilityContractError, TransactionPoolerDetectedError, MigrationLockTimeoutError,
   type Retryability,
 } from "../../src/index.js";
@@ -25,9 +25,9 @@ import {
  * machine-readable `.retryable`, and asserts the doc's code set, class set, and per-code retryable
  * markings all equal the surface (table ≡ surface). If a future minor adds an error class to the
  * barrel, `EXPORTED_CONCRETE` grows, the instance-list guard fails, and the doc must be updated to
- * match — the number self-corrects. It is 25 today (design §3.1's 21 + the already-shipped G6/G7
- * `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED`, plus the audit-added `AUTHENTICATION_FAILED`), but
- * no assertion hard-codes 25.
+ * match — the number self-corrects. It is 24 today (design §3.1's 21 + the already-shipped G6/G7
+ * `MIGRATION_LOCK_TIMEOUT` / `DURABILITY_CONTRACT_VIOLATION` / `TRANSACTION_POOLER_DETECTED`), but
+ * no assertion hard-codes 24.
  */
 
 // One instance of every exported concrete StorageError subclass. `.code` and `.retryable` are class
@@ -58,7 +58,6 @@ const SURFACE_INSTANCES: StorageError[] = [
   new ExclusionViolationError("m"),
   new ClockRegressionError("m"),
   new UnrecognizedPostgresError("m"),
-  new AuthenticationError("m"),
   new MigrationLockTimeoutError("s", 10),
   new DurabilityContractError("m", []),
   new TransactionPoolerDetectedError("m"),
@@ -148,5 +147,22 @@ describe("frozen error-code catalog: table ≡ surface, no drift (C1, C4)", () =
       expect(catalog.some((r) => r.code === forbidden), `${forbidden} must NOT be in the catalog`).toBe(false);
       expect(surfaceCodes.has(forbidden), `${forbidden} must NOT be on the exported surface`).toBe(false);
     }
+  });
+
+  it("the CHANGELOG and catalog prose counts equal the derived surface count (BLOCK 4: no release-facing count contradiction)", () => {
+    const surfaceCount = surfaceCodes.size;
+    const changelog = readFileSync(
+      fileURLToPath(new URL("../../CHANGELOG.md", import.meta.url)), "utf8",
+    );
+    const changelogMatch = changelog.match(/catalog \((\d+) codes?\)/);
+    expect(changelogMatch, "CHANGELOG must state the catalog code count as `catalog (N codes)`").not.toBeNull();
+    expect(Number(changelogMatch![1]), "CHANGELOG catalog count must equal the exported surface count").toBe(surfaceCount);
+
+    const catalogDoc = readFileSync(
+      fileURLToPath(new URL("../../docs/ERROR-CATALOG.md", import.meta.url)), "utf8",
+    );
+    const catalogMatch = catalogDoc.match(/currently \*\*(\d+) codes\*\*/);
+    expect(catalogMatch, "ERROR-CATALOG.md must state its count as `currently **N codes**`").not.toBeNull();
+    expect(Number(catalogMatch![1]), "ERROR-CATALOG.md prose count must equal the exported surface count").toBe(surfaceCount);
   });
 });

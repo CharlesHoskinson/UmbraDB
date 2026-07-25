@@ -64,8 +64,15 @@ below is **1.0.0**.
     - **W1** (Watermarks last-write-wins) — `Watermarks/Laws.lean` (M3a).
     - **C1** (CheckpointStore abstract save-side chunk projection — a join-semilattice) —
       `Checkpoint/Projection.lean`, `Checkpoint/ChunkMap.lean` (M3b).
-  These four are the entire mechanized store-property set the gate covers today, so the box is
-  objectively green (the gate enforces the whole tree, not an enumerated property list).
+  The Lean trust gate mechanically checks the **entire** `Formal/Lean` tree -- it rejects any
+  `sorry`/`admit`/`axiom`/`unsafe` token, then `lake build --wfail`s and independently `leanchecker`s
+  every declaration in both libraries -- so it gates more than these four: `TemporalKV/Laws.lean` also
+  mechanizes additional T1/T2/T4-flavoured theorems (e.g. `attempt_applied_version`,
+  `attempt_conflict_iff_snapshot_mismatch`, `dual_address_agrees`). `{T3, T5, W1, C1}` are the **frozen
+  1.0.0 store-property commitments** -- the properties the release depends on and freezes -- while those
+  additional in-tree theorems are also gated by CI but are **not** part of the frozen 1.0.0 commitment
+  surface. The box is objectively green because every committed property is mechanized and the whole
+  tree passes the gate; this does **not** claim `{T3, T5, W1, C1}` is the entire set CI gates.
 - [x] **Written deferral of everything outside the cut-line to post-1.0** (decision only, no proof work
   in the api-surface change): **C2a / GC**, **ordered reconstruction**, **lease traces**,
   **keyed-store lifting**, and **SQL / runtime refinement** are explicitly out of the 1.0.0 cut-line

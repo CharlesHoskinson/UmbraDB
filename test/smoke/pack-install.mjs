@@ -223,7 +223,7 @@ import {
   createClient, runMigrations, saveAndAdvance, Rollback, DEFAULT_SCHEMA,
   PgTemporalKV, PgCheckpointStore, PgWatermarks, PgTransactionLeaseLayer,
   PgTransactionHistoryStorage, PgWalletStateEnvelopeStore,
-  StorageError, ValidationError, ConnectionError, AuthenticationError,
+  StorageError, ValidationError, ConnectionError,
   MigrationLockTimeoutError, TransactionFaultError, LeaseTimeoutError,
 } from "umbradb";
 import type {
@@ -244,7 +244,6 @@ const _g_createClient: NotAny<typeof createClient> = true;
 const _g_runMigrations: NotAny<typeof runMigrations> = true;
 const _g_saveAndAdvance: NotAny<typeof saveAndAdvance> = true;
 const _g_StorageError: NotAny<typeof StorageError> = true;
-const _g_AuthenticationError: NotAny<typeof AuthenticationError> = true;
 const _g_Retryability: NotAny<Retryability> = true;
 const _g_Shared: NotAny<SharedStorageErrorCode> = true;
 const _g_TKV: NotAny<TemporalKVErrorCode> = true;
@@ -256,18 +255,15 @@ const _g_SAAC: NotAny<SaveAndAdvanceCursor> = true;
 
 // Use the runtime values so the import is a real dependency on the shipped declarations.
 const schema: string = DEFAULT_SCHEMA;
-const auth = new AuthenticationError("bad credentials");
-const authCode: string = auth.code;
-const authRetryable: Retryability = auth.retryable;
 const conn = new ConnectionError("connection lost");
 const connRetryable: Retryability = conn.retryable;
 const migErr = new MigrationLockTimeoutError("smoke_schema", 10);
 const migRetryable: Retryability = migErr.retryable;
 
 void [
-  _g_createClient, _g_runMigrations, _g_saveAndAdvance, _g_StorageError, _g_AuthenticationError,
+  _g_createClient, _g_runMigrations, _g_saveAndAdvance, _g_StorageError,
   _g_Retryability, _g_Shared, _g_TKV, _g_Ckpt, _g_Lease, _g_Env, _g_SAAD, _g_SAAC,
-  schema, authCode, authRetryable, connRetryable, migRetryable,
+  schema, connRetryable, migRetryable,
   saveAndAdvance, Rollback, PgTemporalKV, PgCheckpointStore, PgWatermarks, PgTransactionLeaseLayer,
   PgTransactionHistoryStorage, PgWalletStateEnvelopeStore, ValidationError, TransactionFaultError,
   LeaseTimeoutError, createClient, runMigrations,

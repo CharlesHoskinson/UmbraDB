@@ -68,7 +68,7 @@ export {
   LeaseFaultError, TransactionHandleInvalidError,
 } from "./interfaces/transaction-lease.js";
 export { EnvelopeVersionUnsupportedError, EnvelopeCorruptError } from "./interfaces/wallet-state-envelope.js";
-export { ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError, AuthenticationError } from "./postgres/errors.js";
+export { ExclusionViolationError, ClockRegressionError, UnrecognizedPostgresError } from "./postgres/errors.js";
 // Durability-contract error classes (G6): a consumer catches these from `runMigrations`, so they
 // are part of the public durability surface even though they are thrown by the startup probe.
 export { DurabilityContractError, TransactionPoolerDetectedError } from "./postgres/durability-probe.js";

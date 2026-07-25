@@ -2,7 +2,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import {
   createClient, runMigrations, saveAndAdvance, Rollback, DEFAULT_SCHEMA,
   PgTemporalKV, PgCheckpointStore, PgWatermarks, PgTransactionLeaseLayer,
-  PgTransactionHistoryStorage, PgWalletStateEnvelopeStore, StorageError, AuthenticationError,
+  PgTransactionHistoryStorage, PgWalletStateEnvelopeStore, StorageError,
   type UmbraDBSql, type UmbraDBConnectionOptions, type Migration, type RunMigrationsOptions,
   type Retryability,
   type SharedStorageErrorCode, type TemporalKVErrorCode, type CheckpointStoreErrorCode,
@@ -42,7 +42,6 @@ describe("frozen surface: every export is a concrete, non-any type from the buil
     expectTypeOf(PgWalletStateEnvelopeStore).not.toBeAny();
     expectTypeOf(Rollback).not.toBeAny();
     expectTypeOf(StorageError).not.toBeAny();
-    expectTypeOf(AuthenticationError).not.toBeAny();
   });
 
   it("each concrete adapter instance implements its frozen interface", () => {

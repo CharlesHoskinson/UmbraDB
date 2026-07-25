@@ -147,7 +147,7 @@ enumerates the initial public surface (the five primitives + `PgWalletStateEnvel
 
 ### Requirement: The error-code catalog is frozen and published with a retryable field
 
-The release SHALL publish a `{code → meaning → retryable}` table covering exactly the 25 frozen
+The release SHALL publish a `{code → meaning → retryable}` table covering exactly the 24 frozen
 error codes enumerated in design §3.1 (the shared, TemporalKV, CheckpointStore, Transaction/Lease,
 wallet-envelope, and postgres-adapter codes — the complete set of non-chain-archive
 `StorageError.code` values on `main`) and SHALL NOT include any `CHAIN_ARCHIVE_*`, `BLOB_*`, or
@@ -155,7 +155,7 @@ wallet-envelope, and postgres-adapter codes — the complete set of non-chain-ar
 
 #### Scenario: The published catalog lists every frozen code with a retryability marking
 - **WHEN** the error-code catalog document is read
-- **THEN** each of the 25 frozen codes SHALL appear with a one-line meaning and a retryable marking
+- **THEN** each of the 24 frozen codes SHALL appear with a one-line meaning and a retryable marking
 - **AND** `CONNECTION_ERROR`, `TRANSACTION_FAULT`, `LEASE_TIMEOUT`, and `MIGRATION_LOCK_TIMEOUT` SHALL be marked retryable
 - **AND** no `CHAIN_ARCHIVE_INVARIANT_VIOLATION`, `CHAIN_ARCHIVE_CHECK_VIOLATION`,
   `BLOB_INTEGRITY`, `BLOB_MISSING`, or `BLOCK_NOT_FOUND` code SHALL appear in the catalog

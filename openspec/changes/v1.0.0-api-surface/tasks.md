@@ -64,11 +64,15 @@ validates the packed result of everything above.
 >    every concrete subclass"; the root `StorageError` IS exported (catch-all + spec scenario), but the
 >    intermediates `TemporalKVError`/`CheckpointStoreError`/`TransactionLeaseError`/`WalletStateEnvelopeError`
 >    are not, keeping the surface to base + concrete leaves.
-> 5. **`MIGRATION_LOCK_TIMEOUT` retryability = `non-retryable`** per design §3.1's explicit rule (retryable
->    set is exactly `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT}`; "all others non-retryable").
->    SPEC-AMBIGUITY FLAG for task 8.1/5.2: semantically it resembles `LEASE_TIMEOUT` (another advisory-lock
->    wait, which IS retryable), but it is a startup/migration fault normally handled by an orchestrator
->    restart rather than an in-process retry, and design froze the retryable set as exactly those three.
+> 5. **`MIGRATION_LOCK_TIMEOUT` retryability = `retryable`** (cross-vendor re-audit reconciliation): it is
+>    another advisory-lock acquire wait, exactly like the retryable `LEASE_TIMEOUT` -- the migration
+>    advisory lock is released the moment the concurrent migration commits, so a bounded
+>    backoff-then-retry can succeed. `runMigrations` translates BOTH `55P03` (`lock_timeout`) and `57014`
+>    (`statement_timeout`) at the single lock-acquire site into this one error, and both are lock-acquire
+>    timeouts that clear the same way (not a conflation of unrelated faults). The earlier
+>    "non-retryable / orchestrator-restart" flag was an operational preference, not a retryability fact;
+>    RESOLVED to retryable. The frozen retryable set is exactly
+>    `{CONNECTION_ERROR, TRANSACTION_FAULT, LEASE_TIMEOUT, MIGRATION_LOCK_TIMEOUT}` (4 codes).
 > 6. **`retryable` field representation.** `abstract readonly retryable: Retryability` on the
 >    `StorageError` base, where `Retryability = "retryable" | "non-retryable" | "conditional"`. Every
 >    concrete subclass sets it; `ClockRegressionError` = `"conditional"` (its two documented causes are
@@ -82,7 +86,7 @@ validates the packed result of everything above.
   `Retryability` enum to express the conditional case) — and set it on every concrete subclass
   across `storage-errors.ts`, `temporal-kv.ts`, `checkpoint-store.ts`, `transaction-lease.ts`,
   `wallet-state-envelope.ts`, `postgres/errors.ts`. Mark `CONNECTION_ERROR`, `TRANSACTION_FAULT`,
-  `LEASE_TIMEOUT` retryable; mark `CLOCK_REGRESSION` conditional (retryable same-ms collision vs.
+  `LEASE_TIMEOUT`, `MIGRATION_LOCK_TIMEOUT` retryable; mark `CLOCK_REGRESSION` conditional (retryable same-ms collision vs.
   non-retryable backward step — `errors.ts:33`'s own two documented causes); all others
   non-retryable. **Acceptance:** `tsc --noEmit` passes; a unit test catches one instance of each
   error class and asserts its `retryable` value matches the frozen catalog table (design §3.1);

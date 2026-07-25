@@ -114,10 +114,7 @@ is more thoroughly exercised.
 
 
 ```typescript
-import { createClient } from "./src/postgres/client.js";
-import { runMigrations } from "./src/postgres/migrate.js";
-import { PgTemporalKV } from "./src/postgres/temporal-kv.js";
-import { PgTransactionLeaseLayer } from "./src/postgres/transaction-lease.js";
+import { createClient, runMigrations, PgTemporalKV, PgTransactionLeaseLayer } from "umbradb";
 
 const sql = createClient({ connectionString: process.env.DATABASE_URL, schema: "my_app" });
 await runMigrations(sql, { schema: "my_app" });
