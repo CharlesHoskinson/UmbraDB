@@ -369,6 +369,16 @@ test/
                            (Testcontainers), not mocked
 ```
 
+## Security
+
+UmbraDB is a **single-node, single-writer** storage library with a deliberately small trust model:
+one trusted writer against one trusted local Postgres. [`SECURITY.md`](SECURITY.md) is the
+authoritative threat model — it states the binding deployer preconditions the code relies on but
+does not itself enforce (single trusted writer; `schema` is namespacing, **not** a tenant boundary;
+the global chunk pool is one trust domain with a cross-wallet dedup side channel; **no** at-rest
+encryption is provided), the commit policy, and how to report a vulnerability. **Read it before
+deploying UmbraDB to persist secret-bearing data.**
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
