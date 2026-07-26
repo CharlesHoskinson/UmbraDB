@@ -87,7 +87,7 @@ synchronous=NORMAL might roll back following a power loss."* Lose recent commits
 sparse-trie-as-cache took newPayload 42.9 → 32.4 ms (−25%) and final state-root time to **1–2 ms per
 block**. Cheapest item here, zero semantic risk.
 
-**1.3 — `ledger_db.cache_size` is already raised.** Note for the record: the value is an **object
+**1.3 — `ledger_db.cache_size`: RE-TEST after the `Rc` fix, see R2.** Note for the record: the value is an **object
 count**, not bytes, despite byte units. Repo default is 1,024; we run 2 MiB = 2,097,152 objects. This
 lever is spent — my earlier 16 MiB experiment (16.7 M objects) gave no sustained gain for 23 GB RSS.
 
@@ -108,7 +108,9 @@ defeat, and we hit it on every node of every block. Measured penalty for random 
 Content-addressed nodes are order-independent by definition, so reordering writes cannot change
 output.
 
-**2.2 — Hint-driven prefetch (the Ira technique).** Record the node-hash access set per block during
+**2.2 — Hint-driven prefetch (the Ira technique). DEMOTED — see R1 below.** Measurement shows we
+are not I/O-bound, so this technique's premise does not hold for us. Retained for the record and in
+case the profile changes after the `Rc` fix. Record the node-hash access set per block during
 pass 1; in later passes a prefetcher sorts hashes for blocks n+1…n+32 and walks SQLite with a forward
 cursor. Wall time becomes `max(prefetch, fold)` rather than their sum.
 
@@ -210,6 +212,79 @@ combined.
 
 ---
 
+---
+
+## Experimental results (run 2026-07-26 against the live 4.3.3 indexer)
+
+Three open questions were settled by measurement rather than argument. Two of them reorder the plan.
+
+### R1 — The E0.4 gate is ANSWERED: we are CPU-bound, not I/O-bound
+
+60-second measurement on the running process:
+
+| | |
+|---|---|
+| CPU | 70% of one core |
+| **Physical disk reads** | **27 KB/s** |
+| Read syscalls | 3,953/sec |
+| Physical writes | 2 MB/s |
+| Page cache | 23 GB resident against an 88 GB node store |
+
+**The page cache is already serving essentially every read.** Ira's 5.2–23.6x came from a profile
+that was 67.9% I/O; ours has almost no physical read I/O at all.
+
+**Consequence: hint-driven prefetch (was Stage 2.2) is demoted.** It exists to get data off disk
+before it is needed. Our data is already in memory. What remains is ~4,000 read *syscalls* per second
+plus B-tree traversal — that cost is CPU and syscall overhead, not disk latency, and prefetching
+cannot remove it.
+
+**Promoted in its place: Stage 3 (pipelining state-independent work) and anything that reduces the
+NUMBER of node lookups**, since each lookup is now a CPU cost rather than an I/O wait.
+
+### R2 — My earlier `cache_size` experiment was confounded and must be re-run
+
+I previously raised `cache_size` from 2 MiB to 16 MiB objects, measured no sustained gain, and
+reverted it, concluding the lever was spent.
+
+That conclusion does not survive R1. With 64.5% of CPU inside the quadratic HashMap clone, an
+improvement confined to the remaining ~35% would have been close to invisible. And R1 shows the
+in-process object cache is exactly what avoids those ~4,000 syscalls/sec.
+
+**`cache_size` must be re-tested after the `Rc` backport, not written off.** Recording the earlier
+negative result as unreliable rather than as evidence.
+
+### R3 — The GC disagreement is RESOLVED: our version has no GC
+
+Checked the feature flags at our exact tag rather than at repo HEAD:
+
+```
+v4.3.3 (running):  features = [ "layout-v2" ]
+HEAD:              features = [ "layout-v2", "gc-v1" ]
+```
+
+**Our indexer has no ledger-DB garbage collection.** Every block's ledger state is persisted as a
+permanent root and never reclaimed. Corroborated operationally: zero GC-related log lines in 30
+minutes of running.
+
+One lane was right for our version; the other had read HEAD. This also explains the disk trajectory
+directly — ~1 GB/hour of growth with nothing ever reclaimed, 161 GB at half height.
+
+### R4 — Stage 4's premise is CONFIRMED, and more precisely than stated
+
+Verified at `v4.3.3:chain-indexer/src/application.rs`:
+
+- **line 394** — `ledger_state.root()` is computed, then compared against `block.ledger_state_root`
+  and `bail!`s on mismatch.
+- **line 404** — `ledger_state.zswap_merkle_tree_root()` is compared against the block's value and
+  `bail!`s on mismatch.
+- **`ledger_state_root` appears zero times in the SQL migrations.** There is no such column.
+- The persisted `zswap_merkle_tree_root` column is populated from `block.zswap_merkle_tree_root`
+  (line 403), i.e. the value the *node* supplied, not the value we computed.
+
+So both computed roots are **pure validation**. Deferring them changes no stored byte, exactly as
+Erigon does during historical sync. The Stage 4 decision stands as described, now on verified
+footing rather than a reported claim.
+
 ## What this roadmap does not promise
 
 **Not 20x on 20 cores.** `state(n+1) = apply(state(n), block(n+1))` is a sequential dependency no
@@ -226,14 +301,11 @@ crash consistency, and run-to-run determinism.
 
 ---
 
-## Open conflict between sources, unresolved
+## Resolved: the GC conflict
 
-Two research lanes disagree on garbage collection. One reports 4.3.3 has **no** ledger-DB GC
-(`indexer-common/Cargo.toml:23` enables `layout-v2` only; `gc-v1` arrives in 4.3.4). The other, reading
-repo HEAD, reports GC running **every block with a 200 ms budget** — up to 40% of the loop.
-
-They read different revisions. **Which applies to our running 4.3.3 must be settled by inspection
-before anyone tunes `gc_bound`.** Recording the disagreement rather than picking one.
+Settled by inspection — see R3. Our running v4.3.3 has `features = [ "layout-v2" ]` only, so **no
+ledger-DB garbage collection**. HEAD adds `gc-v1`. The lane reporting a 200 ms GC budget had read
+HEAD, not our tag. Nothing to tune; the fix is an upgrade, at the cost of migration `008`.
 
 ---
 
