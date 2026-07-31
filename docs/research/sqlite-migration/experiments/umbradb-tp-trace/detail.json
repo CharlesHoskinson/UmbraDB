@@ -1,0 +1,2313 @@
+{
+ "v1.0.0-sqlite-engine-core": {
+  "cov": {
+   "the storage engine is an embedded SQLite database reached through a version-pinned, gate-observable binding": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "J4",
+    "J5",
+    "J11"
+   ],
+   "the database handle is owned by a dedicated worker thread and never escapes it": [
+    "C1",
+    "C2",
+    "C5",
+    "C6"
+   ],
+   "a transaction handle is an opaque token that cannot be used to reach the database": [
+    "C3",
+    "C4"
+   ],
+   "the connection factory opens exactly one database file and rejects options that no longer mean anything": [
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5",
+    "E6",
+    "E7"
+   ],
+   "the pragma bootstrap is an ordered, once-only sequence whose effect is verified by read-back": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+   ],
+   "every bound parameter is normalised before it reaches the binding": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5"
+   ],
+   "result columns are decoded from origin metadata, never from declared type names": [
+    "B6",
+    "B7",
+    "B8"
+   ],
+   "64-bit integer values round-trip without precision loss": [
+    "B9",
+    "B10"
+   ],
+   "text that SQLite stores incorrectly is rejected at the boundary": [
+    "E8",
+    "E9",
+    "E10"
+   ],
+   "no statement is issued with more bound parameters than the engine accepts": [
+    "B11",
+    "B12",
+    "B13",
+    "B14"
+   ],
+   "a long read does not starve the main thread": [
+    "C9"
+   ],
+   "a result set is streamed across the worker boundary in batches, and a stream can never wedge the writer": [
+    "P2",
+    "C12",
+    "C13",
+    "C14",
+    "C15",
+    "C16",
+    "C17",
+    "C18",
+    "C19"
+   ],
+   "a cancellable statement carries a per-row guard whose argument cannot be hoisted": [
+    "C20",
+    "C20a",
+    "C20b",
+    "C20c",
+    "C20d",
+    "C20e",
+    "C22"
+   ],
+   "statement deadlines are enforced in flight where a guard is possible, and detected at completion where it is not": [
+    "C7",
+    "C8",
+    "C10",
+    "C21",
+    "C11"
+   ],
+   "every performance-dependent decision is blocked on measurements taken on a real filesystem under declared conditions": [
+    "P0",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F7"
+   ],
+   "the decisions blocked on the measurement gate are named, and none of them is settled by this change": [
+    "P1",
+    "F6",
+    "F8",
+    "F9"
+   ],
+   "the conformance suite is re-executed against the new engine rather than amended to suit it": [
+    "G1",
+    "G2",
+    "G3"
+   ]
+  },
+  "miss": [],
+  "hard": [
+   [
+    "the storage engine is an embedded SQLite database reached through a version-pinned, gate-observable binding",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6",
+     "A7",
+     "J4",
+     "J5",
+     "J11"
+    ]
+   ],
+   [
+    "the decisions blocked on the measurement gate are named, and none of them is settled by this change",
+    [
+     "doc"
+    ],
+    [
+     "P1",
+     "F6",
+     "F8",
+     "F9"
+    ]
+   ],
+   [
+    "the conformance suite is re-executed against the new engine rather than amended to suit it",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "G1",
+     "G2",
+     "G3"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "B15",
+    "(fa\u00e7ade) / 2.7",
+    "[unit]"
+   ],
+   [
+    "H1",
+    "design \u00a78.1, \u00a710.1",
+    "[manual]"
+   ],
+   [
+    "H2",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "H3",
+    "design \u00a710.2",
+    "[doc]"
+   ],
+   [
+    "H4",
+    "proposal non-goals",
+    "[CI]"
+   ],
+   [
+    "H5",
+    "design \u00a73.5.6",
+    "[manual]"
+   ],
+   [
+    "H6",
+    "design \u00a710.2",
+    "[manual]"
+   ],
+   [
+    "J1",
+    "design \u00a710.1 / 0.5b",
+    "[doc]"
+   ],
+   [
+    "J2",
+    "design \u00a710.1 / 0.5b",
+    "[doc]"
+   ],
+   [
+    "J3",
+    "0.5b",
+    "[CI]"
+   ],
+   [
+    "J3a",
+    "0.5b",
+    "[CI]"
+   ],
+   [
+    "J3b",
+    "0.5b",
+    "[CI][doc]"
+   ],
+   [
+    "J3c",
+    "0.5b",
+    "[doc][manual]"
+   ],
+   [
+    "J3d",
+    "0.5b",
+    "[CI]"
+   ],
+   [
+    "J3e",
+    "0.5b",
+    "[CI]"
+   ],
+   [
+    "J3f",
+    "0.5b",
+    "[CI]"
+   ],
+   [
+    "J3g",
+    "design \u00a710.1 / 0.5b",
+    "[doc]"
+   ],
+   [
+    "J3h",
+    "design \u00a710.1 / G-16",
+    "[CI][doc]"
+   ],
+   [
+    "J6",
+    "design \u00a710.2 / 0.6",
+    "[doc]"
+   ],
+   [
+    "J7",
+    "design \u00a710.3 / 0.5b",
+    "[doc]"
+   ],
+   [
+    "J8",
+    "design \u00a710.1",
+    "[doc]"
+   ],
+   [
+    "J9",
+    "design \u00a74.10, \u00a710.1",
+    "[doc]"
+   ],
+   [
+    "J9a",
+    "design \u00a74.10",
+    "[doc]"
+   ],
+   [
+    "J10",
+    "design \u00a710.1, \u00a710.2",
+    "[manual]"
+   ],
+   [
+    "J12",
+    "design \u00a74.11, \u00a74.12",
+    "[doc]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-temporal-event-log": {
+  "cov": {
+   "the event log is the only stored temporal representation and validity intervals are derived, never stored": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "G3",
+    "J1",
+    "J4"
+   ],
+   "gap-freedom is structural \u2014 a gap in a key's validity chain is unrepresentable": [
+    "P1",
+    "B1",
+    "B2",
+    "B3",
+    "B5",
+    "B7",
+    "J1",
+    "J2",
+    "J4"
+   ],
+   "the structural gap-freedom guarantee is a property of the encoding, so converting a gap-bearing history into it is not information-preserving": [
+    "J1",
+    "J4"
+   ],
+   "getAt asserts the `at` bound through the primary-key index, not only through the index it searched": [
+    "J1",
+    "J4"
+   ],
+   "the event log is append-only at the database level": [
+    "B3",
+    "C1c",
+    "C4",
+    "C5",
+    "J1",
+    "J3",
+    "J4"
+   ],
+   "WellFormed is the single remaining refinement obligation and is asserted in the database": [
+    "C1",
+    "C1a",
+    "C1b",
+    "C2",
+    "C3",
+    "J1",
+    "J4"
+   ],
+   "the write-timestamp clock policy is decided by the engine-core measurement gate, not assumed": [
+    "P0",
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "J1",
+    "J4"
+   ],
+   "same-transaction key reuse is adapter-enforced, and the adapter states exactly what it guarantees": [
+    "E1",
+    "E3",
+    "E4",
+    "E5",
+    "E6",
+    "F7e",
+    "J1",
+    "J4"
+   ],
+   "the adapter never issues INSERT OR REPLACE against the event log": [
+    "F1",
+    "F2",
+    "J1",
+    "J4"
+   ],
+   "trigger assertions abort the statement and never end the transaction": [
+    "F3",
+    "F4",
+    "F5",
+    "J1",
+    "J4"
+   ],
+   "the naive EXCLUDE transliteration is prohibited": [
+    "G1",
+    "G2",
+    "G4",
+    "J1",
+    "J4"
+   ],
+   "the engine configuration under which trigger-based enforcement is sound is asserted, not assumed": [
+    "F6",
+    "F7",
+    "F7a",
+    "F7b",
+    "F7c",
+    "F7d",
+    "F7d1",
+    "J1",
+    "J4"
+   ],
+   "Postgres errors surface as the shared StorageError hierarchy": [
+    "H7",
+    "H8",
+    "J1",
+    "J4"
+   ],
+   "Unconditional writes are gapless and monotonic (Law T1)": [
+    "J1",
+    "J4"
+   ],
+   "A caller-supplied transaction handle is honored or rejected, never silently ignored": [
+    "J1",
+    "J4"
+   ],
+   "put's CAS guard distinguishes conflict from absence": [
+    "J1",
+    "J4"
+   ],
+   "A second write to the same key within one transaction is rejected at the trigger level, not silently absorbed": [
+    "E1",
+    "E2",
+    "J1",
+    "J4"
+   ],
+   "listKeys streams without materializing the full result set first, and orders results correctly": [
+    "J1",
+    "J4"
+   ],
+   "getAt satisfies temporal-projection equivalence (Law T3), within the store's retention window": [
+    "J1",
+    "J4"
+   ],
+   "Dual addressing agrees at recorded write timestamps (Law T4)": [
+    "J1",
+    "J4"
+   ],
+   "History intervals never overlap for a single key (Law T5)": [
+    "B4",
+    "B6",
+    "B7",
+    "J1",
+    "J4"
+   ]
+  },
+  "miss": [],
+  "hard": [],
+  "unres": [
+   [
+    "P2",
+    "`design.md` \u00a70.3 / 0.3",
+    "[doc]"
+   ],
+   [
+    "B4a",
+    "gap-boundary / `design.md` \u00a74.4",
+    "[doc][manual]"
+   ],
+   [
+    "B4b",
+    "gap-boundary / 3.3b",
+    "[prop][manual]"
+   ],
+   [
+    "B4c",
+    "T3 / 3.3b",
+    "[doc][unit]"
+   ],
+   [
+    "B4d",
+    "gap-boundary / 3.3b",
+    "[manual]"
+   ],
+   [
+    "B4e",
+    "gap-boundary / 3.3c",
+    "[unit][CI]"
+   ],
+   [
+    "C1d",
+    "CAS / 2.1",
+    "[unit][doc]"
+   ],
+   [
+    "C6",
+    "T4 / 1.1, 1.2",
+    "[unit]"
+   ],
+   [
+    "D6",
+    "T4 / 2.2, 3.1",
+    "[prop]"
+   ],
+   [
+    "H1",
+    "T3 / 2.2",
+    "[unit]"
+   ],
+   [
+    "I3a",
+    "I-3 / 2.2c",
+    "[unit][CI]"
+   ],
+   [
+    "I3b",
+    "I-3 / 2.2c",
+    "[unit][prop]"
+   ],
+   [
+    "I3c",
+    "I-3 / 2.2c",
+    "[unit]"
+   ],
+   [
+    "I3d",
+    "I-3 / 2.2c",
+    "[unit]"
+   ],
+   [
+    "I3e",
+    "I-3 / 4.3",
+    "[doc]"
+   ],
+   [
+    "H2",
+    "T3 / 3.1",
+    "[prop]"
+   ],
+   [
+    "H3",
+    "T3 / 2.2",
+    "[unit]"
+   ],
+   [
+    "H4",
+    "T4 / 3.1",
+    "[prop]"
+   ],
+   [
+    "H5",
+    "T1, CAS / 2.1, 3.1",
+    "[prop][unit]"
+   ],
+   [
+    "H6",
+    "listKeys / 2.2b",
+    "[unit][prop]"
+   ],
+   [
+    "H6a",
+    "listKeys / 2.2b",
+    "[unit][CI]"
+   ],
+   [
+    "H6b",
+    "listKeys / 2.2b",
+    "[unit]"
+   ],
+   [
+    "H6c",
+    "listKeys / 2.2b",
+    "[unit]"
+   ],
+   [
+    "H6d",
+    "listKeys / 2.2b",
+    "[unit][CI]"
+   ],
+   [
+    "H6e",
+    "listKeys / 2.2b",
+    "[unit]"
+   ],
+   [
+    "H6f",
+    "listKeys / 2.2b",
+    "[unit]"
+   ],
+   [
+    "H6g",
+    "listKeys / 4.3",
+    "[doc]"
+   ],
+   [
+    "H9",
+    "opts.tx / 2.3b",
+    "[unit]"
+   ],
+   [
+    "H9a",
+    "opts.tx / 2.3b",
+    "[unit]"
+   ],
+   [
+    "H9b",
+    "opts.tx / 2.3b",
+    "[unit]"
+   ],
+   [
+    "H9c",
+    "opts.tx / 3.4",
+    "[unit]"
+   ],
+   [
+    "H9d",
+    "opts.tx / `design.md` \u00a70.4",
+    "[manual][doc]"
+   ],
+   [
+    "J5",
+    "\u2014 / 3.1",
+    "[manual][CI]"
+   ],
+   [
+    "N1",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N2",
+    "proposal non-goals / change 1",
+    "[manual]"
+   ],
+   [
+    "N3",
+    "proposal non-goals / change 3, `design.md` \u00a70.4",
+    "[manual]"
+   ],
+   [
+    "N4",
+    "proposal non-goals / change 4",
+    "[manual]"
+   ],
+   [
+    "N5",
+    "proposal non-goals / change 5, task 4.2",
+    "[manual][doc]"
+   ],
+   [
+    "N6",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N7",
+    "`design.md` \u00a71, \u00a75",
+    "[manual][CI]"
+   ],
+   [
+    "N8",
+    "`design.md` \u00a713 / 4.3",
+    "[doc]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-concurrency-lease": {
+  "cov": {
+   "per-key lease mutual exclusion is enforced in-process and uses no lock file": [
+    "A1",
+    "A2",
+    "A2a",
+    "A2b",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A11"
+   ],
+   "the lease's frozen observable contract is preserved under the new mechanism": [
+    "A8",
+    "A9",
+    "A10",
+    "C4"
+   ],
+   "a second writer process is detected and the displaced process is fail-stopped before it can commit": [
+    "B1",
+    "B3",
+    "B3a",
+    "B3b",
+    "B3c",
+    "B3j",
+    "B3k",
+    "B3l",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8"
+   ],
+   "no UmbraDB code opens and closes a descriptor on the database file or its sidecars": [
+    "B3d",
+    "B3f",
+    "B3h",
+    "B3h2",
+    "B3h4",
+    "B3i",
+    "B3e",
+    "C3a"
+   ],
+   "every concurrency object in this capability is scoped per database file": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "the lease limitation stated in writing is exactly what the mechanism delivers": [
+    "C1",
+    "C2",
+    "C3"
+   ],
+   "every write transaction opens BEGIN IMMEDIATE and no write path is DEFERRED": [
+    "D1",
+    "D2"
+   ],
+   "the whole-database write lock held by withTransaction is bounded": [
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D6a",
+    "D7"
+   ],
+   "all lock waiting happens outside SQLite and busy_timeout is 0 on every handle": [
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5"
+   ],
+   "contention is retried inside the adapter and surfaces only through already-frozen codes": [
+    "E5a",
+    "E5b",
+    "E6",
+    "E7",
+    "E8",
+    "E9"
+   ],
+   "CONNECTION_ERROR becomes unreachable and is never repurposed": [
+    "E10",
+    "E11",
+    "E12"
+   ],
+   "a transaction handle is poisoned by any transaction-scoped error, including one thrown before any statement reaches SQLite": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6"
+   ],
+   "read paths do not take the database write lock": [
+    "G1",
+    "G2",
+    "G3"
+   ],
+   "prune's C2a justification is re-derived from BEGIN IMMEDIATE, not carried over": [
+    "G5",
+    "G6",
+    "G7",
+    "G8"
+   ],
+   "nested withTransaction resolves to a savepoint rather than deadlocking": [
+    "D8"
+   ],
+   "P10 is re-executed with negative controls that fail against the implementations they target": [
+    "H1",
+    "H2",
+    "H3",
+    "H4"
+   ],
+   "Windows parity for the writer-generation guard is established before the strengthened contract ships": [
+    "B9",
+    "B9a",
+    "B10"
+   ]
+  },
+  "miss": [],
+  "hard": [
+   [
+    "the lease limitation stated in writing is exactly what the mechanism delivers",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "C1",
+     "C2",
+     "C3"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "P0",
+    "design \u00a70 D-1, \u00a77.1 / 0.1",
+    "[manual][unit]"
+   ],
+   [
+    "P1",
+    "design \u00a70 D-3 / 0.2, 2.2, 5.1, 1.5",
+    "[manual][CI]"
+   ],
+   [
+    "P1a",
+    "design \u00a70 D-3a, \u00a74.5 / 1.5, 7.2",
+    "[manual]"
+   ],
+   [
+    "P2",
+    "design \u00a70 D-4 / 0.3",
+    "[manual]"
+   ],
+   [
+    "A12",
+    "\u2014 / 2.3",
+    "[CI]"
+   ],
+   [
+    "B2",
+    "\"\u2026SHALL NOT use a process id\u2026 or any liveness inference\" / 3.1",
+    "[CI]"
+   ],
+   [
+    "B3g",
+    "\"\u2026SHALL be unconditional rather than journal-mode-conditional\" / 3.6",
+    "[doc][manual]"
+   ],
+   [
+    "B3h1",
+    "design \u00a72.6.2 / 3.11",
+    "[doc][manual]"
+   ],
+   [
+    "B3h3",
+    "\"each claim's qualifier SHALL appear in the owning change's own text\" / 3b.4",
+    "[manual]"
+   ],
+   [
+    "S5",
+    "design \u00a70 D-1 / 3.10",
+    "[manual]"
+   ],
+   [
+    "C3b",
+    "design \u00a72.6 / 7.1 ordering note",
+    "[manual]"
+   ],
+   [
+    "C5",
+    "design \u00a73.2 / 7.1 ordering note",
+    "[manual]"
+   ],
+   [
+    "D9",
+    "\"\u2026statement runtime has no bound at all\" / 7.2",
+    "[doc]"
+   ],
+   [
+    "E13",
+    "design \u00a711 / 5.5",
+    "[manual]"
+   ],
+   [
+    "G4",
+    "\"\u2026isolation SHALL remain on the frozen surface, validated and then ignored\" / 4.2",
+    "[unit][doc]"
+   ],
+   [
+    "H5",
+    "design \u00a71, \u00a72 / 7.3",
+    "[doc][manual]"
+   ],
+   [
+    "H6",
+    "\u2014 / 6.3",
+    "[CI]"
+   ],
+   [
+    "H7",
+    "proposal \"What changes\" / 7.4",
+    "[doc]"
+   ],
+   [
+    "H8a",
+    "design \u00a72.6.1, \u00a72.6.2 / 3b.3",
+    "[manual]"
+   ],
+   [
+    "H8",
+    "design \u00a70 H-2 / 3b.1",
+    "[manual]"
+   ],
+   [
+    "H9",
+    "design \u00a70 H-5 / 3b.2",
+    "[manual]"
+   ],
+   [
+    "H10",
+    "design \u00a77.1 (containment note) / 5.2",
+    "[unit][manual]"
+   ],
+   [
+    "H11",
+    "design \u00a72.6.2 / 3b.4",
+    "[manual]"
+   ],
+   [
+    "H12",
+    "G-17 / 3b.5",
+    "[manual][doc]"
+   ],
+   [
+    "H13",
+    "G-1/G-3/G-8 / proposal non-goal, N1",
+    "[doc][CI]"
+   ],
+   [
+    "H14",
+    "G-16 / 3b.1, 3b.4",
+    "[doc][manual]"
+   ],
+   [
+    "N1",
+    "proposal non-goal + the G-8 handover record",
+    "[manual]"
+   ],
+   [
+    "N2",
+    "design \u00a70 D-1..D-3",
+    "[manual]"
+   ],
+   [
+    "N3",
+    "design \u00a70 D-5; `council/commitments.md` R3",
+    "[manual]"
+   ],
+   [
+    "N4",
+    "design \u00a70 D-5",
+    "[manual]"
+   ],
+   [
+    "N5",
+    "design \u00a70 D-4",
+    "[manual]"
+   ],
+   [
+    "N6",
+    "design \u00a70 D-6",
+    "[manual]"
+   ],
+   [
+    "N7",
+    "`council/redteam.md` \u00a72 #4 (233\u00d7 tmpfs error)",
+    "[manual][doc]"
+   ],
+   [
+    "N8",
+    "`Formal/STORAGE_ALGEBRA.md:303-317`; design \u00a72.4",
+    "[unit][manual]"
+   ],
+   [
+    "N9",
+    "brief trap 6",
+    "[manual]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-schema-parity": {
+  "cov": {
+   "Migrations are idempotent and ordered": [
+    "MG1",
+    "MG2",
+    "MG3",
+    "MG8"
+   ],
+   "Schema isolation is the default, not opt-in": [
+    "N3"
+   ],
+   "every object name UmbraDB creates carries the schema prefix, including index and trigger names": [
+    "N1",
+    "N2",
+    "N3"
+   ],
+   "the schema parameter and DEFAULT_SCHEMA survive the engine change byte-for-byte": [
+    "N5"
+   ],
+   "schema emulation SHALL NOT be implemented as one database file per schema": [
+    "N8"
+   ],
+   "every table is STRICT and a wrong-typed write is rejected, not coerced": [
+    "S1",
+    "S2",
+    "S4"
+   ],
+   "each PostgreSQL type class maps to exactly one SQLite declared type": [
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "domain constraints lost with the PostgreSQL type system are restored as named CHECK constraints": [
+    "C1",
+    "C2",
+    "C3"
+   ],
+   "identifier containment is a junction table whose predicate is row-subset-of-the-finalizing-set": [
+    "J1",
+    "J2",
+    "J3",
+    "J5",
+    "J8"
+   ],
+   "an identifier set is replaced wholesale on every write, never merged in place": [
+    "J6",
+    "J7"
+   ],
+   "uniqueness over a nullable key column is emulated by a coalesce expression index with a domain-excluded sentinel": [
+    "R1",
+    "R2",
+    "R4"
+   ],
+   "listKeys matches a literal prefix with a half-open range scan, not LIKE": [
+    "L1",
+    "L2",
+    "L4",
+    "L5"
+   ],
+   "listKeys ordering is code-point order and the one-time resume-cursor reorder is disclosed": [
+    "L6",
+    "L7"
+   ],
+   "WITHOUT ROWID is used only for narrow tables and never for payload-bearing tables": [
+    "R6",
+    "R7",
+    "MS4"
+   ],
+   "migration 006 replays verbatim, and no future migration adds a STORED generated column to a populated table": [
+    "MG5",
+    "MG7"
+   ],
+   "the writer-generation table is created and seeded by the migration lineage": [
+    "W1",
+    "W2",
+    "W3",
+    "W5",
+    "W6"
+   ],
+   "sequence allocation is guarded by a runtime invariant, with uniqueness as defence-in-depth": [
+    "SQ1",
+    "SQ2",
+    "SQ3",
+    "SQ6",
+    "SQ7",
+    "SQ9"
+   ],
+   "the schema text is covered by a digest recorded at migration time": [
+    "SD1",
+    "SD2",
+    "SD3",
+    "SD4",
+    "SD5"
+   ],
+   "every migration begins with non-idempotent DDL and runs in one transaction": [
+    "I5-1",
+    "I5-2",
+    "I5-3",
+    "I5-4",
+    "I5-6",
+    "I5-7"
+   ],
+   "transaction-history reads derive identifiers from entry and cross-check the junction": [
+    "I7-1",
+    "I7-2",
+    "I7-3",
+    "I7-4",
+    "I7-5",
+    "I7-6",
+    "I7-8"
+   ],
+   "wallet-tier digest columns are declared under this capability's conventions": [
+    "DG1",
+    "DG2",
+    "DG3",
+    "DG4",
+    "DG6",
+    "DG7"
+   ],
+   "the forward-only migration framework is preserved with SQLite-native bootstrap detection": [],
+   "migration 005 is retained as a recorded no-op and its hard invariants are retired with reason": [
+    "MG4"
+   ],
+   "bulk inserts have no row cap derived from the bind-parameter ceiling": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B7",
+    "B8"
+   ],
+   "foreign-key enforcement is a schema precondition that is asserted, not assumed": [
+    "C4",
+    "C5"
+   ],
+   "every performance-dependent property is stated as an obligation to measure, not as a number": [
+    "P2",
+    "MS1",
+    "MS2",
+    "MS3"
+   ]
+  },
+  "miss": [
+   "the forward-only migration framework is preserved with SQLite-native bootstrap detection"
+  ],
+  "hard": [
+   [
+    "schema emulation SHALL NOT be implemented as one database file per schema",
+    [
+     "doc"
+    ],
+    [
+     "N8"
+    ]
+   ],
+   [
+    "every performance-dependent property is stated as an obligation to measure, not as a number",
+    [
+     "doc",
+     "manual"
+    ],
+    [
+     "P2",
+     "MS1",
+     "MS2",
+     "MS3"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "P1",
+    "design \u00a70 / 0.1",
+    "[manual]"
+   ],
+   [
+    "P3",
+    "design \u00a715 Q1 / 0.3",
+    "[manual][doc]"
+   ],
+   [
+    "N4",
+    "negative-control scenarios / 1.3",
+    "[unit]"
+   ],
+   [
+    "N6",
+    "design \u00a71.6 / 1.4",
+    "[unit][doc]"
+   ],
+   [
+    "N7",
+    "design \u00a70 / 1.5",
+    "[doc][manual]"
+   ],
+   [
+    "S3",
+    "negative-control scenario / 2.2",
+    "[unit]"
+   ],
+   [
+    "S8",
+    "design \u00a72.3, \u00a712.2 / 2.4",
+    "[unit][CI]"
+   ],
+   [
+    "C6",
+    "negative-control scenario / 3.3",
+    "[unit]"
+   ],
+   [
+    "J4",
+    "negative-control scenario / 4.4",
+    "[unit]"
+   ],
+   [
+    "J9",
+    "design \u00a74.4 / 4.2",
+    "[unit]"
+   ],
+   [
+    "L3",
+    "negative-control scenario / 5.2",
+    "[unit]"
+   ],
+   [
+    "B5",
+    "negative-control scenario / 6.4",
+    "[unit]"
+   ],
+   [
+    "B6",
+    "design \u00a76.2 / 6.4",
+    "[doc]"
+   ],
+   [
+    "MG6",
+    "negative-control scenario / 7.4",
+    "[unit]"
+   ],
+   [
+    "W4",
+    "negative-control scenario / 7.7",
+    "[unit]"
+   ],
+   [
+    "W7",
+    "design \u00a70, \u00a79.4 / 7.6",
+    "[manual][doc]"
+   ],
+   [
+    "SQ4",
+    "negative-control scenario / 7.11",
+    "[unit]"
+   ],
+   [
+    "SQ5",
+    "negative-control scenario / 7.11",
+    "[unit]"
+   ],
+   [
+    "SQ8",
+    "design \u00a717.4 / 7.12",
+    "[doc][manual]"
+   ],
+   [
+    "R3",
+    "negative-control scenario / 8.3",
+    "[unit]"
+   ],
+   [
+    "R5",
+    "proposal non-goals / 8.1",
+    "[unit][CI]"
+   ],
+   [
+    "I5-5",
+    "negative-control scenario / 10.2",
+    "[unit]"
+   ],
+   [
+    "I7-7",
+    "negative-control scenario / 10.6",
+    "[unit]"
+   ],
+   [
+    "DG5",
+    "design \u00a719.3 / 10.7",
+    "[manual][doc]"
+   ],
+   [
+    "DG8",
+    "negative-control scenario / 10.6b",
+    "[unit]"
+   ],
+   [
+    "G9a",
+    "design \u00a79.2 / 10.6c",
+    "[doc][manual]"
+   ],
+   [
+    "X1",
+    "design \u00a716.3 / 9.1",
+    "[manual][CI]"
+   ],
+   [
+    "X2",
+    "design \u00a716.5 / 9.2",
+    "[doc]"
+   ],
+   [
+    "X3",
+    "design \u00a716.4 / 9.1",
+    "[doc]"
+   ],
+   [
+    "X4",
+    "design \u00a713 / 9.3",
+    "[doc]"
+   ],
+   [
+    "X5",
+    "design \u00a714 / 9.4",
+    "[CI][doc]"
+   ],
+   [
+    "X6",
+    "\u2014 / 9.5",
+    "[CI]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-durability-contract": {
+  "cov": {
+   "the durability probe verifies library-controlled pragmas instead of deployer-supplied server settings": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8"
+   ],
+   "the synchronous default is FULL and is lowered only under a stated decision rule": [
+    "P1",
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6"
+   ],
+   "integrity coverage follows the three-class corruption model with an explicit column-level coverage set": [
+    "C3",
+    "C3b",
+    "C4"
+   ],
+   "the value digest is a versioned, length-prefixed, row-bound SHA-256 computed adapter-side": [
+    "C1",
+    "C2",
+    "C4e",
+    "C4f"
+   ],
+   "the digest covers the stored bytes and never a logical value": [
+    "C3c"
+   ],
+   "a documented-as-dangerous salvage bypass ships from day one": [
+    "C3d"
+   ],
+   "a covered row cannot be downgraded to unverified, by configuration or by statement": [
+    "C4a",
+    "C4b",
+    "C4c",
+    "C4d"
+   ],
+   "the schema digest is verified at open and is the one open-scoped corruption failure": [
+    "C6a"
+   ],
+   "the verification pass runs the structural check, the digest sweep, the schema digest and the invariants together, and never refuses": [
+    "C5",
+    "C5a",
+    "C5b",
+    "C6"
+   ],
+   "Class B corruption is answered by named invariants with an owner per change": [],
+   "the checksum VFS is considered and declined, with its reasons recorded": [
+    "C9c"
+   ],
+   "the integrity boundary is disclosed using the two-case wording, in every channel a consumer reads": [
+    "C7",
+    "C7a",
+    "C8",
+    "C9",
+    "C9a",
+    "C9b"
+   ],
+   "corruption recovery is row-scoped and proportionate, never whole-database refusal": [
+    "C11",
+    "C12"
+   ],
+   "the cancellation contract promises only what a mechanism can deliver": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7"
+   ],
+   "the backup primitive is established by measurement on the ruled binding, not asserted": [
+    "E0",
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5",
+    "E6",
+    "E7",
+    "E8",
+    "E9",
+    "E10",
+    "E10a",
+    "E10b",
+    "E10c",
+    "E11"
+   ],
+   "driver errors are discriminated by the ruled binding's string code, never by a numeric result code": [
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19"
+   ],
+   "a backup's manifest-to-chunk closure is tested rather than asserted": [
+    "E12"
+   ],
+   "no frozen error code is repurposed and no contention code is added": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6"
+   ],
+   "every integrity fault raised by a sibling change is routed to a named existing code, and scope decides which": [
+    "F20",
+    "F21",
+    "F22"
+   ],
+   "failures of a process outside the frozen surface are tool diagnostics, not catalog entries": [
+    "F23",
+    "F24",
+    "N7"
+   ],
+   "the persisted value digest and the migration fidelity comparison are two distinct artifacts": [
+    "C1",
+    "C2",
+    "C4e",
+    "C4f",
+    "F25"
+   ],
+   "CLOCK_REGRESSION retains its conditional retryability marking": [
+    "F7",
+    "F8"
+   ],
+   "the catalog count is derived from the exported surface and is not confused with the conformance pin": [
+    "F9",
+    "F10"
+   ],
+   "the stability policy binds the situation-to-code mapping and bounds additive-only": [
+    "F11",
+    "F12",
+    "F13"
+   ],
+   "the release record prices every break as pre-tag and post-tag": [
+    "I3",
+    "I4"
+   ],
+   "the manual pre-tag evidence artifact is re-executed against the new release candidate, never amended": [
+    "G1",
+    "G2",
+    "G3",
+    "G4"
+   ],
+   "the conformance suite is re-executed with negative controls and gains the properties SQLite creates": [
+    "G5",
+    "G6",
+    "G7",
+    "G8",
+    "G9",
+    "G10"
+   ],
+   "deleting a pinned conformance id is a reviewed contract change in its own commit": [
+    "G11",
+    "G12"
+   ],
+   "a running embedded engine can be diagnosed from outside itself without a debugger": [
+    "H1",
+    "H2",
+    "H3",
+    "H4"
+   ],
+   "the unbounded transaction hold is documented as unbounded and instrumented rather than claimed to be bounded": [
+    "H5",
+    "H6"
+   ],
+   "every engine-named contract sentence is re-derived and every external precedent citation is re-verified before it ships": [
+    "E13",
+    "I1",
+    "I2"
+   ],
+   "the known verification gaps are recorded in the catalog rather than left for a green gate to hide": [
+    "F14",
+    "I5",
+    "I6"
+   ],
+   "the unmeasured integrity quantities are carried as obligations, never as assumptions": [
+    "C10",
+    "C13"
+   ]
+  },
+  "miss": [
+   "Class B corruption is answered by named invariants with an owner per change"
+  ],
+  "hard": [
+   [
+    "the integrity boundary is disclosed using the two-case wording, in every channel a consumer reads",
+    [
+     "CI",
+     "doc"
+    ],
+    [
+     "C7",
+     "C7a",
+     "C8",
+     "C9",
+     "C9a",
+     "C9b"
+    ]
+   ],
+   [
+    "the backup primitive is established by measurement on the ruled binding, not asserted",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "E0",
+     "E1",
+     "E2",
+     "E3",
+     "E4",
+     "E5",
+     "E6",
+     "E7",
+     "E8",
+     "E9",
+     "E10",
+     "E10a",
+     "E10b",
+     "E10c",
+     "E11"
+    ]
+   ],
+   [
+    "the stability policy binds the situation-to-code mapping and bounds additive-only",
+    [
+     "CI",
+     "doc"
+    ],
+    [
+     "F11",
+     "F12",
+     "F13"
+    ]
+   ],
+   [
+    "the release record prices every break as pre-tag and post-tag",
+    [
+     "doc",
+     "manual"
+    ],
+    [
+     "I3",
+     "I4"
+    ]
+   ],
+   [
+    "every engine-named contract sentence is re-derived and every external precedent citation is re-verified before it ships",
+    [
+     "doc",
+     "manual"
+    ],
+    [
+     "E13",
+     "I1",
+     "I2"
+    ]
+   ],
+   [
+    "the known verification gaps are recorded in the catalog rather than left for a green gate to hide",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "F14",
+     "I5",
+     "I6"
+    ]
+   ],
+   [
+    "the unmeasured integrity quantities are carried as obligations, never as assumptions",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "C10",
+     "C13"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "P0",
+    "design \u00a70.4 / 0.1",
+    "[manual]"
+   ],
+   [
+    "P2",
+    "design \u00a70.4 / 0.1",
+    "[manual]"
+   ],
+   [
+    "C3a",
+    "\"framed preimage\" / 3.1a",
+    "[unit][CI]"
+   ],
+   [
+    "C6b",
+    "\"anti-latch\" / 3.6",
+    "[unit][CI]"
+   ],
+   [
+    "C6c",
+    "\"invariants owned across the sprint\" / 3.7",
+    "[manual]"
+   ],
+   [
+    "N1",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N2",
+    "design \u00a70.2, \u00a70.4",
+    "[manual]"
+   ],
+   [
+    "N9",
+    "design \u00a70.4 / 0.1",
+    "[manual]"
+   ],
+   [
+    "N3",
+    "design \u00a70.2",
+    "[manual]"
+   ],
+   [
+    "N4",
+    "design \u00a70.2",
+    "[manual]"
+   ],
+   [
+    "N5",
+    "proposal non-goals; `docs/CONTRACT.md:135-143`",
+    "[manual][doc]"
+   ],
+   [
+    "N6",
+    "`v1.0.0-api-surface` acceptance N3",
+    "[unit][CI]"
+   ],
+   [
+    "N8",
+    "design \u00a71.3; B2",
+    "[doc][CI]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-chain-archive": {
+  "cov": {
+   "the chain-archive lineage is created empty and replayed forward, with no data migration": [
+    "S1",
+    "S2"
+   ],
+   "the chain archive occupies its own database file and no transaction spans the tier boundary": [
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "a second process writing the archive file is detected and fail-stopped before it can commit": [
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10"
+   ],
+   "height-range separation SHALL NOT be implemented with ATTACH": [
+    "A1",
+    "A2",
+    "A3"
+   ],
+   "each archive relation is stored in one table and a table-per-height-range layout is prohibited": [
+    "P3",
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "L5",
+    "L6"
+   ],
+   "a view-routing insert trigger never accepts a row it does not store": [
+    "L8",
+    "L11"
+   ],
+   "a height-qualified read resolves in one index descent": [
+    "L7",
+    "L9"
+   ],
+   "at most one canonical block per height is enforced by the database (invariant I-2)": [
+    "L10",
+    "R13",
+    "R14"
+   ],
+   "the archive cursor is bounded by its data and its monotonic guard cannot latch": [
+    "R15",
+    "R15a",
+    "R16",
+    "R16a",
+    "R16b"
+   ],
+   "verifier-key observation identity uses the ruled coalesce expression index, not a plain UNIQUE": [
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7"
+   ],
+   "every PostgreSQL guard trigger has a named SQLite counterpart and row locking is removed with reason": [
+    "S11",
+    "D2",
+    "D8",
+    "D9"
+   ],
+   "blob content is stored in the database and verified on read by recomputing its address": [
+    "D11",
+    "W3",
+    "W4",
+    "W5",
+    "R18"
+   ],
+   "the archive write path reuses prepared statements and acquires no bind-parameter row cap": [
+    "W1",
+    "W2"
+   ],
+   "the ingest cursor advances in the same transaction as the block bundle it passes": [
+    "S11",
+    "W6",
+    "W7",
+    "W8"
+   ],
+   "constraint identity survives the port and message parsing is confined to one function": [
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5",
+    "E6",
+    "X1"
+   ],
+   "the archive's bounded delete is written in the form that needs no optional compile option": [],
+   "a snapshot is a database file with no outstanding write-ahead-log dependency, together with a manifest": [
+    "N1",
+    "N2"
+   ],
+   "the snapshot and verification tooling runs outside the library process": [
+    "N0",
+    "N0a"
+   ],
+   "the snapshot manifest is derived from the finished artifact, never from the source database": [
+    "N3",
+    "N4",
+    "N5"
+   ],
+   "the snapshot manifest identifies the artifact well enough to restore it safely": [
+    "N6",
+    "N7",
+    "N8",
+    "N9",
+    "N10"
+   ],
+   "restoring a snapshot runs four checks and reports them separately": [
+    "N11",
+    "N11a",
+    "N11c",
+    "N11d",
+    "N11b",
+    "N12",
+    "N13"
+   ],
+   "a snapshot makes no completeness claim": [
+    "N14",
+    "N15"
+   ],
+   "no live-backup primitive is named for the archive until it has been measured on the ruled binding": [
+    "N16",
+    "N17",
+    "N18"
+   ],
+   "the archive's durability setting is not lowered without four stated preconditions": [
+    "R1",
+    "R2",
+    "R3"
+   ],
+   "each archive table has a stated integrity classification and mechanism": [
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R16c"
+   ],
+   "the digest column and its drift guard follow this lineage's DDL conventions": [
+    "R8",
+    "R8a",
+    "R8b",
+    "R9",
+    "R10",
+    "R11",
+    "R12"
+   ],
+   "the uncovered projection tables have a written rebuild path with an executed transcript": [
+    "R17"
+   ],
+   "the archive sync entry point remains coherent across typecheck, build and run": [
+    "C1",
+    "C2",
+    "C3",
+    "C4"
+   ],
+   "every performance-dependent property of the archive is an obligation to measure, not a number": [
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M5a",
+    "M6",
+    "M7",
+    "M8",
+    "M9"
+   ]
+  },
+  "miss": [
+   "the archive's bounded delete is written in the form that needs no optional compile option"
+  ],
+  "hard": [
+   [
+    "no live-backup primitive is named for the archive until it has been measured on the ruled binding",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "N16",
+     "N17",
+     "N18"
+    ]
+   ],
+   [
+    "the archive's durability setting is not lowered without four stated preconditions",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "R1",
+     "R2",
+     "R3"
+    ]
+   ],
+   [
+    "the uncovered projection tables have a written rebuild path with an executed transcript",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "R17"
+    ]
+   ],
+   [
+    "the archive sync entry point remains coherent across typecheck, build and run",
+    [
+     "CI",
+     "doc",
+     "manual"
+    ],
+    [
+     "C1",
+     "C2",
+     "C3",
+     "C4"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "P1",
+    "design \u00a70 / 0.1",
+    "[manual]"
+   ],
+   [
+    "P2",
+    "design \u00a714.1 / 0.2",
+    "[manual]"
+   ],
+   [
+    "P4",
+    "design \u00a712 / 0.4",
+    "[manual]"
+   ],
+   [
+    "P5",
+    "\"bulk deletion does not depend on an unpinnable compile option\" / 0.5",
+    "[manual][CI]"
+   ],
+   [
+    "D1",
+    "design \u00a75 / 1.1",
+    "[unit][CI]"
+   ],
+   [
+    "D10",
+    "design \u00a75.4 / 1.7",
+    "[unit][CI]"
+   ],
+   [
+    "D12",
+    "design \u00a75.2 / 1.8",
+    "[doc]"
+   ],
+   [
+    "W9",
+    "\"does not depend on an unpinnable compile option\" / 3.5",
+    "[unit][CI]"
+   ],
+   [
+    "N19",
+    "all snapshot reqs / 5.7",
+    "[unit][CI]"
+   ],
+   [
+    "C5",
+    "design \u00a715 Q-A2 / 7.3",
+    "[manual][doc]"
+   ],
+   [
+    "X2",
+    "design \u00a713 / 2.2",
+    "[CI]"
+   ],
+   [
+    "X3",
+    "design \u00a711 / 2.2",
+    "[CI]"
+   ],
+   [
+    "X4",
+    "design \u00a713 / 2.1",
+    "[CI]"
+   ],
+   [
+    "X5",
+    "design \u00a71 / 9.2",
+    "[CI][doc]"
+   ],
+   [
+    "X6",
+    "design \u00a714.3 / 9.3",
+    "[doc][manual]"
+   ],
+   [
+    "X8",
+    "design \u00a714.4 / 7.4",
+    "[CI]"
+   ],
+   [
+    "X9",
+    "design \u00a714.4 / 2.2, 7.4",
+    "[doc][manual]"
+   ],
+   [
+    "X10",
+    "design \u00a73.4 / 2.1",
+    "[doc]"
+   ],
+   [
+    "X11",
+    "design \u00a710.5.1 / 0.1",
+    "[doc]"
+   ],
+   [
+    "X7",
+    "all / 9.4",
+    "[CI][manual]"
+   ]
+  ]
+ },
+ "v1.0.0-sqlite-data-migration": {
+  "cov": {
+   "the migration reads the source PostgreSQL database and never writes to it": [
+    "A1",
+    "A2",
+    "A3"
+   ],
+   "the target database is created by running the SQLite lineage to completion on an empty file before any row is imported": [
+    "B1",
+    "B2",
+    "B3",
+    "B4"
+   ],
+   "the temporal event log is reconstructed from both source tables and the live version is never dropped": [
+    "C1",
+    "C2",
+    "C3",
+    "C4"
+   ],
+   "the reconstruction's source preconditions are verified per key rather than inherited from the adapter": [
+    "D1",
+    "D2"
+   ],
+   "a source state the event-log encoding cannot represent is refused, and no target database is produced": [
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7"
+   ],
+   "checkpoint manifest identifiers are preserved and no generated column is transported": [
+    "E1",
+    "E2",
+    "E3",
+    "E4"
+   ],
+   "the identifier array is exploded into the junction table and the two I-7 cross-checks hold on the imported data": [
+    "P3",
+    "E5",
+    "E6",
+    "E8",
+    "E9",
+    "M5"
+   ],
+   "a source that violates a constraint the target newly adds is refused with a remediation report, and is never quarantined": [
+    "P5",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "M7"
+   ],
+   "stored JSON values are transported as the source's own canonical text and never through a JavaScript JSON round trip": [
+    "F1",
+    "F2",
+    "F3"
+   ],
+   "timestamps are transported as an exact millisecond integer under pinned session settings": [
+    "F5",
+    "F6",
+    "F7"
+   ],
+   "objects belonging to the target lineage are produced by the lineage and are never imported": [],
+   "the export is a single read-only snapshot and the bundle is self-describing": [
+    "G1",
+    "G2",
+    "G3",
+    "G4"
+   ],
+   "verification is a ladder of five rungs whose pass is their conjunction, and it states what it assumes": [
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H9",
+    "H10",
+    "H11",
+    "H12"
+   ],
+   "point-in-time equivalence is established exhaustively over the breakpoint set": [
+    "H6",
+    "H7",
+    "H8"
+   ],
+   "a check with nothing in scope reports n/a and never pass, and the fixtures are proven non-empty": [
+    "Q1",
+    "Q2",
+    "Q3"
+   ],
+   "migration-tool failures are tool diagnostics with a stable exit code and a machine-readable report": [
+    "Q4",
+    "Q5",
+    "Q6",
+    "Q7",
+    "R4"
+   ],
+   "the stored-value digest and the transport-fidelity comparison are two distinct artifacts and are never conflated": [
+    "F4",
+    "F4b",
+    "F4c",
+    "F4d"
+   ],
+   "content verification reuses the durability contract's digest regime and introduces no second mechanism": [
+    "G5",
+    "H5",
+    "H13",
+    "H14",
+    "H15",
+    "H16",
+    "H17"
+   ],
+   "an interrupted migration never leaves a database that presents itself as complete": [
+    "J1",
+    "J2"
+   ],
+   "re-running the migration is safe, and resumability is decided by measurement rather than assumed": [
+    "C6",
+    "J3",
+    "J4",
+    "J5"
+   ],
+   "the import does not weaken any check in order to go faster": [
+    "J6",
+    "J7",
+    "J8",
+    "J9",
+    "Q8",
+    "Q9",
+    "Q10"
+   ],
+   "the supported rollback is the untouched source database and no reverse migration is offered": [
+    "K5",
+    "K6"
+   ],
+   "each distribution channel has a written procedure and the container channel's hazards are named": [
+    "P2",
+    "K1",
+    "K2",
+    "K3"
+   ],
+   "differences that survive a faithful migration are disclosed before the migration runs": [
+    "P3",
+    "H10",
+    "K4",
+    "K4b",
+    "K4c"
+   ],
+   "no migration duration or throughput figure is asserted, and every PostgreSQL-side claim is labelled": [
+    "L4",
+    "L5",
+    "L6"
+   ]
+  },
+  "miss": [
+   "objects belonging to the target lineage are produced by the lineage and are never imported"
+  ],
+  "hard": [
+   [
+    "the supported rollback is the untouched source database and no reverse migration is offered",
+    [
+     "CI",
+     "doc"
+    ],
+    [
+     "K5",
+     "K6"
+    ]
+   ],
+   [
+    "each distribution channel has a written procedure and the container channel's hazards are named",
+    [
+     "doc",
+     "manual"
+    ],
+    [
+     "P2",
+     "K1",
+     "K2",
+     "K3"
+    ]
+   ],
+   [
+    "no migration duration or throughput figure is asserted, and every PostgreSQL-side claim is labelled",
+    [
+     "doc",
+     "manual"
+    ],
+    [
+     "L4",
+     "L5",
+     "L6"
+    ]
+   ]
+  ],
+  "unres": [
+   [
+    "P0",
+    "design \u00a70.1 / 0.1",
+    "[manual][CI]"
+   ],
+   [
+    "P1",
+    "design \u00a713 / 0.2",
+    "[manual]"
+   ],
+   [
+    "P4",
+    "proposal Impact / 0.5",
+    "[manual][CI]"
+   ],
+   [
+    "A4",
+    "design \u00a77.2 / 1.1",
+    "[CI]"
+   ],
+   [
+    "C5",
+    "design \u00a72.3 / 3.3",
+    "[unit]"
+   ],
+   [
+    "E7",
+    "design \u00a75.2 / 3.5",
+    "[unit]"
+   ],
+   [
+    "F8",
+    "design \u00a76.5 / 3.7",
+    "[unit]"
+   ],
+   [
+    "R1",
+    "\u2014 / 0.4d",
+    "[CI]"
+   ],
+   [
+    "R2",
+    "\u2014 / 0.4d",
+    "[CI][manual]"
+   ],
+   [
+    "R3",
+    "\u2014 / 0.4d",
+    "[CI]"
+   ],
+   [
+    "K7",
+    "design \u00a711.3 / 6.5",
+    "[manual]"
+   ],
+   [
+    "L1",
+    "design \u00a714 / 7.1",
+    "[CI][unit]"
+   ],
+   [
+    "L2",
+    "design \u00a714, \u00a74.5 / 7.2",
+    "[unit]"
+   ],
+   [
+    "L3",
+    "design \u00a714 / 7.3",
+    "[manual][CI]"
+   ],
+   [
+    "N1",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N2",
+    "proposal non-goals",
+    "[CI][manual]"
+   ],
+   [
+    "N3",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N4",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N5",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N6",
+    "proposal non-goals",
+    "[CI]"
+   ],
+   [
+    "N7",
+    "proposal non-goals",
+    "[CI][manual]"
+   ],
+   [
+    "N8",
+    "proposal non-goals",
+    "[manual]"
+   ],
+   [
+    "N9",
+    "change 1 task 0.5b / 8.2",
+    "[CI]"
+   ],
+   [
+    "N10",
+    "\u2014 / 8.3",
+    "[CI]"
+   ]
+  ]
+ }
+}
