@@ -1,0 +1,7 @@
+?? openspec/changes/v1.0.0-sqlite-chain-archive/
+?? openspec/changes/v1.0.0-sqlite-concurrency-lease/
+?? openspec/changes/v1.0.0-sqlite-data-migration/
+?? openspec/changes/v1.0.0-sqlite-durability-contract/
+?? openspec/changes/v1.0.0-sqlite-engine-core/
+?? openspec/changes/v1.0.0-sqlite-schema-parity/
+?? openspec/changes/v1.0.0-sqlite-temporal-event-log/

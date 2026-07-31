@@ -1,0 +1,308 @@
+# Round-2 cross-vendor audit — Codex (GPT-5.6 Sol), cold read
+
+**Seat:** `codex-cold2` — cross-vendor / outside reading, four-seat round-2 panel.
+**Model:** `gpt-5.6-sol` via OpenAI Codex CLI v0.146.0, reasoning effort `high`, sandbox `read-only`.
+**Subject:** seven-change OpenSpec sprint plan (20,327 lines / 157 requirements / 540 scenarios),
+`/root/UDB-sqlite-sprint`, branch `sprint/sqlite-migration`.
+**Run:** 2026-07-31T22:03:18Z → 2026-07-31T22:12:38Z (560 s wall clock), exit status 0.
+
+Everything from here to `## Harness notes` is Codex's output, reproduced byte-for-byte from the
+capture file. The harness did not add, remove, soften, merge, reorder, or reword any finding.
+Provenance and trap observations are in `## Harness notes` at the end.
+
+**Headline for the panel:** `REJECT`. Codex **disagrees prominently with the round-2 brief**: it
+does not accept that all three remediation gates are closed. It holds that R-1 is *not* closed
+(five operative stale-archive statements survive, and change 1's own enforcement grep is scoped to
+changes 1–5 rather than all seven), that R-2's inheritance table is incomplete (change 6's
+removal-guard proof is missing from it), and that R-3 lost invariant I-4 in the prose relay. On
+Q2 it reports **no distinct fourth stale premise established within budget**, while insisting the
+two already-retracted premises still survive in operative artifacts.
+
+---
+
+## 1. Verdict
+
+**Model: OpenAI Codex (GPT-5), cross-vendor seat.**
+
+**REJECT**
+
+I disagree with the brief’s claim that all three remediation gates are closed: R-1 remains contradicted in operative artifacts, R-2’s inheritance table is incomplete, and R-3 omits invariant I-4 from its owning change. **Q5:** I would refuse approval until those three defects and the ungrounded migration-diagnostic ruling are corrected and re-audited. All seven changes pass strict structural validation, but that does not resolve these semantic defects. The plan is substantially improved and most of the digest and migration work is sound, but implementation should not begin as written.
+
+## 2. Critical findings
+
+### C1 — R-3 omitted invariant I-4 from its owning change
+
+- **Change:** `v1.0.0-sqlite-concurrency-lease`
+- **Evidence:** `v1.0.0-sqlite-durability-contract/design.md:476` assigns I-4 to change 3: registration must assert one affected row and a defined read-back. But `v1.0.0-sqlite-concurrency-lease/specs/transaction-lease/spec.md:146-170` merely requires bumping the row and retaining the read-back.
+- **Direct check:**
+
+```text
+$ rg -n '(I-4|single affected row|defined read-back|changes *=== *1|changes *== *1|zero-row)' openspec/changes/v1.0.0-sqlite-concurrency-lease
+```
+
+The command exited with no stdout: the owning change contains none of the required I-4 language.
+
+This recreates the zero-row/silent-success class. A missing or damaged seed row can let the registration `UPDATE` succeed as a statement while affecting zero rows, followed by an absent read-back and undefined generation. That defeats the cross-process guard rather than merely producing a poor diagnostic.
+
+**The plan should say instead:** change 3 must normatively require `changes === 1`, require a present read-back matching the newly written owner/generation, abort startup otherwise with a specified non-retryable error, and include a negative-control implementation in which removing either assertion permits the undefined-generation silent success. This also supplies the requested fifth zero-row/silent-success instance.
+
+### C2 — R-2’s inheritance table omits the archive removal-guard proof
+
+- **Changes:** `v1.0.0-sqlite-concurrency-lease`, `v1.0.0-sqlite-chain-archive`
+- **Evidence:** change 3’s supposedly complete inheritance table at `design.md:418-426` lists six write-lock-dependent claims but not the archive’s removal-guard interleaving proof. Change 6 requires that proof to be discharged by “single-writer serialization under `BEGIN IMMEDIATE`” at `specs/chain-archive/spec.md:354-361` and `:380-385`.
+- Change 6’s implementation task repeats the unconditional formulation at `tasks.md:91-96`. Neither location carries the database/`-wal`/`-shm` descriptor precondition.
+
+The archive argument is unsafe if an in-process descriptor close voids exclusivity: a referencing insert and role removal may interleave despite both paths using `BEGIN IMMEDIATE`.
+
+**The plan should say instead:** add this archive claim to change 3’s inheritance table and explicitly qualify the change 6 requirement, scenario, code comment, and test with the descriptor precondition. Its negative control should void the lock and demonstrate the prohibited interleaving.
+
+## 3. Major findings
+
+### Q1 — Is this implementable as written?
+
+**No.** An outside engineer would have to ask questions the plan should already answer:
+
+1. What exact checks, error, and negative control implement I-4?
+2. Does the archive removal-guard proof inherit the descriptor precondition, despite not appearing in change 3’s exhaustive table?
+3. Which archive scope statement controls: change 6’s in-scope specification or the contrary normative and non-goal statements still present elsewhere?
+4. What machine-readable contract applies to migration refusals—library error code, CLI exit code, report schema, or some combination?
+5. Which container images exist, and what exact upgrade procedure applies when PostgreSQL is bundled in the application image? Change 7 admits this procedure is unwritable pending the owner’s answer at `design.md:1196` and blocks task 6.2 at `tasks.md:44-49`.
+
+### Q2 — Is there a fourth stale premise?
+
+I did **not establish a distinct fourth load-bearing stale premise** within the time budget. I did establish that the already-retracted archive and page-checksum premises still survive in operative documents, so I disagree prominently with the brief’s assertion that R-1 is closed.
+
+Operative stale archive statements remain at:
+
+- `v1.0.0-sqlite-durability-contract/specs/release-contract/spec.md:22-24`
+- `v1.0.0-sqlite-temporal-event-log/proposal.md:148-152`
+- `v1.0.0-sqlite-concurrency-lease/proposal.md:176-181`
+- `v1.0.0-sqlite-schema-parity/proposal.md:172-179`
+- `v1.0.0-sqlite-schema-parity/design.md:435-436`
+
+These are not all historical correction notes; several are current scope declarations. The durability capability spec is especially serious because it says the archive is “out of scope entirely,” despite that change owning the digest/verification regime consumed by change 6.
+
+Change 1’s enforcement criterion is also stale: `acceptance.md:152` and `tasks.md:79-82` scan changes **1–5**, not all seven. The scan found 15 total occurrences of the refuted archive phrases, including correction notes, and the five operative statements above.
+
+**The plan should say instead:** the archive is owned by change 6, while each sibling owns only its explicit interface to change 6. The enforcement scan must cover all seven changes and allow historical wording only inside unmistakably labelled correction records.
+
+Page-checksum-gap language also survives at `v1.0.0-sqlite-schema-parity/design.md:30,1272` and `v1.0.0-sqlite-temporal-event-log/tasks.md:344`. It should say the digest adds detection for a specific payload-byte corruption class; it does not restore a PostgreSQL guarantee UmbraDB previously supplied.
+
+### Q3 — Did remediation introduce new defects?
+
+**Yes.**
+
+1. I-4 was lost in the prose relay, as detailed in C1.
+2. The R-2 inheritance table omitted change 6’s lock-dependent removal-guard proof, as detailed in C2.
+3. Two cross-change citations fail:
+
+   - `v1.0.0-sqlite-data-migration/specs/data-migration/spec.md:185-187` says keeping refusal diagnostics out of `docs/ERROR-CATALOG.md` is “per” durability-contract lines 403–420. The cited `release-contract/spec.md:403-420` instead discusses `quick_check`, digest sweeps, and integrity reporting. The durability spec contains no migration-tool/catalog ruling.
+   - `v1.0.0-sqlite-data-migration/specs/data-migration/spec.md:93-95` cites engine-core lines 161–171 for irreversible pragma ordering. Those lines concern transaction-token barriers and the connection factory. The actual pragma rule is at `sqlite-engine/spec.md:206-227`.
+
+The first failed citation leaves a real decision unowned. Change 7 itself records the refusal-code question as still open at `design.md:1199`, while simultaneously presenting the non-catalog ruling as settled.
+
+**The plan should say instead:** change 5 must rule explicitly whether migration-tool failures participate in the frozen library catalog; change 7 must then specify the CLI exit code and structured report schema. Both citations must point to the actual normative requirements.
+
+The digest coverage set itself held in the sampled comparison: change 5’s column-level table at `release-contract/spec.md:150-166` and change 6’s archive table at `chain-archive/spec.md:776-788` agree on covered and uncovered archive columns.
+
+### Q4 — Is seven-change decomposition still right?
+
+**Broadly yes, but ownership and handoffs need repair.** I found no unavoidable dependency cycle: change 6 supplies archive coverage/DDL to change 5, while consuming change 5’s digest mechanism, and those halves can be staged without merging the changes.
+
+The ownership defects are:
+
+- I-4 is assigned to change 3 but accepted by nobody in change 3.
+- The archive lock-dependent claim belongs in change 6, with its inherited precondition coordinated by change 3.
+- Migration refusal observability is jointly marked for changes 5 and 7 but is not decided by either.
+- Change 7 correctly accepts change 4’s reject-versus-quarantine handoff: `data-migration/spec.md:313-376` requires refusal, remediation reporting for newly added constraints, and no quarantine.
+
+The seven-change boundary remains defensible after those ownership records are made explicit.
+
+### Failed R-1 enforcement is itself rework-prone
+
+Change 1’s `J3` acceptance criterion says changes 1–5, while the brief requires all seven. This permits future stale wording in the newly added changes to pass the declared gate. Update both `engine-core/tasks.md:79-82` and `engine-core/acceptance.md:152` to enumerate all seven target directories.
+
+## 4. Minor findings
+
+### Fourth same-mechanism overclaim
+
+`v1.0.0-sqlite-data-migration/design.md:1196` emphasizes that “Four independent readers” searched for Docker artifacts. Four readers repeating the same repository-absence observation are not four independent mechanisms and cannot establish what external container images exist. The document fortunately keeps the owner question open, so this is misleading evidence rhetoric rather than a closed unsafe conclusion.
+
+### Residual terminology
+
+“Page-checksum gap” should be removed from schema-parity and temporal-event-log prose. The accurate distinction is:
+
+- structural corruption: SQLite checks can detect it;
+- payload-byte corruption: may pass structural checks and requires application-level protection;
+- PostgreSQL parity: UmbraDB never promised or verified page checksums, although PostgreSQL operators had an optional facility.
+
+## 5. What I verified and it held
+
+### Mechanical checks
+
+Exact output of:
+
+```text
+$ /usr/local/bin/openspec validate --changes --strict --no-interactive
+✓ change/sprint-2-transaction-lease
+✓ change/sprint-3-checkpoint-store
+✓ change/sprint-4-watermarks
+✓ change/sprint-5-formal-watermarks
+✓ change/sprint-6-formal-checkpoint-c1
+✓ change/sprint-7-transaction-history-storage
+✓ change/sprint-8-wallet-envelope-live-sync
+✓ change/v1.0.0-api-surface
+✓ change/v1.0.0-durable-checkpoint-cursor
+✓ change/v1.0.0-infosec-signoff
+✓ change/v1.0.0-perf-baseline
+✓ change/v1.0.0-recovery-testing
+✓ change/v1.0.0-sqlite-chain-archive
+✓ change/v1.0.0-sqlite-concurrency-lease
+✓ change/v1.0.0-sqlite-data-migration
+✓ change/v1.0.0-sqlite-durability-contract
+✓ change/v1.0.0-sqlite-engine-core
+✓ change/v1.0.0-sqlite-schema-parity
+✓ change/v1.0.0-sqlite-temporal-event-log
+✗ change/v1.1.0-formal-completion
+✗ change/v1.1.0-quint-model-checking
+Totals: 19 passed, 2 failed (21 items)
+Details: openspec validate v1.1.0-formal-completion --type change
+```
+
+Exact output of:
+
+```text
+$ git status --porcelain -- src test chain-archive-sync package.json
+```
+
+was empty.
+
+The manual file count held: changes 1, 2, 3, 5, 6, and 7 each contain five conventional files; schema-parity contains six because it has two delta specs. Every change has `acceptance.md`.
+
+### Load-bearing checks that held
+
+- The archive-unwired retraction is correct. `package.json:46` exposes `archive:sync`; `chain-archive-sync/bootstrap.ts:21` applies `chainArchiveMigrations`; `sync-service.ts:123` constructs `PgChainArchiveStore`.
+- The page-checksum retraction is correctly stated in the release-contract requirement. `src/postgres/durability-probe.ts:204-206` reads only `fsync`, `synchronous_commit`, and `full_page_writes`; `release-contract/spec.md:490-503` has the mandatory two-case wording and operator-option distinction.
+- The R-2 source-guard requirement itself covers the database file, `-wal`, and `-shm`, including indirect path construction, at `transaction-lease/spec.md:280-305`.
+- Invariants I-1, I-2, I-3, I-5, I-6, I-7, and I-8 each have an owner, normative requirement, and a scenario that would fail if their assertion were removed. Representative locations are:
+  - I-1: `storage-schema/spec.md:552-585`
+  - I-2: `chain-archive/spec.md:226-265`
+  - I-3: `temporal-kv/spec.md:192-265`
+  - I-5: `storage-schema/spec.md:662-700`
+  - I-6: `release-contract/spec.md:420-449` and `chain-archive/spec.md:281-300`
+  - I-7: `storage-schema/spec.md:703-752`
+  - I-8: `chain-archive/spec.md:267-279`
+- Change 7 handles existing rows violating new constraints correctly: `data-migration/spec.md:313-376` rejects duplicate manifest sequences, corrupted `next_seq`, invalid hashes/lifecycle values, and lifecycle/document disagreement; `:335-367` explicitly forbids quarantine.
+- No performance requirement sampled treated a tmpfs throughput figure as an admissible target. The specifications route performance decisions through real-filesystem measurement obligations.
+
+### Citation spot-checks
+
+1. **HELD — change 1:** `engine-core/design.md:985-987` → `package.json:46`, `bootstrap.ts:21`, `sync-service.ts:123`; all show the asserted archive runner path.
+2. **HELD — change 2:** `temporal-event-log/spec.md:129` → `001_temporal_kv.ts:97-99`; the cited constraint is an `EXCLUDE USING gist` overlap constraint.
+3. **HELD — change 3:** `transaction-lease/spec.md:29` → `src/interfaces/transaction-lease.ts:31-33`; the interface says no TTL, self-expiry, or stealing.
+4. **HELD — change 4:** `storage-schema/spec.md:554-556` → `checkpoint-store.ts:328-334`; load selects by wallet/network, descending sequence, limit one.
+5. **HELD — change 5:** `release-contract/spec.md:497-500` → `durability-probe.ts:204-206`; exactly the three claimed PostgreSQL settings are read.
+6. **HELD — change 6:** `chain-archive/spec.md:382-385` → `001_chain_archive_core.ts:605-654`; the source documents the two-session role-removal interleavings and row-lock proof.
+7. **HELD — change 7:** `data-migration/spec.md:239-241` → `wallet-state-envelope.ts:11-12`; the envelope adds no table and reuses checkpoint storage.
+8. **HELD — cross-change:** `data-migration/spec.md:84-89` → `schema-parity/spec.md:465-467`; the target requires the STORED generated column and forbids substituting VIRTUAL.
+9. **FAILED — cross-change:** `data-migration/spec.md:93-95` → engine-core `spec.md:161-171`; cited lines do not specify pragma ordering. The relevant rule is at `:206-227`.
+10. **FAILED — cross-change:** `data-migration/spec.md:185-187` → durability-contract `spec.md:403-420`; cited lines do not rule on migration diagnostics or error-catalog membership.
+
+## 6. Coverage gaps
+
+### (a) Gaps in the seven changes
+
+- No normative implementation of I-4 exists in its owning change.
+- The archive removal-guard proof lacks the descriptor precondition and is absent from the R-2 inheritance table.
+- Migration refusal observability has no settled owner-approved contract.
+- The container-image migration procedure remains blocked on an external inventory question.
+- The R-1 enforcement check does not cover all seven changes.
+- Cross-change citations have no mechanical line-resolution/semantic-review gate; two sampled relays were already wrong.
+
+### (b) Material I did not examine
+
+- I did not read all 20,327 lines or exhaustively inspect all 157 requirements and 540 scenarios.
+- I did not exhaustively trace every numeric datum or every external/upstream API citation.
+- I sampled rather than exhaustively audited task-dependency edges and all digest-column DDL.
+- I did not run future implementation tests, benchmarks, migration fixtures, Windows parity tests, or destructive corruption experiments; no migration implementation exists yet.
+- I did not independently verify owner statements about real external consumers or container images.
+- Per instruction, I did not run Graphify or build, load, or query any knowledge graph.
+
+---
+
+## Harness notes
+
+*Written by the harness (Claude), not by Codex. Nothing in this section is part of the review.*
+
+### Exact command run
+
+Runner script `/root/umbradb-sqlite-research/run-codex-cold2.sh`, invoked as
+`bash /root/umbradb-sqlite-research/run-codex-cold2.sh` from the Bash tool via
+single-quoted `wsl -e bash -lc '...'`. The script executes:
+
+```bash
+timeout 1200 codex exec \
+  --sandbox read-only \
+  -C /root/UDB-sqlite-sprint \
+  -c model_reasoning_effort="high" \
+  -o /root/umbradb-sqlite-research/audit2/.codex2-last.md \
+  'Read the file /root/umbradb-sqlite-research/codex-prompt2.txt in full (it is 234 lines) and follow its instructions exactly. It is your complete task brief. Do NOT run graphify and do NOT build or query any knowledge graph.' \
+  > /root/umbradb-sqlite-research/audit2/.codex2-stdout.log 2>&1
+```
+
+The task brief is the 234-line file `/root/umbradb-sqlite-research/codex-prompt2.txt` (written by
+the harness for this round; the round-1 equivalent is `codex-prompt.txt`). It carried the five
+panel questions labelled Q1–Q5, the retracted-premise list, the three gate-closure checks, the
+recurring error classes, the mechanical checks, and the required six-section output shape.
+
+### Run metadata
+
+| Field | Value |
+|---|---|
+| Exit status | `0` (single run; no retry needed, no timeout) |
+| Wall clock | 560 s (9 min 20 s) of a 1200 s cap |
+| Start / end (UTC) | `2026-07-31T22:03:18Z` → `2026-07-31T22:12:38Z` |
+| Model reported by CLI banner | `model: gpt-5.6-sol`, `provider: openai` |
+| Model reported by Codex in §1 | "OpenAI Codex (GPT-5), cross-vendor seat" |
+| CLI version | OpenAI Codex v0.146.0 |
+| Sandbox / approval | `read-only` / `never` |
+| Session id | `019fba34-0373-79e1-b923-6af86e719440` |
+| Raw stdout | `/root/umbradb-sqlite-research/audit2/.codex2-stdout.log` (5,683 lines) |
+| Captured final message | `/root/umbradb-sqlite-research/audit2/.codex2-last.md` (206 lines) |
+| Run meta | `/root/umbradb-sqlite-research/audit2/.codex2-run.meta` |
+
+Note the mild self-identification mismatch: the CLI banner says `gpt-5.6-sol`; Codex describes
+itself in the review as "OpenAI Codex (GPT-5)". The banner is authoritative. The same mismatch
+occurred in round 1.
+
+### Traps — observed / avoided
+
+- **graphify: AVOIDED.** The prohibition was placed both in the inline invocation string and as
+  rule 1 of the brief. Codex acknowledged it in its first turn and restated compliance in §6(b).
+  Every one of its `rg`/`find` sweeps carried an explicit `--glob '!graphify-out/**'` or
+  `-not -path '*/graphify-out/*'` exclusion. No graph build or query appears in the log.
+- **`npx openspec` stub: AVOIDED.** Codex ran `/usr/local/bin/openspec` with the absolute path on
+  its first attempt. The only `npx openspec` strings in the log are quotations of the warning
+  itself. It did not report "openspec is not installed".
+- **Minor detour (not a listed trap):** before reading the brief, Codex loaded
+  `/root/foreman/skills/superpowers/skills/using-superpowers/SKILL.md` and a Codex-specific
+  operating reference, on its own initiative ("workflow setup only, not Graphify"). Cost was a
+  couple of tool calls and did not affect the budget.
+- **Read-only respected.** `git status --porcelain` in `/root/UDB-sqlite-sprint` after the run shows
+  only the seven untracked `openspec/changes/v1.0.0-sqlite-*/` directories that existed before it.
+  No tracked file was modified; no file was created by Codex.
+- **Time budget:** finished in 47% of the cap unprompted, so section 6(b)'s list of unexamined
+  material is a scoping choice rather than a wall-clock cutoff. The panel should weigh it as such.
+
+### Harness mechanical spot-check (fact confirmation only, no adjudication)
+
+Codex's Q2 claim that change 1's R-1 enforcement scan is scoped to changes 1–5 rather than all
+seven is mechanically confirmed by the harness against the two cited locations:
+
+- `openspec/changes/v1.0.0-sqlite-engine-core/acceptance.md:152` (J3) reads "Grepping changes 1–5
+  for the refuted phrases".
+- `openspec/changes/v1.0.0-sqlite-engine-core/tasks.md:79-82` reads "every one of changes 2, 3, 4
+  and 5 has adopted the R-1 and R-9 wording — verified by grepping the five changes".
+
+Confirmed as textual fact only. The harness takes no position on any finding in this review; the
+remaining findings were not independently re-verified, by design of this seat.
