@@ -25,3 +25,9 @@ Targeted read-only re-audit verified the corrected final spec table and `git dif
 No other material privacy/cryptography/ownership claim error found in this design tranche. Passing the documentation audit must not be represented as certification of future implementation or of production deployment. Graphify and full release audit are owned by the parent agent.
 
 Final targeted re-audit: PASS. Read-only reviewer made no repository changes. Parent owns Graphify regeneration and consolidated release evidence.
+
+## Additional targeted audit: historical secret-scanner false positive
+
+**PASS.** Reviewed final `.gitleaksignore:20–24` diff independently, without displaying credential values. The sole added suppression is fingerprint `c80329a40c0c5809940fee75c793d61088aa7250:docs/research/sqlite-migration/graph/graph.html:generic-api-key:281`. At that immutable commit, HTML line 281 parses as a hyperedge array; the generic-rule match crosses a serialized `nodes` delimiter into another declared graph node ID. Both symbolic IDs are present in that commit's graph.json, connected in graph data and sourced from l7-precedent.md. This is not credential material. No path/rule/global allowlist or custom-rule weakening is introduced; fresh findings on the same path remain scanned. `git diff --check` passed. Parent reports a verified Gitleaks 8.28 full-history scan of 223 commits PASS and a custom seed-rule negative control detected with expected exit 1; this reviewer did not rerun those scans.
+
+Low-severity nonblocking comment precision at `.gitleaksignore:22`: the write-amplification rationale node explicitly cites B3, while the Erigon concept node has null source_location. Both source_file fields are l7-precedent.md. Suggested precise wording: both IDs source the document, with the rationale node citing B3. This does not alter the false-positive classification or suppression safety.

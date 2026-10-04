@@ -16,3 +16,10 @@
 # planting a fresh hex value in EITHER field of the tracked .example template fails the gate.
 be646fcff58052a77e848914a79ccef2279cf78f:nix/midnight-env/test-wallets/preview-test-wallet.json:umbradb-wallet-seed-hex:4
 be646fcff58052a77e848914a79ccef2279cf78f:nix/midnight-env/test-wallets/preview-test-wallet.json:umbradb-wallet-seed-hex:5
+
+# Verified historical graph false positive, not a credential: the generic rule crosses the
+# quoted nodes delimiter in a serialized hyperedge and captures another declared graph node ID.
+# Both IDs exist in graph.json at this commit, sourced from l7-precedent.md;
+# the rationale node cites B3.
+# This exempts ONLY this immutable finding; new content on the path remains scanned.
+c80329a40c0c5809940fee75c793d61088aa7250:docs/research/sqlite-migration/graph/graph.html:generic-api-key:281

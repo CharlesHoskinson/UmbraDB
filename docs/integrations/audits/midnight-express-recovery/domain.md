@@ -29,3 +29,12 @@ Verified final `specs/mpe-recovery/spec.md:9–10` and `:16`: UDB-MPE-003 now se
 Also verified final `specs/mpe-recovery/spec.md:13–14`, `:17`, `:19`: endpoint custody maps to PRV-007; key erasure maps to CRY-029/030 with the declared backup profile; expired outbox dispatch is explicitly refused; privacy acknowledgement behavior maps to CON-039. Authoritative source checks confirm PRV-007 keeps recognition/decryption secrets inside the trusted endpoint, and STO-011 concerns process-restart recovery rather than power-loss durability. The final table preserves that distinction.
 
 **No remaining domain-correctness blockers. PASS for the design-only proposal**, not certification of an implemented adapter, HA system, or future release.
+
+
+## Final targeted CI-fix audit — PASS
+
+Independently reviewed the final `.gitleaksignore` diff. The sole addition at `.gitleaksignore:20–24` documents and exempts the exact fingerprint `c80329a40c0c5809940fee75c793d61088aa7250:docs/research/sqlite-migration/graph/graph.html:generic-api-key:281`. There is no path-wide or rule-wide exclusion.
+
+Independently read historical `graph.html:281` at that commit: the detected material is a serialized hyperedge node list, containing symbolic identifiers `l7_precedent_random_hash_key_write_amplification` and `l7_precedent_erigon`. Parsed historical `graph/graph.json` confirms both are declared nodes: respectively the rationale “Random-hash-key B-tree write amplification” with source location B3, and the concept “Erigon”, both attributed to `l7-precedent.md`. This is a graph identifier false positive, not credential material.
+
+Severity: no remaining finding. The exact-fingerprint suppression is justified and does not change recovery requirements or claimed implementation. Parent reports verified Gitleaks 8.28.0 full-history scan over 223 commits PASS and an all-zero seed outside the template detected with expected exit 1; this auditor independently verified classification and suppression scope, not scanner execution. The prior design-only domain PASS remains valid.
