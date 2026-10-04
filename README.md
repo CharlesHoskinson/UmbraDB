@@ -350,3 +350,5 @@ cross-writer T1, the concurrency and liveness laws a sequential proof model hand
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Future integration proposal: [Midnight Express backend recovery](docs/integrations/midnight-express-recovery.md). This design does not change the current release or its supported API.

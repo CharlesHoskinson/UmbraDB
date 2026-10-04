@@ -492,6 +492,12 @@ track ships as the 1.1 headline.
   in `a3a3c99` which pins nixpkgs to an exact revision and documents the reproducibility contract).
   See [Getting started](README.md#getting-started) in the README for what it provides.
 
+## Midnight Express recovery — proposed future-release track
+
+Use UmbraDB as the backend workflow recovery foundation for Midnight Express, extending its Midnight checkpoint/cursor model with atomic local effects, dedup/outbox state, strict durability, protected restore and explicit retention. This is a **design-only proposal**, coordinated with post-1.0/1.1 cipher/scoped-addressing work; exact version and schedule are unset. It does not change the 1.0 checklist or claim current implementation.
+
+[Integration summary](docs/integrations/midnight-express-recovery.md) · [OpenSpec proposal/design/tasks](openspec/changes/midnight-express-recovery/proposal.md) · [Fourteen acceptance requirements](openspec/changes/midnight-express-recovery/specs/mpe-recovery/spec.md).
+
 ## Non-goals
 
 - Not a general-purpose ORM or query builder — the interfaces are
